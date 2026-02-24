@@ -2,12 +2,12 @@ import os
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import FastAPI, Request
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi import FastAPI
+from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
 from conductor.api.routes import router, registry
-from conductor.utils.config import HOST, PORT, PASSWORD, PID_FILE, ensure_dirs
+from conductor.utils.config import HOST, PORT, PID_FILE, ensure_dirs
 
 
 @asynccontextmanager
@@ -21,22 +21,6 @@ async def lifespan(app: FastAPI):
 
 def create_app() -> FastAPI:
     app = FastAPI(title="Conductor", version="0.1.0", lifespan=lifespan)
-
-    # Optional password protection
-    if PASSWORD:
-
-        @app.middleware("http")
-        async def check_password(request: Request, call_next):
-            # Allow static assets and the root page without auth
-            if request.url.path == "/" or request.url.path.startswith("/static"):
-                return await call_next(request)
-            # Check bearer token
-            auth = request.headers.get("Authorization", "")
-            token = request.query_params.get("token", "")
-            if auth == f"Bearer {PASSWORD}" or token == PASSWORD:
-                return await call_next(request)
-            return JSONResponse(status_code=401, content={"detail": "Unauthorized"})
-
     app.include_router(router)
 
     # Serve dashboard

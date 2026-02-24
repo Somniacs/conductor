@@ -2,7 +2,7 @@
 
 Local orchestration layer that manages interactive terminal processes and exposes them through a web dashboard for observation and remote input.
 
-Start Claude sessions, training scripts, or any long-running process on your workstation — then monitor and interact with them from your phone over Tailscale. Walk away from the desk, pull out your phone, and keep prompting.
+Start Claude Code sessions, training scripts, or any long-running process on your workstation — then monitor and interact with them from your phone over Tailscale. Walk away from the desk, pull out your phone, and keep prompting.
 
 ## The Workflow
 
@@ -10,7 +10,7 @@ Start Claude sessions, training scripts, or any long-running process on your wor
 You at your desk                          You on the couch
 ─────────────────                         ──────────────────
 conductor run claude research             Open phone browser
-conductor run claude coding               → http://solos-gpu:7777
+conductor run claude coding               → http://mycomputer:7777
 conductor run "python train.py" training
                                           Select "research"
 Leave your desk.                          Send a prompt
@@ -79,8 +79,7 @@ This is the primary use case — run Claude sessions on your workstation, intera
 ### 1. Start Conductor on your workstation
 
 ```bash
-# Password-protect it since it's accessible over the network
-CONDUCTOR_PASSWORD=mysecret conductor serve
+conductor serve
 ```
 
 ### 2. Find your Tailscale hostname
@@ -96,7 +95,7 @@ tailscale status
 Open Safari/Chrome on your phone and go to:
 
 ```
-http://solos-gpu:7777?token=mysecret
+http://solos-gpu:7777
 ```
 
 That's it. You now have full terminal access to all your running sessions from your phone.
@@ -128,16 +127,9 @@ conductor run "python long_training.py" training
 
 ### Security
 
-Conductor binds to `127.0.0.1` by default — it is **not** exposed to the public internet. Tailscale provides encrypted point-to-point connections between your devices with no open ports.
+Tailscale handles everything. Only devices on your Tailnet can reach the server — authenticated by device identity, encrypted end-to-end via WireGuard. No passwords needed, no ports exposed to the internet.
 
-For extra protection:
-
-```bash
-# Set a password (recommended for Tailscale access)
-CONDUCTOR_PASSWORD=mysecret conductor serve
-```
-
-API requests must then include `Authorization: Bearer mysecret` header or `?token=mysecret` query parameter. The dashboard prompts for the token on first load.
+Conductor binds to `127.0.0.1` by default. Tailscale makes it reachable to your other devices without opening any firewall ports.
 
 ## CLI Reference
 
@@ -254,5 +246,5 @@ pip install dist/conductor-0.1.0-py3-none-any.whl
 - **No IDE integration required** — works with any terminal
 - **Processes remain normal terminals** — PTY preserves full terminal behavior
 - **Browser is a secondary control surface** — not a replacement for your terminal
-- **Secure by default** — localhost only, Tailscale for remote, optional password
+- **Secure by default** — localhost only, Tailscale for remote access (no extra auth needed)
 - **Minimal dependencies** — standard Python + FastAPI

@@ -1,4 +1,3 @@
-import os
 from pathlib import Path
 
 HOST = "127.0.0.1"
@@ -11,8 +10,6 @@ LOG_DIR = CONDUCTOR_DIR / "logs"
 PID_FILE = CONDUCTOR_DIR / "server.pid"
 
 BUFFER_MAX_BYTES = 1_000_000  # 1MB rolling buffer
-
-PASSWORD = os.environ.get("CONDUCTOR_PASSWORD")
 
 
 def ensure_dirs():
