@@ -688,14 +688,10 @@
                 overflow: visible;
             }
             .drawer-toggle {
-                position: fixed;
-                left: 0;
+                left: 260px;
                 right: auto;
                 width: 20px;
                 border-radius: 0 6px 6px 0;
-            }
-            .sidebar.open .drawer-toggle {
-                left: 260px;
             }
         }
     </style>
@@ -1641,8 +1637,8 @@
         }, 150));
 
         // --- Notifications ---
-        // Detect when Claude becomes idle (waiting for input) and send a browser notification.
-        // Watches for the idle prompt pattern in recent terminal output.
+        // Detect when a session needs attention by scanning terminal output.
+        // Two triggers: (1) permission/question prompts, (2) long idle after sustained activity.
         let notificationsEnabled = false;
 
         async function requestNotificationPermission() {
@@ -1655,30 +1651,73 @@
 
         function sendNotification(title, body) {
             if (!notificationsEnabled) return;
-            if (document.visibilityState === 'visible') return; // Don't notify if user is looking
+            if (document.visibilityState === 'visible') return;
             try {
                 new Notification(title, {
                     body: body,
                     icon: 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><text y="80" font-size="80">♭</text></svg>',
-                    tag: 'conductor-idle', // Replaces previous notification
+                    tag: 'conductor-' + title,
                 });
             } catch (e) {}
         }
 
-        // Track per-panel activity state.
-        // When output stops arriving for a while after a burst, Claude is likely idle.
-        const _activityTimers = {};
-        function trackActivity(panel) {
-            // Reset the idle timer every time output arrives
-            if (_activityTimers[panel.id]) clearTimeout(_activityTimers[panel.id]);
-            panel._wasActive = true;
-            _activityTimers[panel.id] = setTimeout(() => {
-                // No output for 3 seconds after activity — likely idle
-                if (panel._wasActive) {
-                    panel._wasActive = false;
-                    sendNotification(`♭ ${panel.name}`, 'Session is waiting for input');
+        // Read the last N non-empty lines from the xterm buffer
+        function getTerminalTail(panel, count) {
+            if (!panel.terminal) return '';
+            const buf = panel.terminal.buffer.active;
+            const lines = [];
+            for (let i = buf.length - 1; i >= 0 && lines.length < count; i--) {
+                const line = buf.getLine(i);
+                if (line) {
+                    const text = line.translateToString(true).trim();
+                    if (text) lines.unshift(text);
                 }
-            }, 3000);
+            }
+            return lines.join('\n');
+        }
+
+        const _activityTimers = {};
+        const _outputBytes = {};     // track output volume per panel
+        const _lastNotified = {};    // prevent duplicate notifications
+        function trackActivity(panel) {
+            if (_activityTimers[panel.id]) clearTimeout(_activityTimers[panel.id]);
+
+            // Count output chunks — we only notify after sustained activity
+            _outputBytes[panel.id] = (_outputBytes[panel.id] || 0) + 1;
+
+            _activityTimers[panel.id] = setTimeout(() => {
+                // Need real output before we consider notifying
+                const volume = _outputBytes[panel.id] || 0;
+                _outputBytes[panel.id] = 0;
+                if (volume < 10) return; // ignore tiny bursts (keepalives, cursor moves)
+
+                const tail = getTerminalTail(panel, 8);
+                if (!tail) return;
+
+                let reason = null;
+                // Permission / confirmation prompts
+                if (/\(y\)es.*\(n\)o/i.test(tail) || /\[Y\/n\]/i.test(tail) || /\(y\/n\)/i.test(tail)) {
+                    reason = 'Needs confirmation';
+                } else if (/allow|deny|approve|reject/i.test(tail) && /\?/m.test(tail)) {
+                    reason = 'Asking for permission';
+                // Question being asked
+                } else if (/\?\s*$/m.test(tail)) {
+                    reason = 'Asking a question';
+                // Long idle after lots of output = task likely finished
+                } else if (volume > 100) {
+                    reason = 'Task may be complete';
+                }
+
+                if (!reason) return;
+                // Don't re-notify the same thing
+                const key = panel.id + ':' + reason;
+                if (_lastNotified[key]) return;
+                _lastNotified[key] = true;
+                // Clear after 60s so we can notify again for a new occurrence
+                setTimeout(() => { delete _lastNotified[key]; }, 60000);
+
+                sendNotification(`♭ ${panel.name}`, reason);
+            }, 5000); // 5s of silence before checking
         }
 
         // --- Init ---
