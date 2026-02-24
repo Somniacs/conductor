@@ -62,7 +62,6 @@
         }
 
         .sidebar-actions button:hover { background: #242450; }
-        .sidebar-actions button.active { background: #2a2a6a; border-color: #4a4aaa; }
 
         #session-list {
             flex: 1;
@@ -202,14 +201,8 @@
             color: #c0c0e0;
         }
 
-        .dir-picker .dir-entry:hover {
-            background: #1a1a3e;
-        }
-
-        .dir-picker .dir-icon {
-            color: #6060aa;
-            font-size: 11px;
-        }
+        .dir-picker .dir-entry:hover { background: #1a1a3e; }
+        .dir-picker .dir-icon { color: #6060aa; font-size: 11px; }
 
         .dir-picker .dir-empty {
             padding: 8px 10px;
@@ -224,19 +217,22 @@
             overflow: hidden;
         }
 
+        /* Split toolbar - only visible with 2+ panels */
         .toolbar {
-            display: flex;
+            display: none;
             align-items: center;
             gap: 8px;
-            padding: 6px 12px;
+            padding: 4px 12px;
             background: #10102a;
             border-bottom: 1px solid #1e1e3e;
             font-size: 12px;
             color: #808090;
         }
 
+        .toolbar.visible { display: flex; }
+
         .toolbar button {
-            padding: 4px 10px;
+            padding: 3px 10px;
             background: #1a1a3e;
             border: 1px solid #2a2a5a;
             color: #a0a0c0;
@@ -248,13 +244,6 @@
         .toolbar button:hover { background: #242450; }
         .toolbar button.active { background: #2a2a6a; border-color: #4a4aaa; color: #e0e0e0; }
 
-        .toolbar .sep {
-            width: 1px;
-            height: 16px;
-            background: #2a2a4a;
-            margin: 0 4px;
-        }
-
         /* Panels container */
         #panels {
             flex: 1;
@@ -263,7 +252,7 @@
             background: #0a0a1a;
         }
 
-        /* Resizable split panes */
+        /* Split panes */
         .split-container {
             display: flex;
             width: 100%;
@@ -286,6 +275,7 @@
             flex-shrink: 0;
             background: #1e1e3e;
             transition: background 0.15s;
+            position: relative;
         }
 
         .split-handle:hover, .split-handle.dragging {
@@ -293,12 +283,12 @@
         }
 
         .split-handle.h-handle {
-            width: 4px;
+            width: 5px;
             cursor: col-resize;
         }
 
         .split-handle.v-handle {
-            height: 4px;
+            height: 5px;
             cursor: row-resize;
         }
 
@@ -393,11 +383,10 @@
             </div>
         </aside>
         <main class="content">
-            <div class="toolbar">
-                <span>Layout:</span>
-                <button class="active" data-layout="single" onclick="setLayout('single')">Single</button>
-                <button data-layout="hsplit" onclick="setLayout('hsplit')">H Split</button>
-                <button data-layout="vsplit" onclick="setLayout('vsplit')">V Split</button>
+            <div class="toolbar" id="toolbar">
+                <span>Split:</span>
+                <button class="active" data-split="horizontal" onclick="setSplitDir('horizontal')">&#8596; Horizontal</button>
+                <button data-split="vertical" onclick="setSplitDir('vertical')">&#8597; Vertical</button>
             </div>
             <div id="panels">
                 <div class="empty-state">
@@ -413,8 +402,8 @@
     <script>
         // --- State ---
         let sessions = [];
-        let panels = [];       // [{id, name, ws, terminal, fitAddon, element}]
-        let layout = 'single'; // 'single' | 'hsplit' | 'vsplit'
+        let panels = [];
+        let splitDir = 'horizontal';
         let allowedCommands = [];
         let selectedCwd = null;
         const hasXterm = typeof Terminal !== 'undefined';
@@ -501,24 +490,25 @@
         }
 
         // --- Panels ---
-        function maxPanels() {
-            return layout === 'single' ? 1 : 2;
-        }
-
         function openSession(id, name) {
             if (panels.find(p => p.id === id)) return;
-            while (panels.length >= maxPanels()) {
-                closePanel(panels[0].id);
-            }
+
+            // No hard limit — add the panel, rebuild handles it
             const panel = { id, name, ws: null, terminal: null, fitAddon: null, element: null };
             panels.push(panel);
             rebuildPanels();
             connectWebSocket(panel);
         }
 
+        function updateToolbar() {
+            const toolbar = document.getElementById('toolbar');
+            toolbar.classList.toggle('visible', panels.length >= 2);
+        }
+
         function rebuildPanels() {
             const container = document.getElementById('panels');
             container.innerHTML = '';
+            updateToolbar();
 
             if (panels.length === 0) {
                 container.innerHTML = `
@@ -530,41 +520,38 @@
                 return;
             }
 
-            if (panels.length === 1 || layout === 'single') {
-                // Single panel fills the container
+            if (panels.length === 1) {
+                // Single panel — fullscreen, no split
                 const pane = document.createElement('div');
                 pane.className = 'split-pane';
                 pane.appendChild(buildPanelElement(panels[0]));
                 container.appendChild(pane);
             } else {
-                // Two panels with a draggable split handle
-                const splitDir = layout === 'hsplit' ? 'horizontal' : 'vertical';
+                // Multiple panels with draggable dividers
                 const wrapper = document.createElement('div');
                 wrapper.className = `split-container ${splitDir}`;
 
-                const pane1 = document.createElement('div');
-                pane1.className = 'split-pane';
-                pane1.appendChild(buildPanelElement(panels[0]));
+                panels.forEach((panel, i) => {
+                    if (i > 0) {
+                        // Insert a drag handle between panels
+                        const prevPane = wrapper.lastElementChild;
+                        const handle = document.createElement('div');
+                        handle.className = `split-handle ${splitDir === 'horizontal' ? 'h-handle' : 'v-handle'}`;
+                        initDragHandle(handle, prevPane, splitDir);
+                        wrapper.appendChild(handle);
+                    }
 
-                const handle = document.createElement('div');
-                handle.className = `split-handle ${splitDir === 'horizontal' ? 'h-handle' : 'v-handle'}`;
-                initDragHandle(handle, pane1, splitDir);
+                    const pane = document.createElement('div');
+                    pane.className = 'split-pane';
+                    pane.appendChild(buildPanelElement(panel));
+                    wrapper.appendChild(pane);
+                });
 
-                const pane2 = document.createElement('div');
-                pane2.className = 'split-pane';
-                pane2.appendChild(buildPanelElement(panels[1]));
-
-                wrapper.appendChild(pane1);
-                wrapper.appendChild(handle);
-                wrapper.appendChild(pane2);
                 container.appendChild(wrapper);
             }
 
             renderSessionList();
-            // Fit terminals after DOM settles
-            requestAnimationFrame(() => {
-                requestAnimationFrame(handleResize);
-            });
+            requestAnimationFrame(() => requestAnimationFrame(handleResize));
         }
 
         function buildPanelElement(panel) {
@@ -584,7 +571,6 @@
 
             panel.element = div;
 
-            // Initialize terminal after it's in the DOM
             requestAnimationFrame(() => {
                 const termEl = document.getElementById(termId);
                 if (!termEl) return;
@@ -622,7 +608,6 @@
 
                     panel.terminal = term;
                 } else {
-                    // Fallback: plain text with input bar
                     termEl.innerHTML = '<pre></pre>';
                     const inputDiv = document.createElement('div');
                     inputDiv.className = 'panel-input';
@@ -645,76 +630,65 @@
             rebuildPanels();
         }
 
-        // --- Drag handle for resizable split ---
-        function initDragHandle(handle, pane1, direction) {
+        // --- Drag handle for resizable splits ---
+        function initDragHandle(handle, pane, direction) {
             let startPos, startSize;
 
-            function onMouseDown(e) {
-                e.preventDefault();
+            function onStart(clientX, clientY) {
                 handle.classList.add('dragging');
-                startPos = direction === 'horizontal' ? e.clientX : e.clientY;
-                startSize = direction === 'horizontal' ? pane1.offsetWidth : pane1.offsetHeight;
-                document.addEventListener('mousemove', onMouseMove);
-                document.addEventListener('mouseup', onMouseUp);
+                startPos = direction === 'horizontal' ? clientX : clientY;
+                startSize = direction === 'horizontal' ? pane.offsetWidth : pane.offsetHeight;
                 document.body.style.cursor = direction === 'horizontal' ? 'col-resize' : 'row-resize';
                 document.body.style.userSelect = 'none';
             }
 
-            function onMouseMove(e) {
-                const currentPos = direction === 'horizontal' ? e.clientX : e.clientY;
+            function onMove(clientX, clientY) {
+                const currentPos = direction === 'horizontal' ? clientX : clientY;
                 const delta = currentPos - startPos;
-                const newSize = Math.max(100, startSize + delta);
-                pane1.style.flex = 'none';
+                const newSize = Math.max(80, startSize + delta);
+                pane.style.flex = 'none';
                 if (direction === 'horizontal') {
-                    pane1.style.width = newSize + 'px';
+                    pane.style.width = newSize + 'px';
                 } else {
-                    pane1.style.height = newSize + 'px';
+                    pane.style.height = newSize + 'px';
                 }
                 handleResize();
             }
 
-            function onMouseUp() {
+            function onEnd() {
                 handle.classList.remove('dragging');
-                document.removeEventListener('mousemove', onMouseMove);
-                document.removeEventListener('mouseup', onMouseUp);
                 document.body.style.cursor = '';
                 document.body.style.userSelect = '';
                 handleResize();
             }
 
-            handle.addEventListener('mousedown', onMouseDown);
+            // Mouse
+            handle.addEventListener('mousedown', (e) => {
+                e.preventDefault();
+                onStart(e.clientX, e.clientY);
+                function mm(e) { onMove(e.clientX, e.clientY); }
+                function mu() {
+                    onEnd();
+                    document.removeEventListener('mousemove', mm);
+                    document.removeEventListener('mouseup', mu);
+                }
+                document.addEventListener('mousemove', mm);
+                document.addEventListener('mouseup', mu);
+            });
 
-            // Touch support for mobile
+            // Touch
             handle.addEventListener('touchstart', (e) => {
                 e.preventDefault();
-                const touch = e.touches[0];
-                handle.classList.add('dragging');
-                startPos = direction === 'horizontal' ? touch.clientX : touch.clientY;
-                startSize = direction === 'horizontal' ? pane1.offsetWidth : pane1.offsetHeight;
-
-                function onTouchMove(e) {
-                    const touch = e.touches[0];
-                    const currentPos = direction === 'horizontal' ? touch.clientX : touch.clientY;
-                    const delta = currentPos - startPos;
-                    const newSize = Math.max(100, startSize + delta);
-                    pane1.style.flex = 'none';
-                    if (direction === 'horizontal') {
-                        pane1.style.width = newSize + 'px';
-                    } else {
-                        pane1.style.height = newSize + 'px';
-                    }
-                    handleResize();
+                const t = e.touches[0];
+                onStart(t.clientX, t.clientY);
+                function tm(e) { const t = e.touches[0]; onMove(t.clientX, t.clientY); }
+                function te() {
+                    onEnd();
+                    document.removeEventListener('touchmove', tm);
+                    document.removeEventListener('touchend', te);
                 }
-
-                function onTouchEnd() {
-                    handle.classList.remove('dragging');
-                    document.removeEventListener('touchmove', onTouchMove);
-                    document.removeEventListener('touchend', onTouchEnd);
-                    handleResize();
-                }
-
-                document.addEventListener('touchmove', onTouchMove, { passive: false });
-                document.addEventListener('touchend', onTouchEnd);
+                document.addEventListener('touchmove', tm, { passive: false });
+                document.addEventListener('touchend', te);
             }, { passive: false });
         }
 
@@ -753,7 +727,7 @@
             panel.ws = ws;
         }
 
-        // --- Input ---
+        // --- Input (fallback only) ---
         function handlePanelInput(event, id) {
             if (event.key !== 'Enter') return;
             const input = event.target;
@@ -764,19 +738,16 @@
             }
         }
 
-        // --- Layout ---
-        function setLayout(l) {
-            layout = l;
-            document.querySelectorAll('.toolbar button[data-layout]').forEach(btn => {
-                btn.classList.toggle('active', btn.dataset.layout === l);
+        // --- Split Direction ---
+        function setSplitDir(dir) {
+            splitDir = dir;
+            document.querySelectorAll('.toolbar button[data-split]').forEach(btn => {
+                btn.classList.toggle('active', btn.dataset.split === dir);
             });
-            // Trim excess panels
-            while (panels.length > maxPanels()) {
-                const p = panels.pop();
-                if (p.ws) p.ws.close();
-                if (p.terminal) p.terminal.dispose();
+            if (panels.length >= 2) {
+                // Reset custom sizes so flex: 1 distributes evenly
+                rebuildPanels();
             }
-            rebuildPanels();
         }
 
         // --- New Session ---

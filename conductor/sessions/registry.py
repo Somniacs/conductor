@@ -12,6 +12,12 @@ class SessionRegistry:
         self.sessions: Dict[str, Session] = {}
         ensure_dirs()
 
+    async def _on_session_exit(self, session_id: str):
+        """Called when a session's process exits. Removes the session."""
+        session = self.sessions.pop(session_id, None)
+        if session:
+            self._delete_metadata(session_id)
+
     async def create(self, name: str, command: str, cwd: str | None = None) -> Session:
         if name in self.sessions:
             existing = self.sessions[name]
@@ -20,7 +26,13 @@ class SessionRegistry:
             else:
                 await self.remove(name)
 
-        session = Session(name=name, command=command, session_id=name, cwd=cwd)
+        session = Session(
+            name=name,
+            command=command,
+            session_id=name,
+            cwd=cwd,
+            on_exit=self._on_session_exit,
+        )
         await session.start()
         self.sessions[name] = session
         self._save_metadata(session)

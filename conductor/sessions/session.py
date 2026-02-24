@@ -10,7 +10,7 @@ from conductor.utils.config import BUFFER_MAX_BYTES
 class Session:
     """A single managed terminal session backed by a PTY."""
 
-    def __init__(self, name: str, command: str, session_id: str | None = None, cwd: str | None = None):
+    def __init__(self, name: str, command: str, session_id: str | None = None, cwd: str | None = None, on_exit=None):
         self.id = session_id or name
         self.name = name
         self.command = command
@@ -22,6 +22,7 @@ class Session:
         self.pid: int | None = None
         self.start_time: float | None = None
         self._monitor_task: asyncio.Task | None = None
+        self._on_exit = on_exit
 
     async def start(self):
         self.pty.spawn()
@@ -84,6 +85,9 @@ class Session:
         except Exception:
             pass
         self._broadcast(b"\r\n[Process exited]\r\n")
+        self.pty.close()
+        if self._on_exit:
+            await self._on_exit(self.id)
 
     async def kill(self):
         self.pty.kill()
