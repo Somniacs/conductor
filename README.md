@@ -18,37 +18,62 @@ Come back later.                          Switch to "coding"
 Everything still running.                 Close phone. Reconnect anytime.
 ```
 
-## Setup
+## Prerequisites
 
-### 1. Clone and install
+- **Python 3.10+** — check with `python3 --version`
+- **Git** — to clone the repository
+- **Tailscale** (optional, for remote access) — install on your workstation and your phone/tablet, sign in with the same account on both. See [tailscale.com](https://tailscale.com/)
+
+## Install
+
+### Option A — From release (recommended)
+
+Download the latest release from GitHub, extract, and run the install script:
+
+```bash
+# Download and extract
+curl -sL https://github.com/xohm/conductor/releases/latest/download/conductor.tar.gz | tar xz
+cd conductor
+./install.sh
+```
+
+Or download manually from the [Releases](https://github.com/xohm/conductor/releases) page, extract the archive, and run `./install.sh` inside.
+
+### Option B — From source
 
 ```bash
 git clone git@github.com:xohm/conductor.git
 cd conductor
-python -m venv .venv
+./install.sh
+```
+
+The install script checks for Python 3.10+, installs [pipx](https://pipx.pypa.io/) if needed, and installs Conductor system-wide. After it finishes, the `conductor` command is available globally from any terminal.
+
+If the command is not found after install, restart your terminal or run `source ~/.bashrc` (or `~/.zshrc`).
+
+<details>
+<summary>Manual install (without install script)</summary>
+
+```bash
+git clone git@github.com:xohm/conductor.git
+cd conductor
+python3 -m venv .venv
 source .venv/bin/activate
 pip install -e .
 ```
 
-### 2. Make it available everywhere
-
-After `pip install -e .`, the `conductor` command is inside `.venv/bin/`. To use it from any terminal without activating the venv, add it to your PATH.
-
-Add this to your `~/.bashrc` or `~/.zshrc`:
+This puts `conductor` inside `.venv/bin/`. You need to activate the venv each time, or add it to your PATH:
 
 ```bash
+# Add to ~/.bashrc or ~/.zshrc:
 export PATH="$HOME/path/to/conductor/.venv/bin:$PATH"
 ```
 
-Then reload:
+</details>
 
-```bash
-source ~/.bashrc  # or ~/.zshrc
-```
+## Usage
 
-Now you can run `conductor` from any terminal.
-
-### 3. Start sessions
+### Start sessions
 
 ```bash
 # Start one session (server auto-starts in background)
@@ -59,18 +84,11 @@ conductor run claude coding
 conductor run claude review
 ```
 
-That's it. Open `http://127.0.0.1:7777` in your browser.
+Open `http://127.0.0.1:7777` in your browser. That's it for local use.
 
-## Remote Access from Phone/Tablet (Tailscale)
+### Remote access from phone/tablet
 
-This is the main use case — run sessions on your workstation, interact from your phone on the couch.
-
-### What you need
-
-- [Tailscale](https://tailscale.com/) installed on your workstation and your phone/tablet
-- Both devices on the same Tailnet (just sign in with the same account)
-
-### Steps
+This requires Tailscale on both your workstation and your phone/tablet (see Prerequisites).
 
 **1. Start Conductor on your workstation** (if not already running):
 
@@ -78,32 +96,28 @@ This is the main use case — run sessions on your workstation, interact from yo
 conductor run claude research
 ```
 
-**2. Find your machine's Tailscale name:**
+**2. Open on your phone/tablet:**
+
+Option A — run `conductor qr` to show a scannable QR code:
+
+```bash
+conductor qr
+```
+
+Option B — use the dashboard's **Link Device** feature (hamburger menu → Link Device).
+
+Option C — find your Tailscale hostname and type the URL:
 
 ```bash
 tailscale status
 # 100.64.0.1    my-machine    linux   -
 ```
 
-**3. Open on your phone/tablet:**
+Then open `http://my-machine:7777` on your phone.
 
-Option A — run `conductor qr` to show a QR code in the terminal and open a clean SVG in the browser:
+Done. Full terminal access to all sessions from your phone — type prompts, view output, create or kill sessions.
 
-```
-$ conductor qr
-```
-
-Option B — use the dashboard's **Link Device** feature (hamburger menu → Link Device).
-
-Option C — type the URL:
-
-```
-http://my-machine:7777
-```
-
-Done. You have full terminal access to all your running sessions. Type prompts, view output, create new sessions, kill old ones — all from your phone.
-
-### Why this works
+### Why remote access works
 
 Tailscale creates a private network between your devices using WireGuard. Only your devices can reach the server. No ports exposed to the internet, no passwords, no setup beyond installing Tailscale. Conductor binds to `0.0.0.0` so it's reachable on your Tailscale network without any extra configuration.
 
@@ -132,13 +146,16 @@ The web dashboard at `http://127.0.0.1:7777` provides:
 |---|---|
 | `conductor serve` | Start the server (foreground) |
 | `conductor serve --host 0.0.0.0 --port 8888` | Custom host/port |
-| `conductor run COMMAND [NAME]` | Start a managed session |
+| `conductor run COMMAND [NAME]` | Start session and attach (see output in terminal) |
+| `conductor run -d COMMAND [NAME]` | Start session in background (detached) |
+| `conductor attach NAME` | Attach to a running session |
 | `conductor list` | List active sessions |
 | `conductor stop NAME` | Stop a session |
+| `conductor restart` | Restart the server (picks up config changes) |
 | `conductor open` | Open the dashboard in the default browser |
 | `conductor qr` | Show QR code (terminal + opens SVG in browser) |
 
-`conductor run` auto-starts the server as a background daemon if it isn't already running. If no name is given, the command name is used.
+`conductor run` auto-starts the server as a background daemon if it isn't already running. If no name is given, the command name is used. Press `Ctrl+]` to detach from a session without stopping it.
 
 ## API
 
@@ -188,6 +205,7 @@ conductor/
 ├── cli/main.py               # Click CLI
 ├── static/index.html          # Dashboard (single-file HTML/JS/CSS)
 ├── main.py                    # Entry point
+├── install.sh                 # One-step installer (pipx)
 ├── pyproject.toml
 └── LICENSE                    # MIT
 ```

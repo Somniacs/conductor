@@ -56,6 +56,14 @@ class Session:
             except asyncio.QueueFull:
                 pass
 
+    def _broadcast_close(self):
+        """Send None sentinel to all subscribers to signal session end."""
+        for queue in list(self.subscribers):
+            try:
+                queue.put_nowait(None)
+            except asyncio.QueueFull:
+                pass
+
     def subscribe(self) -> asyncio.Queue:
         queue: asyncio.Queue = asyncio.Queue(maxsize=1000)
         self.subscribers.add(queue)
@@ -85,6 +93,7 @@ class Session:
         except Exception:
             pass
         self._broadcast(b"\r\n[Process exited]\r\n")
+        self._broadcast_close()
         self.pty.close()
         if self._on_exit:
             await self._on_exit(self.id)
@@ -96,6 +105,8 @@ class Session:
             asyncio.get_event_loop().remove_reader(self.pty.master_fd)
         except Exception:
             pass
+        # Signal all subscribers to disconnect
+        self._broadcast_close()
 
     async def cleanup(self):
         if self._monitor_task:

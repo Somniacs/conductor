@@ -1,4 +1,5 @@
 import os
+import signal
 import subprocess
 import sys
 import time
@@ -7,7 +8,7 @@ from pathlib import Path
 import click
 import httpx
 
-from conductor.utils.config import BASE_URL, HOST, PORT, ensure_dirs
+from conductor.utils.config import BASE_URL, HOST, PORT, PID_FILE, ensure_dirs
 
 
 def server_running() -> bool:
@@ -26,15 +27,20 @@ def start_server_daemon() -> bool:
     env = os.environ.copy()
     env["PYTHONPATH"] = str(project_root) + os.pathsep + env.get("PYTHONPATH", "")
 
-    with open(log_path, "a") as log:
-        subprocess.Popen(
-            [sys.executable, "-m", "conductor.server.app"],
-            stdout=log,
-            stderr=subprocess.STDOUT,
-            start_new_session=True,
-            cwd=str(project_root),
-            env=env,
-        )
+    log = log_path.open("a")
+    popen_kwargs = dict(
+        stdout=log,
+        stderr=subprocess.STDOUT,
+        cwd=str(project_root),
+        env=env,
+    )
+    if sys.platform == "win32":
+        popen_kwargs["creationflags"] = subprocess.CREATE_NEW_PROCESS_GROUP
+    else:
+        popen_kwargs["start_new_session"] = True
+
+    subprocess.Popen([sys.executable, "-m", "conductor.server.app"], **popen_kwargs)
+    log.close()
 
     for _ in range(20):
         time.sleep(0.25)
@@ -63,15 +69,19 @@ def serve(host, port):
 @cli.command()
 @click.argument("command")
 @click.argument("name", required=False)
-def run(command, name):
+@click.option("-d", "--detach", is_flag=True, help="Run in background (don't attach to terminal)")
+def run(command, name, detach):
     """Run a command in a new Conductor session.
+
+    By default, attaches to the session so you see output in your terminal.
+    Use -d/--detach to run in the background.
 
     Usage: conductor run COMMAND [NAME]
 
     Examples:
         conductor run claude research
+        conductor run -d claude coding
         conductor run "python train.py" training
-        conductor run bash
     """
     if name is None:
         name = command.split()[0]
@@ -85,20 +95,118 @@ def run(command, name):
 
     r = httpx.post(
         f"{BASE_URL}/sessions/run",
-        json={"name": name, "command": command},
+        json={"name": name, "command": command, "source": "cli"},
         timeout=10,
     )
 
     if r.status_code == 200:
         data = r.json()
-        click.echo(f"Session '{data['name']}' started (pid: {data['pid']})")
-        click.echo(f"Dashboard: {BASE_URL}")
+        if detach:
+            click.echo(f"Session '{data['name']}' started (pid: {data['pid']})")
+            click.echo(f"Dashboard: {BASE_URL}")
+        else:
+            click.echo(f"Session '{data['name']}' started. Attaching... (Ctrl+] to detach)")
+            _attach_session(data["name"])
     elif r.status_code == 409:
         click.echo(f"Session '{name}' already exists.", err=True)
         sys.exit(1)
     else:
         click.echo(f"Error: {r.text}", err=True)
         sys.exit(1)
+
+
+@cli.command()
+@click.argument("name")
+def attach(name):
+    """Attach to a running session.
+
+    Connects your terminal to the session's output and input.
+    Press Ctrl+] to detach without stopping the session.
+    """
+    if not server_running():
+        click.echo("Server not running.", err=True)
+        sys.exit(1)
+
+    # Verify session exists
+    r = httpx.get(f"{BASE_URL}/sessions", timeout=5)
+    sessions = {s["name"]: s for s in r.json()}
+    if name not in sessions:
+        click.echo(f"Session '{name}' not found.", err=True)
+        sys.exit(1)
+
+    click.echo(f"Attaching to '{name}'... (Ctrl+] to detach)")
+    _attach_session(name)
+
+
+def _attach_session(session_name: str):
+    """Attach terminal to a session via WebSocket."""
+    import select
+    import termios
+    import threading
+    import tty
+    import websockets.sync.client as ws_sync
+
+    ws_url = BASE_URL.replace("http://", "ws://") + f"/sessions/{session_name}/stream"
+
+    stdin_fd = sys.stdin.fileno()
+    old_settings = termios.tcgetattr(stdin_fd)
+    stop = threading.Event()
+
+    # Pipe to wake up the stdin select when WebSocket closes
+    wake_r, wake_w = os.pipe()
+
+    def ws_reader(ws):
+        """Read from WebSocket, write to stdout."""
+        try:
+            for message in ws:
+                if isinstance(message, bytes) and message:
+                    sys.stdout.buffer.write(message)
+                    sys.stdout.buffer.flush()
+                elif isinstance(message, str) and message:
+                    sys.stdout.write(message)
+                    sys.stdout.flush()
+        except Exception:
+            pass
+        finally:
+            stop.set()
+            os.write(wake_w, b"\x00")  # wake up select
+
+    try:
+        tty.setraw(stdin_fd)
+        ws = ws_sync.connect(ws_url)
+
+        reader_thread = threading.Thread(target=ws_reader, args=(ws,), daemon=True)
+        reader_thread.start()
+
+        try:
+            while not stop.is_set():
+                readable, _, _ = select.select([stdin_fd, wake_r], [], [], 1.0)
+
+                if wake_r in readable:
+                    break
+
+                if stdin_fd in readable:
+                    data = os.read(stdin_fd, 1024)
+                    if not data:
+                        break
+                    if b"\x1d" in data:  # Ctrl+]
+                        break
+                    try:
+                        ws.send(data)
+                    except Exception:
+                        break
+        finally:
+            try:
+                ws.close()
+            except Exception:
+                pass
+            os.close(wake_r)
+            os.close(wake_w)
+    except KeyboardInterrupt:
+        pass
+    finally:
+        termios.tcsetattr(stdin_fd, termios.TCSADRAIN, old_settings)
+        click.echo("\nDetached.")
 
 
 @cli.command("list")
@@ -139,6 +247,45 @@ def stop(name):
         sys.exit(1)
     else:
         click.echo(f"Error: {r.text}", err=True)
+        sys.exit(1)
+
+
+def stop_server() -> bool:
+    """Stop the server daemon. Returns True if it was stopped."""
+    if PID_FILE.exists():
+        try:
+            pid = int(PID_FILE.read_text().strip())
+            if sys.platform == "win32":
+                subprocess.run(["taskkill", "/F", "/PID", str(pid)],
+                               capture_output=True)
+            else:
+                os.kill(pid, signal.SIGTERM)
+            PID_FILE.unlink(missing_ok=True)
+            return True
+        except (ProcessLookupError, ValueError, OSError):
+            PID_FILE.unlink(missing_ok=True)
+
+    return False
+
+
+@cli.command()
+def restart():
+    """Restart the Conductor server (keeps sessions)."""
+    if not server_running():
+        click.echo("Server not running. Starting...")
+    else:
+        click.echo("Stopping server...")
+        stop_server()
+        # Wait for it to die
+        for _ in range(20):
+            time.sleep(0.25)
+            if not server_running():
+                break
+
+    if start_server_daemon():
+        click.echo(f"Server restarted on {BASE_URL}")
+    else:
+        click.echo("Failed to start server. Try: conductor serve", err=True)
         sys.exit(1)
 
 
@@ -226,8 +373,10 @@ h1 {{ font-size:28px; color:#8080ff; margin:0 0 6px; font-weight:600; }}
 <p class="url">{url}</p>
 </body></html>""")
 
-    click.echo(f"  QR page: {html_path}")
-    webbrowser.open(f"file://{html_path}")
+    file_url = f"file://{html_path}"
+    click.echo(f"  QR page: {file_url}")
+    webbrowser.open(file_url)
+    click.echo("  (opened in browser — check your browser window)")
 
 
 if __name__ == "__main__":

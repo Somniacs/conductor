@@ -20,6 +20,7 @@ class RunRequest(BaseModel):
     name: str
     command: str
     cwd: str | None = None
+    source: str | None = None  # "cli" bypasses whitelist; dashboard is restricted
 
 
 class InputRequest(BaseModel):
@@ -74,17 +75,18 @@ async def list_sessions():
 
 @router.post("/sessions/run")
 async def create_session(req: RunRequest):
-    # Validate command against whitelist
-    try:
-        base_cmd = shlex.split(req.command)[0]
-    except ValueError:
-        raise HTTPException(status_code=400, detail="Invalid command")
+    # Validate command against whitelist (CLI is unrestricted, dashboard is restricted)
+    if req.source != "cli":
+        try:
+            base_cmd = shlex.split(req.command)[0]
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Invalid command")
 
-    if base_cmd not in _allowed_commands:
-        raise HTTPException(
-            status_code=403,
-            detail=f"Command '{base_cmd}' is not allowed. Permitted: {', '.join(sorted(_allowed_commands))}",
-        )
+        if base_cmd not in _allowed_commands:
+            raise HTTPException(
+                status_code=403,
+                detail=f"Command '{base_cmd}' is not allowed. Permitted: {', '.join(sorted(_allowed_commands))}",
+            )
 
     try:
         session = await registry.create(req.name, req.command, cwd=req.cwd)
@@ -145,6 +147,10 @@ async def stream_session(ws: WebSocket, session_id: str):
             while True:
                 try:
                     data = await asyncio.wait_for(queue.get(), timeout=30)
+                    if data is None:
+                        # Session ended — close WebSocket
+                        await ws.close()
+                        break
                     await ws.send_bytes(data)
                 except asyncio.TimeoutError:
                     # Keepalive

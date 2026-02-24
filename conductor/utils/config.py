@@ -16,6 +16,11 @@ BUFFER_MAX_BYTES = 1_000_000  # 1MB rolling buffer
 # The CLI is unrestricted — this only limits what the dashboard can launch.
 ALLOWED_COMMANDS = [
     {"command": "claude --dangerously-skip-permissions", "label": "Claude Code"},
+    {"command": "codex", "label": "OpenAI Codex CLI"},
+    {"command": "gh copilot", "label": "GitHub Copilot CLI"},
+    {"command": "aider", "label": "Aider"},
+    {"command": "cursor", "label": "Cursor Agent"},
+    {"command": "goose", "label": "Goose (Block)"},
 ]
 
 # Default working directories shown in the dashboard directory picker.

@@ -1,0 +1,49 @@
+#!/usr/bin/env bash
+set -e
+
+echo "♭ conductor — install"
+echo ""
+
+# Check Python
+if ! command -v python3 &>/dev/null; then
+    echo "Error: python3 is required but not found."
+    echo "Install Python 3.10+ from https://python.org"
+    exit 1
+fi
+
+# Check Python version
+PY_VERSION=$(python3 -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")')
+PY_MAJOR=$(echo "$PY_VERSION" | cut -d. -f1)
+PY_MINOR=$(echo "$PY_VERSION" | cut -d. -f2)
+
+if [ "$PY_MAJOR" -lt 3 ] || { [ "$PY_MAJOR" -eq 3 ] && [ "$PY_MINOR" -lt 10 ]; }; then
+    echo "Error: Python 3.10+ required, found $PY_VERSION"
+    exit 1
+fi
+
+echo "Python $PY_VERSION ✓"
+
+# Install pipx if needed
+if ! command -v pipx &>/dev/null; then
+    echo "Installing pipx..."
+    python3 -m pip install --user pipx
+    python3 -m pipx ensurepath
+    # Source the updated PATH
+    export PATH="$HOME/.local/bin:$PATH"
+fi
+
+echo "pipx ✓"
+
+# Get the directory where install.sh lives
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+
+# Install conductor
+echo ""
+echo "Installing conductor..."
+pipx install -e "$SCRIPT_DIR" --force
+
+echo ""
+echo "Done! Run 'conductor run claude research' to start."
+echo ""
+echo "If the command is not found, restart your terminal or run:"
+echo "  source ~/.bashrc  # or ~/.zshrc"

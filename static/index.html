@@ -627,9 +627,9 @@
 
         /* Sidebar chevron toggle — sticks to sidebar edge */
         .drawer-toggle {
-            position: fixed;
+            position: absolute;
             top: 0;
-            left: 210px;
+            right: -16px;
             z-index: 301;
             background: #10102a;
             border: 1px solid #2a2a5a;
@@ -638,23 +638,15 @@
             font-size: 14px;
             width: 16px;
             height: 32px;
-            border-radius: 0;
+            border-radius: 0 4px 4px 0;
             cursor: pointer;
             display: flex;
             align-items: center;
             justify-content: center;
             padding: 0;
             line-height: 1;
-            transition: left 0.2s ease;
         }
         .drawer-toggle:hover { color: #c0c0e0; }
-
-        /* When collapsed, chevron at left window edge */
-        .drawer-toggle.collapsed {
-            left: 0;
-            border-left: none;
-            border-radius: 0 4px 4px 0;
-        }
 
         .sidebar-overlay {
             display: none;
@@ -674,7 +666,9 @@
             width: 0;
             min-width: 0;
             border-right: none;
-            overflow: hidden;
+        }
+        .layout.sidebar-collapsed .sidebar > *:not(.drawer-toggle) {
+            display: none;
         }
 
         @media (max-width: 700px) {
@@ -694,21 +688,23 @@
                 overflow: visible;
             }
             .drawer-toggle {
+                position: fixed;
                 left: 0;
+                right: auto;
                 width: 20px;
                 border-radius: 0 6px 6px 0;
             }
-            .drawer-toggle:not(.collapsed) {
+            .sidebar.open .drawer-toggle {
                 left: 260px;
             }
         }
     </style>
 </head>
 <body>
-    <button class="drawer-toggle" id="drawer-toggle" onclick="toggleDrawer()">&#x2039;</button>
     <div class="sidebar-overlay" id="sidebar-overlay" onclick="toggleDrawer()"></div>
     <div class="layout" id="layout">
         <aside class="sidebar" id="sidebar">
+            <button class="drawer-toggle" id="drawer-toggle" onclick="toggleDrawer()">&#x2039;</button>
             <div class="sidebar-header">
                 <h1><a href="https://github.com/xohm/conductor" target="_blank" style="color:inherit;text-decoration:none"><span style="font-size:1.8em;line-height:0;vertical-align:middle">♭</span> conductor</a></h1>
                 <div class="menu-wrapper">
@@ -748,7 +744,7 @@
             </div>
             <div id="panels">
                 <div class="empty-state">
-                    <div class="icon">&#9737;</div>
+                    <div class="icon">&#9837;</div>
                     <div>Select a session or create a new one</div>
                 </div>
             </div>
@@ -1157,7 +1153,7 @@
             if (panels.length === 0) {
                 container.innerHTML = `
                     <div class="empty-state">
-                        <div class="icon">&#9737;</div>
+                        <div class="icon">&#9837;</div>
                         <div>Select a session or create a new one</div>
                     </div>`;
                 renderSessionList();
