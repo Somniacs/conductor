@@ -215,8 +215,8 @@ body {{ margin:0; min-height:100vh; display:flex; flex-direction:column;
        color:#e0e0e0; font-family:Helvetica,Arial,sans-serif; }}
 h1 {{ font-size:28px; color:#8080ff; margin:0 0 6px; font-weight:600; }}
 .sub {{ font-size:14px; color:#808090; margin-bottom:30px; }}
-.qr {{ width:400px; height:400px; }}
-.qr svg {{ width:100%; height:100%; }}
+.qr {{ background:#ffffff; padding:24px; border-radius:12px; display:inline-block; }}
+.qr svg {{ width:300px; height:300px; display:block; }}
 .url {{ font-size:16px; color:#a0a0d0; margin-top:24px;
         font-family:monospace; letter-spacing:0.5px; }}
 </style></head><body>
