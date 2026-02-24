@@ -856,13 +856,14 @@
         };
         const THEME_ORDER = ['default', 'dark', 'mid', 'bright', 'bernstein', 'green'];
 
-        // Compute inverse color for contrast rings
-        function invertColor(hex) {
+        // Return a contrasting grey for the ring around a dot
+        function contrastGrey(hex) {
             const c = hex.replace('#', '');
-            const r = (255 - parseInt(c.substring(0, 2), 16)).toString(16).padStart(2, '0');
-            const g = (255 - parseInt(c.substring(2, 4), 16)).toString(16).padStart(2, '0');
-            const b = (255 - parseInt(c.substring(4, 6), 16)).toString(16).padStart(2, '0');
-            return '#' + r + g + b;
+            const r = parseInt(c.substring(0, 2), 16);
+            const g = parseInt(c.substring(2, 4), 16);
+            const b = parseInt(c.substring(4, 6), 16);
+            const lum = (r * 299 + g * 587 + b * 114) / 1000;
+            return lum > 128 ? '#404040' : '#c0c0c0';
         }
 
         // Debounce helper
@@ -1045,9 +1046,9 @@
                 <div class="panel-header">
                     <span class="panel-title">${panel.name}</span>
                     <div class="panel-header-actions" style="position:relative;">
-                        <button class="theme-btn" id="theme-btn-${panel.id}" onclick="toggleThemeMenu('${panel.id}')" title="Color scheme"><span class="theme-ring" style="background:${THEMES['default'].dot};border-color:${invertColor(THEMES['default'].dot)}"></span></button>
+                        <button class="theme-btn" id="theme-btn-${panel.id}" onclick="toggleThemeMenu('${panel.id}')" title="Color scheme"><span class="theme-ring" style="background:${THEMES['default'].dot};border-color:${contrastGrey(THEMES['default'].dot)}"></span></button>
                         <div class="theme-menu" id="theme-menu-${panel.id}">
-                            ${THEME_ORDER.map(k => `<a onclick="event.stopPropagation();setTheme('${panel.id}','${k}')" data-theme="${k}" data-cursor="${THEMES[k].cursor}"><span class="theme-dot" style="background:${THEMES[k].dot};border-color:${invertColor(THEMES[k].dot)}"></span>${THEMES[k].label}</a>`).join('')}
+                            ${THEME_ORDER.map(k => `<a onclick="event.stopPropagation();setTheme('${panel.id}','${k}')" data-theme="${k}" data-cursor="${THEMES[k].cursor}"><span class="theme-dot" style="background:${THEMES[k].dot};border-color:${contrastGrey(THEMES[k].dot)}"></span>${THEMES[k].label}</a>`).join('')}
                         </div>
                         <button class="font-btn" onclick="changeFontSize('${panel.id}', -1)" title="Smaller">&#8722;</button>
                         <button class="font-btn" onclick="changeFontSize('${panel.id}', 1)" title="Bigger">+</button>
@@ -1233,7 +1234,7 @@
                 const isActive = a.dataset.theme === current;
                 a.classList.toggle('active', isActive);
                 const dot = a.querySelector('.theme-dot');
-                if (dot) dot.style.outlineColor = isActive ? a.dataset.cursor : 'transparent';
+                if (dot) dot.style.outlineColor = isActive ? '#a0a0a0' : 'transparent';
             });
         }
 
@@ -1264,7 +1265,7 @@
                 const ring = btn.querySelector('.theme-ring');
                 if (ring) {
                     ring.style.background = t.dot;
-                    ring.style.borderColor = invertColor(t.dot);
+                    ring.style.borderColor = contrastGrey(t.dot);
                 }
             }
             // Update active markers in the menu
@@ -1274,7 +1275,7 @@
                     const isActive = a.dataset.theme === themeKey;
                     a.classList.toggle('active', isActive);
                     const dot = a.querySelector('.theme-dot');
-                    if (dot) dot.style.outlineColor = isActive ? a.dataset.cursor : 'transparent';
+                    if (dot) dot.style.outlineColor = isActive ? '#a0a0a0' : 'transparent';
                 });
                 menu.classList.remove('open');
             }
