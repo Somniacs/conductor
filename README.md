@@ -87,9 +87,15 @@ tailscale status
 
 **3. Open on your phone/tablet:**
 
-Option A — use the dashboard's **Link Device** feature (hamburger menu → Link Device) to show a scannable QR code.
+Option A — run `conductor qr` to show a QR code in the terminal and open a clean SVG in the browser:
 
-Option B — type the URL:
+```
+$ conductor qr
+```
+
+Option B — use the dashboard's **Link Device** feature (hamburger menu → Link Device).
+
+Option C — type the URL:
 
 ```
 http://my-machine:7777
@@ -127,6 +133,7 @@ The web dashboard at `http://127.0.0.1:7777` provides:
 | `conductor list` | List active sessions |
 | `conductor stop NAME` | Stop a session |
 | `conductor open` | Open the dashboard in the default browser |
+| `conductor qr` | Show QR code (terminal + opens SVG in browser) |
 
 `conductor run` auto-starts the server as a background daemon if it isn't already running. If no name is given, the command name is used.
 

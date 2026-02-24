@@ -158,5 +158,54 @@ def open():
     webbrowser.open(BASE_URL)
 
 
+@cli.command()
+def qr():
+    """Show a QR code to open the dashboard on your phone.
+
+    Detects your Tailscale IP and generates a scannable QR code.
+    Prints it in the terminal and opens a clean SVG image as fallback.
+    """
+    import shutil
+    import tempfile
+    import webbrowser
+
+    import qrcode
+    import qrcode.image.svg
+
+    # Try to get Tailscale IP
+    tailscale_ip = None
+    if shutil.which("tailscale"):
+        try:
+            result = subprocess.run(
+                ["tailscale", "ip", "-4"],
+                capture_output=True, text=True, timeout=5,
+            )
+            if result.returncode == 0:
+                tailscale_ip = result.stdout.strip().split("\n")[0]
+        except Exception:
+            pass
+
+    if tailscale_ip:
+        url = f"http://{tailscale_ip}:{PORT}"
+    else:
+        url = f"http://localhost:{PORT}"
+        click.echo("Tailscale not found. Using localhost (won't work from other devices).")
+
+    # Print ASCII in terminal
+    click.echo(f"\n♭ conductor — scan to open on your phone\n")
+    qr_obj = qrcode.QRCode(border=2)
+    qr_obj.add_data(url)
+    qr_obj.make(fit=True)
+    qr_obj.print_ascii(invert=True)
+    click.echo(f"\n  {url}\n")
+
+    # Also generate a clean SVG and open it in the browser/viewer
+    svg_path = os.path.join(tempfile.gettempdir(), "conductor-qr.svg")
+    img = qrcode.make(url, image_factory=qrcode.image.svg.SvgPathImage)
+    img.save(svg_path)
+    click.echo(f"  QR image: {svg_path}")
+    webbrowser.open(f"file://{svg_path}")
+
+
 if __name__ == "__main__":
     cli()
