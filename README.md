@@ -192,6 +192,14 @@ conductor/
 └── LICENSE                    # MIT
 ```
 
+## Platform Support
+
+| Platform | Status |
+|---|---|
+| Linux | Supported |
+| macOS | Supported — [setup guide](docs/MACOS.md) |
+| Windows | Not yet — [roadmap & WSL workaround](docs/WINDOWS.md) |
+
 ## Requirements
 
 - Python 3.10+
