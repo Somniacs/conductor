@@ -28,6 +28,11 @@ class PTYProcess:
         env = os.environ.copy()
         env["TERM"] = "xterm-256color"
 
+        # Clean env so spawned processes don't think they're nested
+        for key in list(env):
+            if key.startswith("CLAUDE"):
+                del env[key]
+
         self.process = subprocess.Popen(
             args,
             stdin=slave_fd,
