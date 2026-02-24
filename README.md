@@ -117,7 +117,10 @@ The web dashboard at `http://127.0.0.1:7777` provides:
 - **Keyboard input** — type directly into the terminal
 - **New session** — create sessions from the browser with directory picker
 - **Kill confirmation** — stop sessions with a confirmation dialog
+- **Color themes** — 6 presets per panel: Default, Dark, Mid, Bright, Bernstein, Green (retro CRT)
 - **Font size controls** — per-panel `+` / `−` buttons, adaptive defaults for desktop and mobile
+- **Idle notifications** — browser notification when a session is waiting for input (when tab not visible)
+- **Link Device** — QR code in the hamburger menu for opening the dashboard on another device
 - **Collapsible sidebar** — chevron toggle, auto-reopens when all panels close
 - **Auto-reconnect** — WebSocket reconnects automatically on disconnect
 - **Minimum 80 columns** — narrow panels get horizontal scroll instead of reflow
@@ -185,7 +188,8 @@ conductor/
 ├── cli/main.py               # Click CLI
 ├── static/index.html          # Dashboard (single-file HTML/JS/CSS)
 ├── main.py                    # Entry point
-└── pyproject.toml
+├── pyproject.toml
+└── LICENSE                    # MIT
 ```
 
 ## Requirements
