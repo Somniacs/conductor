@@ -1,0 +1,655 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Conductor</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/xterm@5.3.0/css/xterm.css">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+            background: #0a0a1a;
+            color: #e0e0e0;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        .layout {
+            display: grid;
+            grid-template-columns: 260px 1fr;
+            height: 100vh;
+        }
+
+        /* Sidebar */
+        .sidebar {
+            background: #10102a;
+            border-right: 1px solid #1e1e3e;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        .sidebar-header {
+            padding: 20px 16px 12px;
+            border-bottom: 1px solid #1e1e3e;
+        }
+
+        .sidebar-header h1 {
+            font-size: 17px;
+            font-weight: 600;
+            color: #8080ff;
+            letter-spacing: 0.5px;
+        }
+
+        .sidebar-actions {
+            padding: 12px;
+            border-bottom: 1px solid #1e1e3e;
+            display: flex;
+            gap: 6px;
+        }
+
+        .sidebar-actions button {
+            flex: 1;
+            padding: 7px 10px;
+            background: #1a1a3e;
+            border: 1px solid #2a2a5a;
+            color: #c0c0e0;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 12px;
+        }
+
+        .sidebar-actions button:hover {
+            background: #242450;
+        }
+
+        .sidebar-actions button.active {
+            background: #2a2a6a;
+            border-color: #4a4aaa;
+        }
+
+        #session-list {
+            flex: 1;
+            overflow-y: auto;
+            padding: 8px;
+        }
+
+        .session-item {
+            padding: 10px 12px;
+            border-radius: 6px;
+            cursor: pointer;
+            margin-bottom: 2px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 13px;
+            transition: background 0.15s;
+        }
+
+        .session-item:hover {
+            background: #1a1a3e;
+        }
+
+        .session-item.active {
+            background: #1e1e4e;
+        }
+
+        .session-name {
+            font-weight: 500;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .session-status {
+            font-size: 11px;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-weight: 500;
+        }
+
+        .session-status.running {
+            color: #44dd77;
+            background: #113322;
+        }
+
+        .session-status.exited {
+            color: #ff6666;
+            background: #331111;
+        }
+
+        .session-status.killed {
+            color: #ff9944;
+            background: #332211;
+        }
+
+        .session-actions {
+            display: flex;
+            gap: 4px;
+            margin-left: 6px;
+        }
+
+        .session-actions button {
+            background: none;
+            border: none;
+            color: #666;
+            cursor: pointer;
+            font-size: 14px;
+            padding: 2px 4px;
+            border-radius: 3px;
+        }
+
+        .session-actions button:hover {
+            color: #ff6666;
+            background: #331111;
+        }
+
+        /* New session dialog */
+        .new-session {
+            padding: 12px;
+            border-top: 1px solid #1e1e3e;
+            display: none;
+        }
+
+        .new-session.open {
+            display: block;
+        }
+
+        .new-session input {
+            width: 100%;
+            padding: 7px 10px;
+            background: #0a0a1a;
+            border: 1px solid #2a2a5a;
+            color: #e0e0e0;
+            border-radius: 5px;
+            font-size: 13px;
+            margin-bottom: 6px;
+        }
+
+        .new-session button {
+            width: 100%;
+            padding: 7px;
+            background: #2a2a6a;
+            border: 1px solid #3a3aaa;
+            color: #e0e0e0;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 13px;
+        }
+
+        .new-session button:hover {
+            background: #3a3a7a;
+        }
+
+        /* Panels */
+        .content {
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        .toolbar {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 6px 12px;
+            background: #10102a;
+            border-bottom: 1px solid #1e1e3e;
+            font-size: 12px;
+            color: #808090;
+        }
+
+        .toolbar button {
+            padding: 4px 10px;
+            background: #1a1a3e;
+            border: 1px solid #2a2a5a;
+            color: #a0a0c0;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 11px;
+        }
+
+        .toolbar button:hover {
+            background: #242450;
+        }
+
+        .toolbar button.active {
+            background: #2a2a6a;
+            border-color: #4a4aaa;
+            color: #e0e0e0;
+        }
+
+        #panels {
+            flex: 1;
+            display: grid;
+            gap: 1px;
+            background: #0a0a1a;
+            overflow: hidden;
+        }
+
+        .panel {
+            display: flex;
+            flex-direction: column;
+            background: #12122a;
+            overflow: hidden;
+        }
+
+        .panel-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 6px 12px;
+            background: #0e0e24;
+            border-bottom: 1px solid #1e1e3e;
+            font-size: 12px;
+            min-height: 32px;
+        }
+
+        .panel-header .panel-title {
+            font-weight: 500;
+            color: #a0a0d0;
+        }
+
+        .panel-header button {
+            background: none;
+            border: none;
+            color: #606080;
+            cursor: pointer;
+            font-size: 16px;
+            padding: 0 4px;
+            line-height: 1;
+        }
+
+        .panel-header button:hover {
+            color: #ff6666;
+        }
+
+        .panel-terminal {
+            flex: 1;
+            overflow: hidden;
+        }
+
+        /* Fallback terminal (no xterm.js) */
+        .panel-terminal pre {
+            padding: 8px 12px;
+            font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+            font-size: 13px;
+            line-height: 1.4;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+            overflow-y: auto;
+            height: 100%;
+            color: #d0d0d0;
+        }
+
+        .panel-input {
+            padding: 6px 8px;
+            border-top: 1px solid #1e1e3e;
+            background: #0e0e24;
+        }
+
+        .panel-input input {
+            width: 100%;
+            padding: 6px 10px;
+            background: #0a0a1a;
+            border: 1px solid #2a2a5a;
+            color: #e0e0e0;
+            border-radius: 4px;
+            font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+            font-size: 13px;
+            outline: none;
+        }
+
+        .panel-input input:focus {
+            border-color: #4a4aaa;
+        }
+
+        /* Empty state */
+        .empty-state {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            height: 100%;
+            color: #404060;
+            font-size: 14px;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .empty-state .icon {
+            font-size: 48px;
+            opacity: 0.3;
+        }
+
+        /* Split modes */
+        #panels.split-1 { grid-template-columns: 1fr; grid-template-rows: 1fr; }
+        #panels.split-2 { grid-template-columns: 1fr 1fr; grid-template-rows: 1fr; }
+        #panels.split-3 { grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr; }
+        #panels.split-4 { grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr; }
+    </style>
+</head>
+<body>
+    <div class="layout">
+        <aside class="sidebar">
+            <div class="sidebar-header">
+                <h1>&#9737; Conductor</h1>
+            </div>
+            <div class="sidebar-actions">
+                <button onclick="toggleNewSession()">+ New</button>
+            </div>
+            <div id="session-list"></div>
+            <div class="new-session" id="new-session-dialog">
+                <input type="text" id="new-name" placeholder="Session name" autocomplete="off">
+                <input type="text" id="new-command" placeholder="Command (e.g. claude, bash)" autocomplete="off"
+                       onkeydown="if(event.key==='Enter') createSession()">
+                <button onclick="createSession()">Run</button>
+            </div>
+        </aside>
+        <main class="content">
+            <div class="toolbar">
+                <span>Split:</span>
+                <button class="active" onclick="setSplit(1)">1</button>
+                <button onclick="setSplit(2)">2</button>
+                <button onclick="setSplit(4)">4</button>
+            </div>
+            <div id="panels" class="split-1">
+                <div class="empty-state">
+                    <div class="icon">&#9737;</div>
+                    <div>Select a session or create a new one</div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/xterm@5.3.0/lib/xterm.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@xterm/addon-fit@0.10.0/lib/addon-fit.js"></script>
+    <script>
+        // --- State ---
+        let sessions = [];
+        let panels = [];
+        let maxPanels = 1;
+        const hasXterm = typeof Terminal !== 'undefined';
+
+        // --- Session List ---
+        async function fetchSessions() {
+            try {
+                const resp = await fetch('/sessions');
+                sessions = await resp.json();
+                renderSessionList();
+            } catch (e) {
+                // Server unreachable
+            }
+        }
+
+        function renderSessionList() {
+            const list = document.getElementById('session-list');
+            if (sessions.length === 0) {
+                list.innerHTML = '<div style="padding:12px;color:#404060;font-size:13px;">No sessions</div>';
+                return;
+            }
+            list.innerHTML = sessions.map(s => {
+                const isOpen = panels.some(p => p.id === s.id);
+                return `
+                    <div class="session-item ${isOpen ? 'active' : ''}" onclick="openSession('${s.id}', '${s.name}')">
+                        <span class="session-name">${s.name}</span>
+                        <div style="display:flex;align-items:center;gap:4px;">
+                            <span class="session-status ${s.status}">${s.status}</span>
+                            <div class="session-actions">
+                                <button onclick="event.stopPropagation();killSession('${s.id}')" title="Stop">&times;</button>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        // --- Panels ---
+        function openSession(id, name) {
+            // Already open? Focus it
+            if (panels.find(p => p.id === id)) return;
+
+            // Respect max panels
+            while (panels.length >= maxPanels) {
+                closePanel(panels[0].id);
+            }
+
+            const panel = { id, name, ws: null, terminal: null, fitAddon: null, element: null };
+            panels.push(panel);
+            renderPanels();
+            connectWebSocket(panel);
+        }
+
+        function renderPanels() {
+            const container = document.getElementById('panels');
+            container.innerHTML = '';
+
+            if (panels.length === 0) {
+                container.innerHTML = `
+                    <div class="empty-state">
+                        <div class="icon">&#9737;</div>
+                        <div>Select a session or create a new one</div>
+                    </div>`;
+                return;
+            }
+
+            panels.forEach(panel => {
+                const div = document.createElement('div');
+                div.className = 'panel';
+                div.id = `panel-${panel.id}`;
+
+                const inputId = `input-${panel.id}`;
+                const termId = `term-${panel.id}`;
+
+                div.innerHTML = `
+                    <div class="panel-header">
+                        <span class="panel-title">${panel.name}</span>
+                        <button onclick="closePanel('${panel.id}')">&times;</button>
+                    </div>
+                    <div class="panel-terminal" id="${termId}"></div>
+                    <div class="panel-input">
+                        <input type="text" id="${inputId}" placeholder="Send input..."
+                               onkeydown="handlePanelInput(event, '${panel.id}')">
+                    </div>
+                `;
+
+                container.appendChild(div);
+                panel.element = div;
+
+                // Initialize terminal
+                if (hasXterm) {
+                    const term = new Terminal({
+                        cursorBlink: true,
+                        fontSize: 14,
+                        fontFamily: "'Consolas', 'Monaco', 'Courier New', monospace",
+                        theme: {
+                            background: '#12122a',
+                            foreground: '#d0d0e0',
+                            cursor: '#8080ff',
+                            selectionBackground: '#3a3a7a',
+                        },
+                        scrollback: 5000,
+                        convertEol: false,
+                    });
+
+                    const hasFitAddon = typeof FitAddon !== 'undefined';
+                    if (hasFitAddon) {
+                        const fitAddon = new FitAddon.FitAddon();
+                        term.loadAddon(fitAddon);
+                        term.open(document.getElementById(termId));
+                        fitAddon.fit();
+                        panel.fitAddon = fitAddon;
+                    } else {
+                        term.open(document.getElementById(termId));
+                    }
+
+                    // Forward keystrokes via WebSocket
+                    term.onData((data) => {
+                        if (panel.ws && panel.ws.readyState === WebSocket.OPEN) {
+                            panel.ws.send(data);
+                        }
+                    });
+
+                    panel.terminal = term;
+                } else {
+                    // Fallback: plain pre element
+                    const termDiv = document.getElementById(termId);
+                    termDiv.innerHTML = '<pre></pre>';
+                }
+            });
+
+            renderSessionList(); // Update active states
+        }
+
+        function closePanel(id) {
+            const idx = panels.findIndex(p => p.id === id);
+            if (idx < 0) return;
+            const panel = panels[idx];
+            if (panel.ws) { panel.ws.close(); panel.ws = null; }
+            if (panel.terminal) { panel.terminal.dispose(); }
+            panels.splice(idx, 1);
+            renderPanels();
+        }
+
+        // --- WebSocket ---
+        function connectWebSocket(panel) {
+            const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
+            const ws = new WebSocket(`${protocol}//${location.host}/sessions/${panel.id}/stream`);
+            ws.binaryType = 'arraybuffer';
+
+            ws.onopen = () => {};
+
+            ws.onmessage = (event) => {
+                if (event.data instanceof ArrayBuffer && event.data.byteLength === 0) return; // keepalive
+                if (panel.terminal) {
+                    const data = event.data instanceof ArrayBuffer
+                        ? new Uint8Array(event.data)
+                        : event.data;
+                    panel.terminal.write(data);
+                } else {
+                    // Fallback
+                    const termDiv = document.getElementById(`term-${panel.id}`);
+                    const pre = termDiv && termDiv.querySelector('pre');
+                    if (pre) {
+                        const text = event.data instanceof ArrayBuffer
+                            ? new TextDecoder().decode(event.data)
+                            : event.data;
+                        pre.textContent += text;
+                        pre.scrollTop = pre.scrollHeight;
+                    }
+                }
+            };
+
+            ws.onclose = () => {
+                // Auto-reconnect if panel still exists
+                setTimeout(() => {
+                    if (panels.find(p => p.id === panel.id)) {
+                        connectWebSocket(panel);
+                    }
+                }, 2000);
+            };
+
+            ws.onerror = () => {};
+
+            panel.ws = ws;
+        }
+
+        // --- Input ---
+        function handlePanelInput(event, id) {
+            if (event.key !== 'Enter') return;
+            const input = event.target;
+            const panel = panels.find(p => p.id === id);
+            if (panel && panel.ws && panel.ws.readyState === WebSocket.OPEN) {
+                panel.ws.send(input.value + '\n');
+                input.value = '';
+            }
+        }
+
+        // --- Split View ---
+        function setSplit(n) {
+            maxPanels = n;
+            document.getElementById('panels').className = `split-${n}`;
+            // Update toolbar buttons
+            document.querySelectorAll('.toolbar button').forEach(btn => {
+                btn.classList.toggle('active', btn.textContent.trim() === String(n));
+            });
+        }
+
+        // --- New Session ---
+        function toggleNewSession() {
+            const dialog = document.getElementById('new-session-dialog');
+            dialog.classList.toggle('open');
+            if (dialog.classList.contains('open')) {
+                document.getElementById('new-name').focus();
+            }
+        }
+
+        async function createSession() {
+            const nameEl = document.getElementById('new-name');
+            const cmdEl = document.getElementById('new-command');
+            const name = nameEl.value.trim();
+            const command = cmdEl.value.trim();
+            if (!name || !command) return;
+
+            try {
+                const resp = await fetch('/sessions/run', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ name, command }),
+                });
+                if (resp.ok) {
+                    nameEl.value = '';
+                    cmdEl.value = '';
+                    document.getElementById('new-session-dialog').classList.remove('open');
+                    await fetchSessions();
+                    openSession(name, name);
+                } else {
+                    const err = await resp.json();
+                    alert(err.detail || 'Failed to create session');
+                }
+            } catch (e) {
+                alert('Server unreachable');
+            }
+        }
+
+        async function killSession(id) {
+            try {
+                await fetch(`/sessions/${id}`, { method: 'DELETE' });
+                closePanel(id);
+                await fetchSessions();
+            } catch (e) {}
+        }
+
+        // --- Resize Handling ---
+        function handleResize() {
+            panels.forEach(panel => {
+                if (panel.fitAddon) {
+                    try {
+                        panel.fitAddon.fit();
+                        if (panel.terminal && panel.ws && panel.ws.readyState === WebSocket.OPEN) {
+                            const dims = panel.fitAddon.proposeDimensions();
+                            if (dims) {
+                                fetch(`/sessions/${panel.id}/resize`, {
+                                    method: 'POST',
+                                    headers: { 'Content-Type': 'application/json' },
+                                    body: JSON.stringify({ rows: dims.rows, cols: dims.cols }),
+                                });
+                            }
+                        }
+                    } catch (e) {}
+                }
+            });
+        }
+
+        window.addEventListener('resize', () => {
+            clearTimeout(window._resizeTimer);
+            window._resizeTimer = setTimeout(handleResize, 200);
+        });
+
+        // --- Init ---
+        fetchSessions();
+        setInterval(fetchSessions, 3000);
+    </script>
+</body>
+</html>
