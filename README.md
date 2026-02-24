@@ -87,32 +87,7 @@ tailscale status
 
 **3. Open on your phone/tablet:**
 
-Option A — scan a QR code:
-
-```
-$ conductor qr
-
-♭ conductor — scan to open on your phone
-
-█▀▀▀▀▀▀▀█▀▀███▀▀█▀█▀▀▀▀▀▀▀█
-█ █▀▀▀█ ██▀ ███ ▄▄█ █▀▀▀█ █
-█ █   █ █  ▀▀▀▄▀█▄█ █   █ █
-█ ▀▀▀▀▀ █ ▄▀▄ ▄ ▄ █ ▀▀▀▀▀ █
-█▀███▀█▀▀  █ ▄▀█▄▄▀▀▀▀▀██▀█
-██ █▄▀█▀ ▀▀▀█  ▄██▀▄▄▄ ▀▄██
-█ ▄ █▄▀▀▄█ ▄▀▀  █▀█▄▀▀▀  ▀█
-█▄█▀█▀▀▀ ▄█▄██▄▄ ▀ █▄ ▀▀▄██
-█▀▀▀▄▄▄▀▄▀▀█▀▄▀▀▀▀▀▀▀▀▄ ▄██
-█▀▀▀▀▀▀▀█  █▀ ▀ ▀ █▀█ ▀▀███
-█ █▀▀▀█ █▀▀▀▄▀ █▀ ▀▀▀ ▄▀ ▀█
-█ █   █ ███ ██▄▄█▄▀█▀▀▄▄▀▄█
-█ ▀▀▀▀▀ █▀▀ ▀▄▀ ▄█ █▄ █▀ ▀█
-▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀
-
-  http://100.xx.xx.xx:7777
-```
-
-Point your phone camera at the QR code — it opens the dashboard.
+Option A — use the dashboard's **Link Device** feature (hamburger menu → Link Device) to show a scannable QR code.
 
 Option B — type the URL:
 
@@ -151,7 +126,7 @@ The web dashboard at `http://127.0.0.1:7777` provides:
 | `conductor run COMMAND [NAME]` | Start a managed session |
 | `conductor list` | List active sessions |
 | `conductor stop NAME` | Stop a session |
-| `conductor qr` | Show QR code with Tailscale URL for phone access |
+| `conductor open` | Open the dashboard in the default browser |
 
 `conductor run` auto-starts the server as a background daemon if it isn't already running. If no name is given, the command name is used.
 
