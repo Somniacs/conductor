@@ -61,14 +61,8 @@
             font-size: 12px;
         }
 
-        .sidebar-actions button:hover {
-            background: #242450;
-        }
-
-        .sidebar-actions button.active {
-            background: #2a2a6a;
-            border-color: #4a4aaa;
-        }
+        .sidebar-actions button:hover { background: #242450; }
+        .sidebar-actions button.active { background: #2a2a6a; border-color: #4a4aaa; }
 
         #session-list {
             flex: 1;
@@ -88,13 +82,8 @@
             transition: background 0.15s;
         }
 
-        .session-item:hover {
-            background: #1a1a3e;
-        }
-
-        .session-item.active {
-            background: #1e1e4e;
-        }
+        .session-item:hover { background: #1a1a3e; }
+        .session-item.active { background: #1e1e4e; }
 
         .session-name {
             font-weight: 500;
@@ -110,41 +99,16 @@
             font-weight: 500;
         }
 
-        .session-status.running {
-            color: #44dd77;
-            background: #113322;
-        }
+        .session-status.running { color: #44dd77; background: #113322; }
+        .session-status.exited  { color: #ff6666; background: #331111; }
+        .session-status.killed  { color: #ff9944; background: #332211; }
 
-        .session-status.exited {
-            color: #ff6666;
-            background: #331111;
-        }
-
-        .session-status.killed {
-            color: #ff9944;
-            background: #332211;
-        }
-
-        .session-actions {
-            display: flex;
-            gap: 4px;
-            margin-left: 6px;
-        }
-
+        .session-actions { display: flex; gap: 4px; margin-left: 6px; }
         .session-actions button {
-            background: none;
-            border: none;
-            color: #666;
-            cursor: pointer;
-            font-size: 14px;
-            padding: 2px 4px;
-            border-radius: 3px;
+            background: none; border: none; color: #666;
+            cursor: pointer; font-size: 14px; padding: 2px 4px; border-radius: 3px;
         }
-
-        .session-actions button:hover {
-            color: #ff6666;
-            background: #331111;
-        }
+        .session-actions button:hover { color: #ff6666; background: #331111; }
 
         /* New session dialog */
         .new-session {
@@ -153,11 +117,19 @@
             display: none;
         }
 
-        .new-session.open {
+        .new-session.open { display: block; }
+
+        .new-session label {
             display: block;
+            font-size: 11px;
+            color: #808090;
+            margin-bottom: 3px;
+            margin-top: 8px;
         }
 
-        .new-session input {
+        .new-session label:first-child { margin-top: 0; }
+
+        .new-session input, .new-session select {
             width: 100%;
             padding: 7px 10px;
             background: #0a0a1a;
@@ -165,12 +137,14 @@
             color: #e0e0e0;
             border-radius: 5px;
             font-size: 13px;
-            margin-bottom: 6px;
         }
+
+        .new-session select option { background: #0a0a1a; }
 
         .new-session button {
             width: 100%;
             padding: 7px;
+            margin-top: 10px;
             background: #2a2a6a;
             border: 1px solid #3a3aaa;
             color: #e0e0e0;
@@ -179,11 +153,9 @@
             font-size: 13px;
         }
 
-        .new-session button:hover {
-            background: #3a3a7a;
-        }
+        .new-session button:hover { background: #3a3a7a; }
 
-        /* Panels */
+        /* Content area */
         .content {
             display: flex;
             flex-direction: column;
@@ -211,29 +183,71 @@
             font-size: 11px;
         }
 
-        .toolbar button:hover {
-            background: #242450;
+        .toolbar button:hover { background: #242450; }
+        .toolbar button.active { background: #2a2a6a; border-color: #4a4aaa; color: #e0e0e0; }
+
+        .toolbar .sep {
+            width: 1px;
+            height: 16px;
+            background: #2a2a4a;
+            margin: 0 4px;
         }
 
-        .toolbar button.active {
-            background: #2a2a6a;
-            border-color: #4a4aaa;
-            color: #e0e0e0;
-        }
-
+        /* Panels container */
         #panels {
             flex: 1;
-            display: grid;
-            gap: 1px;
+            display: flex;
+            overflow: hidden;
             background: #0a0a1a;
+        }
+
+        /* Resizable split panes */
+        .split-container {
+            display: flex;
+            width: 100%;
+            height: 100%;
             overflow: hidden;
         }
 
+        .split-container.vertical { flex-direction: column; }
+        .split-container.horizontal { flex-direction: row; }
+
+        .split-pane {
+            flex: 1;
+            overflow: hidden;
+            display: flex;
+            min-width: 100px;
+            min-height: 80px;
+        }
+
+        .split-handle {
+            flex-shrink: 0;
+            background: #1e1e3e;
+            transition: background 0.15s;
+        }
+
+        .split-handle:hover, .split-handle.dragging {
+            background: #4a4aaa;
+        }
+
+        .split-handle.h-handle {
+            width: 4px;
+            cursor: col-resize;
+        }
+
+        .split-handle.v-handle {
+            height: 4px;
+            cursor: row-resize;
+        }
+
+        /* Panel */
         .panel {
             display: flex;
             flex-direction: column;
             background: #12122a;
             overflow: hidden;
+            width: 100%;
+            height: 100%;
         }
 
         .panel-header {
@@ -247,43 +261,24 @@
             min-height: 32px;
         }
 
-        .panel-header .panel-title {
-            font-weight: 500;
-            color: #a0a0d0;
-        }
-
+        .panel-header .panel-title { font-weight: 500; color: #a0a0d0; }
         .panel-header button {
-            background: none;
-            border: none;
-            color: #606080;
-            cursor: pointer;
-            font-size: 16px;
-            padding: 0 4px;
-            line-height: 1;
+            background: none; border: none; color: #606080;
+            cursor: pointer; font-size: 16px; padding: 0 4px; line-height: 1;
         }
+        .panel-header button:hover { color: #ff6666; }
 
-        .panel-header button:hover {
-            color: #ff6666;
-        }
+        .panel-terminal { flex: 1; overflow: hidden; }
 
-        .panel-terminal {
-            flex: 1;
-            overflow: hidden;
-        }
-
-        /* Fallback terminal (no xterm.js) */
         .panel-terminal pre {
             padding: 8px 12px;
             font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
-            font-size: 13px;
-            line-height: 1.4;
-            white-space: pre-wrap;
-            word-wrap: break-word;
-            overflow-y: auto;
-            height: 100%;
-            color: #d0d0d0;
+            font-size: 13px; line-height: 1.4;
+            white-space: pre-wrap; word-wrap: break-word;
+            overflow-y: auto; height: 100%; color: #d0d0d0;
         }
 
+        /* Fallback input bar (only shown when xterm.js unavailable) */
         .panel-input {
             padding: 6px 8px;
             border-top: 1px solid #1e1e3e;
@@ -302,32 +297,17 @@
             outline: none;
         }
 
-        .panel-input input:focus {
-            border-color: #4a4aaa;
-        }
+        .panel-input input:focus { border-color: #4a4aaa; }
 
         /* Empty state */
         .empty-state {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            height: 100%;
-            color: #404060;
-            font-size: 14px;
-            flex-direction: column;
-            gap: 8px;
+            display: flex; align-items: center; justify-content: center;
+            height: 100%; width: 100%;
+            color: #404060; font-size: 14px;
+            flex-direction: column; gap: 8px;
         }
 
-        .empty-state .icon {
-            font-size: 48px;
-            opacity: 0.3;
-        }
-
-        /* Split modes */
-        #panels.split-1 { grid-template-columns: 1fr; grid-template-rows: 1fr; }
-        #panels.split-2 { grid-template-columns: 1fr 1fr; grid-template-rows: 1fr; }
-        #panels.split-3 { grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr; }
-        #panels.split-4 { grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr; }
+        .empty-state .icon { font-size: 48px; opacity: 0.3; }
     </style>
 </head>
 <body>
@@ -341,20 +321,24 @@
             </div>
             <div id="session-list"></div>
             <div class="new-session" id="new-session-dialog">
-                <input type="text" id="new-name" placeholder="Session name" autocomplete="off">
-                <input type="text" id="new-command" placeholder="Command (e.g. claude, bash)" autocomplete="off"
-                       onkeydown="if(event.key==='Enter') createSession()">
+                <label>Session name</label>
+                <input type="text" id="new-name" placeholder="e.g. research" autocomplete="off">
+                <label>Command</label>
+                <select id="new-command"></select>
+                <label>Working directory</label>
+                <input type="text" id="new-cwd" placeholder="/home/user/project" autocomplete="off" list="dir-suggestions">
+                <datalist id="dir-suggestions"></datalist>
                 <button onclick="createSession()">Run</button>
             </div>
         </aside>
         <main class="content">
             <div class="toolbar">
-                <span>Split:</span>
-                <button class="active" onclick="setSplit(1)">1</button>
-                <button onclick="setSplit(2)">2</button>
-                <button onclick="setSplit(4)">4</button>
+                <span>Layout:</span>
+                <button class="active" data-layout="single" onclick="setLayout('single')">Single</button>
+                <button data-layout="hsplit" onclick="setLayout('hsplit')">H Split</button>
+                <button data-layout="vsplit" onclick="setLayout('vsplit')">V Split</button>
             </div>
-            <div id="panels" class="split-1">
+            <div id="panels">
                 <div class="empty-state">
                     <div class="icon">&#9737;</div>
                     <div>Select a session or create a new one</div>
@@ -368,9 +352,37 @@
     <script>
         // --- State ---
         let sessions = [];
-        let panels = [];
-        let maxPanels = 1;
+        let panels = [];       // [{id, name, ws, terminal, fitAddon, element}]
+        let layout = 'single'; // 'single' | 'hsplit' | 'vsplit'
+        let allowedCommands = [];
+        let defaultDirs = [];
         const hasXterm = typeof Terminal !== 'undefined';
+
+        // --- Config ---
+        async function fetchConfig() {
+            try {
+                const resp = await fetch('/config');
+                const cfg = await resp.json();
+                allowedCommands = cfg.allowed_commands || [];
+                defaultDirs = cfg.default_directories || [];
+                populateCommandSelect();
+                populateDirSuggestions();
+            } catch (e) {}
+        }
+
+        function populateCommandSelect() {
+            const sel = document.getElementById('new-command');
+            sel.innerHTML = allowedCommands.map(c =>
+                `<option value="${c.command}">${c.label}</option>`
+            ).join('');
+        }
+
+        function populateDirSuggestions() {
+            const dl = document.getElementById('dir-suggestions');
+            dl.innerHTML = defaultDirs.map(d =>
+                `<option value="${d}">`
+            ).join('');
+        }
 
         // --- Session List ---
         async function fetchSessions() {
@@ -378,9 +390,7 @@
                 const resp = await fetch('/sessions');
                 sessions = await resp.json();
                 renderSessionList();
-            } catch (e) {
-                // Server unreachable
-            }
+            } catch (e) {}
         }
 
         function renderSessionList() {
@@ -406,22 +416,22 @@
         }
 
         // --- Panels ---
-        function openSession(id, name) {
-            // Already open? Focus it
-            if (panels.find(p => p.id === id)) return;
+        function maxPanels() {
+            return layout === 'single' ? 1 : 2;
+        }
 
-            // Respect max panels
-            while (panels.length >= maxPanels) {
+        function openSession(id, name) {
+            if (panels.find(p => p.id === id)) return;
+            while (panels.length >= maxPanels()) {
                 closePanel(panels[0].id);
             }
-
             const panel = { id, name, ws: null, terminal: null, fitAddon: null, element: null };
             panels.push(panel);
-            renderPanels();
+            rebuildPanels();
             connectWebSocket(panel);
         }
 
-        function renderPanels() {
+        function rebuildPanels() {
             const container = document.getElementById('panels');
             container.innerHTML = '';
 
@@ -431,33 +441,69 @@
                         <div class="icon">&#9737;</div>
                         <div>Select a session or create a new one</div>
                     </div>`;
+                renderSessionList();
                 return;
             }
 
-            panels.forEach(panel => {
-                const div = document.createElement('div');
-                div.className = 'panel';
-                div.id = `panel-${panel.id}`;
+            if (panels.length === 1 || layout === 'single') {
+                // Single panel fills the container
+                const pane = document.createElement('div');
+                pane.className = 'split-pane';
+                pane.appendChild(buildPanelElement(panels[0]));
+                container.appendChild(pane);
+            } else {
+                // Two panels with a draggable split handle
+                const splitDir = layout === 'hsplit' ? 'horizontal' : 'vertical';
+                const wrapper = document.createElement('div');
+                wrapper.className = `split-container ${splitDir}`;
 
-                const inputId = `input-${panel.id}`;
-                const termId = `term-${panel.id}`;
+                const pane1 = document.createElement('div');
+                pane1.className = 'split-pane';
+                pane1.appendChild(buildPanelElement(panels[0]));
 
-                div.innerHTML = `
-                    <div class="panel-header">
-                        <span class="panel-title">${panel.name}</span>
-                        <button onclick="closePanel('${panel.id}')">&times;</button>
-                    </div>
-                    <div class="panel-terminal" id="${termId}"></div>
-                    <div class="panel-input">
-                        <input type="text" id="${inputId}" placeholder="Send input..."
-                               onkeydown="handlePanelInput(event, '${panel.id}')">
-                    </div>
-                `;
+                const handle = document.createElement('div');
+                handle.className = `split-handle ${splitDir === 'horizontal' ? 'h-handle' : 'v-handle'}`;
+                initDragHandle(handle, pane1, splitDir);
 
-                container.appendChild(div);
-                panel.element = div;
+                const pane2 = document.createElement('div');
+                pane2.className = 'split-pane';
+                pane2.appendChild(buildPanelElement(panels[1]));
 
-                // Initialize terminal
+                wrapper.appendChild(pane1);
+                wrapper.appendChild(handle);
+                wrapper.appendChild(pane2);
+                container.appendChild(wrapper);
+            }
+
+            renderSessionList();
+            // Fit terminals after DOM settles
+            requestAnimationFrame(() => {
+                requestAnimationFrame(handleResize);
+            });
+        }
+
+        function buildPanelElement(panel) {
+            const div = document.createElement('div');
+            div.className = 'panel';
+            div.id = `panel-${panel.id}`;
+
+            const termId = `term-${panel.id}`;
+
+            div.innerHTML = `
+                <div class="panel-header">
+                    <span class="panel-title">${panel.name}</span>
+                    <button onclick="closePanel('${panel.id}')">&times;</button>
+                </div>
+                <div class="panel-terminal" id="${termId}"></div>
+            `;
+
+            panel.element = div;
+
+            // Initialize terminal after it's in the DOM
+            requestAnimationFrame(() => {
+                const termEl = document.getElementById(termId);
+                if (!termEl) return;
+
                 if (hasXterm) {
                     const term = new Terminal({
                         cursorBlink: true,
@@ -473,18 +519,16 @@
                         convertEol: false,
                     });
 
-                    const hasFitAddon = typeof FitAddon !== 'undefined';
-                    if (hasFitAddon) {
+                    if (typeof FitAddon !== 'undefined') {
                         const fitAddon = new FitAddon.FitAddon();
                         term.loadAddon(fitAddon);
-                        term.open(document.getElementById(termId));
+                        term.open(termEl);
                         fitAddon.fit();
                         panel.fitAddon = fitAddon;
                     } else {
-                        term.open(document.getElementById(termId));
+                        term.open(termEl);
                     }
 
-                    // Forward keystrokes via WebSocket
                     term.onData((data) => {
                         if (panel.ws && panel.ws.readyState === WebSocket.OPEN) {
                             panel.ws.send(data);
@@ -493,13 +537,17 @@
 
                     panel.terminal = term;
                 } else {
-                    // Fallback: plain pre element
-                    const termDiv = document.getElementById(termId);
-                    termDiv.innerHTML = '<pre></pre>';
+                    // Fallback: plain text with input bar
+                    termEl.innerHTML = '<pre></pre>';
+                    const inputDiv = document.createElement('div');
+                    inputDiv.className = 'panel-input';
+                    inputDiv.innerHTML = `<input type="text" placeholder="Send input..."
+                        onkeydown="handlePanelInput(event, '${panel.id}')">`;
+                    div.appendChild(inputDiv);
                 }
             });
 
-            renderSessionList(); // Update active states
+            return div;
         }
 
         function closePanel(id) {
@@ -509,7 +557,80 @@
             if (panel.ws) { panel.ws.close(); panel.ws = null; }
             if (panel.terminal) { panel.terminal.dispose(); }
             panels.splice(idx, 1);
-            renderPanels();
+            rebuildPanels();
+        }
+
+        // --- Drag handle for resizable split ---
+        function initDragHandle(handle, pane1, direction) {
+            let startPos, startSize;
+
+            function onMouseDown(e) {
+                e.preventDefault();
+                handle.classList.add('dragging');
+                startPos = direction === 'horizontal' ? e.clientX : e.clientY;
+                startSize = direction === 'horizontal' ? pane1.offsetWidth : pane1.offsetHeight;
+                document.addEventListener('mousemove', onMouseMove);
+                document.addEventListener('mouseup', onMouseUp);
+                document.body.style.cursor = direction === 'horizontal' ? 'col-resize' : 'row-resize';
+                document.body.style.userSelect = 'none';
+            }
+
+            function onMouseMove(e) {
+                const currentPos = direction === 'horizontal' ? e.clientX : e.clientY;
+                const delta = currentPos - startPos;
+                const newSize = Math.max(100, startSize + delta);
+                pane1.style.flex = 'none';
+                if (direction === 'horizontal') {
+                    pane1.style.width = newSize + 'px';
+                } else {
+                    pane1.style.height = newSize + 'px';
+                }
+                handleResize();
+            }
+
+            function onMouseUp() {
+                handle.classList.remove('dragging');
+                document.removeEventListener('mousemove', onMouseMove);
+                document.removeEventListener('mouseup', onMouseUp);
+                document.body.style.cursor = '';
+                document.body.style.userSelect = '';
+                handleResize();
+            }
+
+            handle.addEventListener('mousedown', onMouseDown);
+
+            // Touch support for mobile
+            handle.addEventListener('touchstart', (e) => {
+                e.preventDefault();
+                const touch = e.touches[0];
+                handle.classList.add('dragging');
+                startPos = direction === 'horizontal' ? touch.clientX : touch.clientY;
+                startSize = direction === 'horizontal' ? pane1.offsetWidth : pane1.offsetHeight;
+
+                function onTouchMove(e) {
+                    const touch = e.touches[0];
+                    const currentPos = direction === 'horizontal' ? touch.clientX : touch.clientY;
+                    const delta = currentPos - startPos;
+                    const newSize = Math.max(100, startSize + delta);
+                    pane1.style.flex = 'none';
+                    if (direction === 'horizontal') {
+                        pane1.style.width = newSize + 'px';
+                    } else {
+                        pane1.style.height = newSize + 'px';
+                    }
+                    handleResize();
+                }
+
+                function onTouchEnd() {
+                    handle.classList.remove('dragging');
+                    document.removeEventListener('touchmove', onTouchMove);
+                    document.removeEventListener('touchend', onTouchEnd);
+                    handleResize();
+                }
+
+                document.addEventListener('touchmove', onTouchMove, { passive: false });
+                document.addEventListener('touchend', onTouchEnd);
+            }, { passive: false });
         }
 
         // --- WebSocket ---
@@ -518,23 +639,18 @@
             const ws = new WebSocket(`${protocol}//${location.host}/sessions/${panel.id}/stream`);
             ws.binaryType = 'arraybuffer';
 
-            ws.onopen = () => {};
-
             ws.onmessage = (event) => {
-                if (event.data instanceof ArrayBuffer && event.data.byteLength === 0) return; // keepalive
+                if (event.data instanceof ArrayBuffer && event.data.byteLength === 0) return;
                 if (panel.terminal) {
                     const data = event.data instanceof ArrayBuffer
-                        ? new Uint8Array(event.data)
-                        : event.data;
+                        ? new Uint8Array(event.data) : event.data;
                     panel.terminal.write(data);
                 } else {
-                    // Fallback
                     const termDiv = document.getElementById(`term-${panel.id}`);
                     const pre = termDiv && termDiv.querySelector('pre');
                     if (pre) {
                         const text = event.data instanceof ArrayBuffer
-                            ? new TextDecoder().decode(event.data)
-                            : event.data;
+                            ? new TextDecoder().decode(event.data) : event.data;
                         pre.textContent += text;
                         pre.scrollTop = pre.scrollHeight;
                     }
@@ -542,15 +658,12 @@
             };
 
             ws.onclose = () => {
-                // Auto-reconnect if panel still exists
                 setTimeout(() => {
                     if (panels.find(p => p.id === panel.id)) {
                         connectWebSocket(panel);
                     }
                 }, 2000);
             };
-
-            ws.onerror = () => {};
 
             panel.ws = ws;
         }
@@ -566,14 +679,19 @@
             }
         }
 
-        // --- Split View ---
-        function setSplit(n) {
-            maxPanels = n;
-            document.getElementById('panels').className = `split-${n}`;
-            // Update toolbar buttons
-            document.querySelectorAll('.toolbar button').forEach(btn => {
-                btn.classList.toggle('active', btn.textContent.trim() === String(n));
+        // --- Layout ---
+        function setLayout(l) {
+            layout = l;
+            document.querySelectorAll('.toolbar button[data-layout]').forEach(btn => {
+                btn.classList.toggle('active', btn.dataset.layout === l);
             });
+            // Trim excess panels
+            while (panels.length > maxPanels()) {
+                const p = panels.pop();
+                if (p.ws) p.ws.close();
+                if (p.terminal) p.terminal.dispose();
+            }
+            rebuildPanels();
         }
 
         // --- New Session ---
@@ -586,21 +704,19 @@
         }
 
         async function createSession() {
-            const nameEl = document.getElementById('new-name');
-            const cmdEl = document.getElementById('new-command');
-            const name = nameEl.value.trim();
-            const command = cmdEl.value.trim();
+            const name = document.getElementById('new-name').value.trim();
+            const command = document.getElementById('new-command').value;
+            const cwd = document.getElementById('new-cwd').value.trim() || null;
             if (!name || !command) return;
 
             try {
                 const resp = await fetch('/sessions/run', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ name, command }),
+                    body: JSON.stringify({ name, command, cwd }),
                 });
                 if (resp.ok) {
-                    nameEl.value = '';
-                    cmdEl.value = '';
+                    document.getElementById('new-name').value = '';
                     document.getElementById('new-session-dialog').classList.remove('open');
                     await fetchSessions();
                     openSession(name, name);
@@ -621,7 +737,7 @@
             } catch (e) {}
         }
 
-        // --- Resize Handling ---
+        // --- Resize ---
         function handleResize() {
             panels.forEach(panel => {
                 if (panel.fitAddon) {
@@ -648,6 +764,7 @@
         });
 
         // --- Init ---
+        fetchConfig();
         fetchSessions();
         setInterval(fetchSessions, 3000);
     </script>

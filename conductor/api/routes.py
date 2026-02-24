@@ -1,17 +1,23 @@
 import asyncio
+import shlex
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect, HTTPException
 from pydantic import BaseModel
 
 from conductor.sessions.registry import SessionRegistry
+from conductor.utils.config import ALLOWED_COMMANDS, DEFAULT_DIRECTORIES
 
 router = APIRouter()
 registry = SessionRegistry()
+
+# Build set of allowed base commands for fast lookup
+_allowed_commands = {shlex.split(c["command"])[0] for c in ALLOWED_COMMANDS}
 
 
 class RunRequest(BaseModel):
     name: str
     command: str
+    cwd: str | None = None
 
 
 class InputRequest(BaseModel):
@@ -23,6 +29,15 @@ class ResizeRequest(BaseModel):
     cols: int
 
 
+@router.get("/config")
+async def get_config():
+    """Return allowed commands and directories for the dashboard."""
+    return {
+        "allowed_commands": ALLOWED_COMMANDS,
+        "default_directories": DEFAULT_DIRECTORIES,
+    }
+
+
 @router.get("/sessions")
 async def list_sessions():
     return registry.list_all()
@@ -30,8 +45,20 @@ async def list_sessions():
 
 @router.post("/sessions/run")
 async def create_session(req: RunRequest):
+    # Validate command against whitelist
     try:
-        session = await registry.create(req.name, req.command)
+        base_cmd = shlex.split(req.command)[0]
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid command")
+
+    if base_cmd not in _allowed_commands:
+        raise HTTPException(
+            status_code=403,
+            detail=f"Command '{base_cmd}' is not allowed. Permitted: {', '.join(sorted(_allowed_commands))}",
+        )
+
+    try:
+        session = await registry.create(req.name, req.command, cwd=req.cwd)
         return session.to_dict()
     except ValueError as e:
         raise HTTPException(status_code=409, detail=str(e))

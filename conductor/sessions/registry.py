@@ -12,7 +12,7 @@ class SessionRegistry:
         self.sessions: Dict[str, Session] = {}
         ensure_dirs()
 
-    async def create(self, name: str, command: str) -> Session:
+    async def create(self, name: str, command: str, cwd: str | None = None) -> Session:
         if name in self.sessions:
             existing = self.sessions[name]
             if existing.status == "running":
@@ -20,7 +20,7 @@ class SessionRegistry:
             else:
                 await self.remove(name)
 
-        session = Session(name=name, command=command, session_id=name)
+        session = Session(name=name, command=command, session_id=name, cwd=cwd)
         await session.start()
         self.sessions[name] = session
         self._save_metadata(session)

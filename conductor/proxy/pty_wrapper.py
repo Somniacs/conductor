@@ -11,8 +11,9 @@ import termios
 class PTYProcess:
     """Wraps a subprocess in a pseudo-terminal."""
 
-    def __init__(self, command: str):
+    def __init__(self, command: str, cwd: str | None = None):
         self.command = command
+        self.cwd = cwd
         self.master_fd: int = -1
         self.process: subprocess.Popen | None = None
         self.closed = False
@@ -38,6 +39,7 @@ class PTYProcess:
             stdin=slave_fd,
             stdout=slave_fd,
             stderr=slave_fd,
+            cwd=self.cwd,
             preexec_fn=os.setsid,
             env=env,
         )

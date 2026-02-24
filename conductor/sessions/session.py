@@ -10,11 +10,12 @@ from conductor.utils.config import BUFFER_MAX_BYTES
 class Session:
     """A single managed terminal session backed by a PTY."""
 
-    def __init__(self, name: str, command: str, session_id: str | None = None):
+    def __init__(self, name: str, command: str, session_id: str | None = None, cwd: str | None = None):
         self.id = session_id or name
         self.name = name
         self.command = command
-        self.pty = PTYProcess(command)
+        self.cwd = cwd
+        self.pty = PTYProcess(command, cwd=cwd)
         self.buffer = bytearray()
         self.subscribers: Set[asyncio.Queue] = set()
         self.status = "starting"
@@ -109,4 +110,5 @@ class Session:
             "status": self.status,
             "pid": self.pid,
             "start_time": self.start_time,
+            "cwd": self.cwd,
         }
