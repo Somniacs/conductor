@@ -142,5 +142,49 @@ def stop(name):
         sys.exit(1)
 
 
+@cli.command()
+def qr():
+    """Show a QR code to open the dashboard on your phone.
+
+    Detects your Tailscale IP and generates a scannable QR code
+    pointing to the Conductor dashboard.
+    """
+    import shutil
+
+    # Try to get Tailscale IP
+    tailscale_ip = None
+    if shutil.which("tailscale"):
+        try:
+            result = subprocess.run(
+                ["tailscale", "ip", "-4"],
+                capture_output=True, text=True, timeout=5,
+            )
+            if result.returncode == 0:
+                tailscale_ip = result.stdout.strip().split("\n")[0]
+        except Exception:
+            pass
+
+    if tailscale_ip:
+        url = f"http://{tailscale_ip}:{PORT}"
+    else:
+        url = f"http://localhost:{PORT}"
+        click.echo("Tailscale not found. Using localhost.")
+
+    try:
+        import qrcode
+    except ImportError:
+        click.echo(f"Install qrcode: pip install qrcode")
+        click.echo(f"\nDashboard URL: {url}")
+        return
+
+    qr_obj = qrcode.QRCode(border=1)
+    qr_obj.add_data(url)
+    qr_obj.make(fit=True)
+
+    click.echo(f"\n♭ conductor — scan to open on your phone\n")
+    qr_obj.print_ascii(invert=True)
+    click.echo(f"\n  {url}\n")
+
+
 if __name__ == "__main__":
     cli()

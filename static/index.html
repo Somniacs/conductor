@@ -3,23 +3,25 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Conductor</title>
+    <title>conductor</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='80' font-size='80'>♭</text></svg>">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/xterm@5.3.0/css/xterm.css">
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
 
         body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+            font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
             background: #0a0a1a;
             color: #e0e0e0;
             height: 100vh;
+            height: 100dvh;
             overflow: hidden;
         }
 
         .layout {
-            display: grid;
-            grid-template-columns: 260px 1fr;
+            display: flex;
             height: 100vh;
+            height: 100dvh;
         }
 
         /* Sidebar */
@@ -28,12 +30,18 @@
             border-right: 1px solid #1e1e3e;
             display: flex;
             flex-direction: column;
-            overflow: hidden;
+            overflow: visible;
+            width: 210px;
+            min-width: 210px;
+            flex-shrink: 0;
         }
 
         .sidebar-header {
             padding: 20px 16px 12px;
             border-bottom: 1px solid #1e1e3e;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
         }
 
         .sidebar-header h1 {
@@ -82,10 +90,17 @@
         }
 
         .session-item:hover { background: #1a1a3e; }
-        .session-item.active { background: #1e1e4e; }
+        .session-item.open { background: #151535; }
+        .session-item.focused { background: #1e1e4e; border-left: 2px solid #6060cc; padding-left: 10px; }
 
         .session-name {
             font-weight: 500;
+            overflow: hidden;
+            min-width: 0;
+            flex: 1;
+        }
+
+        .session-name > div:first-child {
             overflow: hidden;
             text-overflow: ellipsis;
             white-space: nowrap;
@@ -154,6 +169,170 @@
 
         .new-session .run-btn:hover { background: #3a3a7a; }
 
+        /* Confirm dialog */
+        .confirm-overlay {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,0.5);
+            z-index: 1000;
+            align-items: center;
+            justify-content: center;
+        }
+        .confirm-overlay.open { display: flex; }
+        .confirm-box {
+            background: #16163a;
+            border: 1px solid #2a2a5a;
+            border-radius: 8px;
+            padding: 20px 24px;
+            min-width: 280px;
+            max-width: 360px;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+        }
+        .confirm-box p {
+            margin: 0 0 16px;
+            color: #d0d0e0;
+            font-size: 14px;
+            line-height: 1.4;
+        }
+        .confirm-actions {
+            display: flex;
+            gap: 8px;
+            justify-content: flex-end;
+        }
+        .confirm-actions button {
+            padding: 6px 16px;
+            border-radius: 5px;
+            border: 1px solid #2a2a5a;
+            cursor: pointer;
+            font-size: 13px;
+        }
+        .confirm-cancel {
+            background: transparent;
+            color: #a0a0b0;
+        }
+        .confirm-cancel:hover { background: #1e1e3e; }
+        .confirm-ok {
+            background: #7a2a2a;
+            border-color: #aa3a3a;
+            color: #f0d0d0;
+        }
+        .confirm-ok:hover { background: #8a3a3a; }
+
+        /* About modal */
+        .about-overlay {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,0.5);
+            z-index: 1000;
+            align-items: center;
+            justify-content: center;
+        }
+        .about-overlay.open { display: flex; }
+        .about-box {
+            background: #16163a;
+            border: 1px solid #2a2a5a;
+            border-radius: 8px;
+            padding: 24px 28px;
+            min-width: 300px;
+            max-width: 420px;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+            position: relative;
+        }
+        .about-box h2 {
+            font-size: 18px;
+            color: #8080ff;
+            margin: 0 0 4px;
+            font-weight: 600;
+        }
+        .about-box .about-version {
+            font-size: 11px;
+            color: #606080;
+            margin-bottom: 14px;
+        }
+        .about-box p {
+            font-size: 13px;
+            color: #b0b0c0;
+            line-height: 1.5;
+            margin: 0 0 12px;
+        }
+        .about-box a {
+            color: #7070cc;
+            text-decoration: none;
+        }
+        .about-box a:hover { text-decoration: underline; }
+        .about-box .about-section {
+            font-size: 11px;
+            color: #606080;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin: 14px 0 6px;
+        }
+        .about-box ul {
+            list-style: none;
+            padding: 0;
+            margin: 0 0 10px;
+            font-size: 12px;
+            color: #a0a0b0;
+        }
+        .about-box ul li { padding: 2px 0; }
+        .about-close {
+            position: absolute;
+            top: 10px;
+            right: 12px;
+            background: none;
+            border: none;
+            color: #606080;
+            font-size: 18px;
+            cursor: pointer;
+            padding: 2px 6px;
+            line-height: 1;
+        }
+        .about-close:hover { color: #c0c0e0; }
+        .menu-btn {
+            background: none;
+            border: none;
+            color: #606080;
+            font-size: 16px;
+            cursor: pointer;
+            padding: 0;
+            line-height: 1;
+        }
+        .menu-btn:hover { color: #a0a0d0; }
+
+        /* Hamburger dropdown */
+        .menu-wrapper { position: relative; }
+        .menu-dropdown {
+            display: none;
+            position: absolute;
+            top: 100%;
+            right: 0;
+            margin-top: 4px;
+            background: #16163a;
+            border: 1px solid #2a2a5a;
+            border-radius: 6px;
+            min-width: 140px;
+            box-shadow: 0 4px 16px rgba(0,0,0,0.4);
+            z-index: 400;
+            overflow: hidden;
+        }
+        .menu-dropdown.open { display: block; }
+        .menu-dropdown a {
+            display: block;
+            padding: 8px 14px;
+            font-size: 13px;
+            color: #c0c0e0;
+            text-decoration: none;
+            cursor: pointer;
+        }
+        .menu-dropdown a:hover { background: #1e1e4e; }
+        .menu-dropdown .menu-sep {
+            height: 1px;
+            background: #2a2a5a;
+            margin: 2px 0;
+        }
+
         /* Directory picker */
         .dir-picker {
             background: #0a0a1a;
@@ -215,18 +394,22 @@
             display: flex;
             flex-direction: column;
             overflow: hidden;
+            flex: 1;
+            min-width: 0;
         }
 
         /* Split toolbar - only visible with 2+ panels */
         .toolbar {
             display: none;
             align-items: center;
+            justify-content: flex-end;
             gap: 8px;
             padding: 4px 12px;
             background: #10102a;
             border-bottom: 1px solid #1e1e3e;
             font-size: 12px;
             color: #808090;
+            flex-shrink: 0;
         }
 
         .toolbar.visible { display: flex; }
@@ -304,7 +487,6 @@
 
         .panel-header {
             display: flex;
-            justify-content: space-between;
             align-items: center;
             padding: 6px 12px;
             background: #0e0e24;
@@ -313,14 +495,88 @@
             min-height: 32px;
         }
 
-        .panel-header .panel-title { font-weight: 500; color: #a0a0d0; }
+        .panel-header .panel-title {
+            flex: 1;
+            text-align: center;
+            font-weight: 500;
+            color: #a0a0d0;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        .panel-focused .panel-header { border-bottom: 1px solid #4040aa; }
+        .panel-focused .panel-header .panel-title { color: #c0c0ff; font-weight: 700; }
+        .panel-header-actions {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
         .panel-header button {
             background: none; border: none; color: #606080;
-            cursor: pointer; font-size: 16px; padding: 0 4px; line-height: 1;
+            cursor: pointer; font-size: 16px; padding: 4px 6px; line-height: 1;
         }
-        .panel-header button:hover { color: #ff6666; }
+        .panel-header button:hover { color: #c0c0e0; }
+        .panel-header button.close-btn:hover { color: #ff6666; }
+        .panel-header .font-btn { font-size: 13px; font-weight: 600; }
+        .panel-header .theme-btn { padding: 3px 6px; display: flex; align-items: center; }
+        .theme-ring {
+            display: inline-block;
+            width: 12px; height: 12px;
+            border-radius: 50%;
+            border: 2px solid;
+            box-sizing: border-box;
+        }
+        .theme-menu {
+            display: none;
+            position: absolute;
+            top: 100%;
+            right: 0;
+            margin-top: 2px;
+            background: #16163a;
+            border: 1px solid #2a2a5a;
+            border-radius: 6px;
+            min-width: 110px;
+            box-shadow: 0 4px 16px rgba(0,0,0,0.4);
+            z-index: 500;
+            overflow: hidden;
+        }
+        .theme-menu.open { display: block; }
+        .theme-menu a {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 6px 12px;
+            font-size: 12px;
+            color: #c0c0e0;
+            text-decoration: none;
+            cursor: pointer;
+        }
+        .theme-menu a:hover { background: #1e1e4e; }
+        .theme-menu a.active { color: #8080ff; }
+        .theme-dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            border: 2px solid;
+            flex-shrink: 0;
+            box-sizing: border-box;
+        }
+        .theme-menu a.active .theme-dot {
+            outline: 2px solid;
+            outline-offset: 1px;
+        }
 
-        .panel-terminal { flex: 1; overflow: hidden; }
+        .panel-terminal {
+            flex: 1;
+            overflow-x: auto;
+            overflow-y: hidden;
+        }
+
+        .terminal-wrapper {
+            width: 100%;
+            height: 100%;
+            /* min-width is set dynamically from JS after measuring char width */
+        }
 
         .panel-terminal pre {
             padding: 8px 12px;
@@ -329,6 +585,14 @@
             white-space: pre-wrap; word-wrap: break-word;
             overflow-y: auto; height: 100%; color: #d0d0d0;
         }
+
+        /* Thin scrollbars */
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #2a2a5a; border-radius: 3px; }
+        ::-webkit-scrollbar-thumb:hover { background: #3a3a7a; }
+        /* Firefox */
+        * { scrollbar-width: thin; scrollbar-color: #2a2a5a transparent; }
 
         /* Fallback input bar (only shown when xterm.js unavailable) */
         .panel-input {
@@ -360,19 +624,113 @@
         }
 
         .empty-state .icon { font-size: 48px; opacity: 0.3; }
+
+        /* Sidebar chevron toggle — sticks to sidebar edge */
+        .drawer-toggle {
+            position: fixed;
+            top: 0;
+            left: 210px;
+            z-index: 301;
+            background: #10102a;
+            border: 1px solid #2a2a5a;
+            border-left: none;
+            color: #8080c0;
+            font-size: 14px;
+            width: 16px;
+            height: 32px;
+            border-radius: 0;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 0;
+            line-height: 1;
+            transition: left 0.2s ease;
+        }
+        .drawer-toggle:hover { color: #c0c0e0; }
+
+        /* When collapsed, chevron at left window edge */
+        .drawer-toggle.collapsed {
+            left: 0;
+            border-left: none;
+            border-radius: 0 4px 4px 0;
+        }
+
+        .sidebar-overlay {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,0.4);
+            z-index: 299;
+        }
+        .sidebar-overlay.open { display: block; }
+
+        /* Collapsible sidebar */
+        .sidebar {
+            position: relative;
+            transition: width 0.2s ease, min-width 0.2s ease;
+        }
+        .layout.sidebar-collapsed .sidebar {
+            width: 0;
+            min-width: 0;
+            border-right: none;
+            overflow: hidden;
+        }
+
+        @media (max-width: 700px) {
+            .sidebar {
+                position: fixed;
+                top: 0; left: 0; bottom: 0;
+                width: 260px;
+                min-width: 260px;
+                z-index: 300;
+                transform: translateX(-100%);
+                transition: transform 0.2s ease;
+            }
+            .sidebar.open { transform: translateX(0); }
+            .layout.sidebar-collapsed .sidebar {
+                width: 260px;
+                min-width: 260px;
+                overflow: visible;
+            }
+            .drawer-toggle {
+                left: 0;
+                width: 20px;
+                border-radius: 0 6px 6px 0;
+            }
+            .drawer-toggle:not(.collapsed) {
+                left: 260px;
+            }
+        }
     </style>
 </head>
 <body>
-    <div class="layout">
-        <aside class="sidebar">
+    <button class="drawer-toggle" id="drawer-toggle" onclick="toggleDrawer()">&#x2039;</button>
+    <div class="sidebar-overlay" id="sidebar-overlay" onclick="toggleDrawer()"></div>
+    <div class="layout" id="layout">
+        <aside class="sidebar" id="sidebar">
             <div class="sidebar-header">
-                <h1>&#9737; Conductor</h1>
+                <h1><a href="https://github.com/xohm/conductor" target="_blank" style="color:inherit;text-decoration:none"><span style="font-size:1.8em;line-height:0;vertical-align:middle">♭</span> conductor</a></h1>
+                <div class="menu-wrapper">
+                    <button class="menu-btn" onclick="toggleMenu()" title="Menu">&#9776;</button>
+                    <div class="menu-dropdown" id="hamburger-menu">
+                        <a onclick="toggleMenu();toggleQR()">Link Device</a>
+                        <div class="menu-sep"></div>
+                        <a href="https://github.com/xohm/conductor/blob/master/README.md" target="_blank" onclick="toggleMenu()">Help</a>
+                        <div class="menu-sep"></div>
+                        <a onclick="toggleMenu();toggleAbout()">About</a>
+                    </div>
+                </div>
             </div>
             <div class="sidebar-actions">
                 <button onclick="toggleNewSession()">+ New</button>
             </div>
             <div id="session-list"></div>
             <div class="new-session" id="new-session-dialog">
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+                    <span style="font-size:12px;font-weight:500;color:#a0a0d0;">New Session</span>
+                    <button onclick="toggleNewSession()" style="background:none;border:none;color:#606080;cursor:pointer;font-size:16px;padding:0 2px;line-height:1;" title="Cancel">&times;</button>
+                </div>
                 <label>Session name</label>
                 <input type="text" id="new-name" placeholder="e.g. research" autocomplete="off">
                 <label>Command</label>
@@ -397,6 +755,44 @@
         </main>
     </div>
 
+    <div class="about-overlay" id="about-dialog" onclick="if(event.target===this)toggleAbout()">
+        <div class="about-box">
+            <button class="about-close" onclick="toggleAbout()">&times;</button>
+            <h2><span style="font-size:1.4em;vertical-align:middle">♭</span> conductor</h2>
+            <div class="about-version">v0.1.0</div>
+            <p>Local orchestration layer for interactive terminal processes. Run sessions on your workstation, interact from anywhere.</p>
+            <div class="about-section">Built with</div>
+            <ul>
+                <li><a href="https://fastapi.tiangolo.com" target="_blank">FastAPI</a> &mdash; async web framework</li>
+                <li><a href="https://xtermjs.org" target="_blank">xterm.js</a> &mdash; terminal rendering</li>
+                <li><a href="https://uvicorn.org" target="_blank">Uvicorn</a> &mdash; ASGI server</li>
+                <li><a href="https://click.palletsprojects.com" target="_blank">Click</a> &mdash; CLI framework</li>
+                <li><a href="https://tailscale.com" target="_blank">Tailscale</a> &mdash; secure remote access</li>
+            </ul>
+            <div class="about-section">Source</div>
+            <p style="margin-bottom:0"><a href="https://github.com/xohm/conductor" target="_blank">github.com/xohm/conductor</a></p>
+        </div>
+    </div>
+
+    <div class="about-overlay" id="qr-dialog" onclick="if(event.target===this)toggleQR()">
+        <div class="about-box" style="text-align:center;min-width:260px;">
+            <button class="about-close" onclick="toggleQR()">&times;</button>
+            <h2 style="font-size:16px;margin-bottom:12px;">Link Device</h2>
+            <div id="qr-content"></div>
+        </div>
+    </div>
+
+    <div class="confirm-overlay" id="confirm-dialog">
+        <div class="confirm-box">
+            <p id="confirm-msg"></p>
+            <div class="confirm-actions">
+                <button class="confirm-cancel" id="confirm-no">Cancel</button>
+                <button class="confirm-ok" id="confirm-yes">Stop</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/xterm@5.3.0/lib/xterm.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@xterm/addon-fit@0.10.0/lib/addon-fit.js"></script>
     <script>
@@ -406,7 +802,100 @@
         let splitDir = 'horizontal';
         let allowedCommands = [];
         let selectedCwd = null;
+        let focusedPanelId = null;
         const hasXterm = typeof Terminal !== 'undefined';
+
+        // Terminal color scheme presets
+        const THEMES = {
+            default: {
+                label: 'Default', dot: '#12122a',
+                background: '#12122a', foreground: '#d0d0e0',
+                cursor: '#8080ff', selectionBackground: '#3a3a7a',
+                black: '#000000', red: '#ff5555', green: '#50fa7b', yellow: '#f1fa8c',
+                blue: '#6272a4', magenta: '#ff79c6', cyan: '#8be9fd', white: '#f8f8f2',
+            },
+            dark: {
+                label: 'Dark', dot: '#000000',
+                background: '#000000', foreground: '#c0c0c0',
+                cursor: '#ffffff', selectionBackground: '#333333',
+                black: '#000000', red: '#cc0000', green: '#4e9a06', yellow: '#c4a000',
+                blue: '#3465a4', magenta: '#75507b', cyan: '#06989a', white: '#d3d7cf',
+            },
+            mid: {
+                label: 'Mid', dot: '#1e1e2e',
+                background: '#1e1e2e', foreground: '#cdd6f4',
+                cursor: '#f5e0dc', selectionBackground: '#45475a',
+                black: '#45475a', red: '#f38ba8', green: '#a6e3a1', yellow: '#f9e2af',
+                blue: '#89b4fa', magenta: '#f5c2e7', cyan: '#94e2d5', white: '#bac2de',
+            },
+            bright: {
+                label: 'Bright', dot: '#fafafa',
+                background: '#fafafa', foreground: '#383a42',
+                cursor: '#526eff', selectionBackground: '#bfceff',
+                black: '#383a42', red: '#e45649', green: '#50a14f', yellow: '#c18401',
+                blue: '#4078f2', magenta: '#a626a4', cyan: '#0184bc', white: '#fafafa',
+            },
+            bernstein: {
+                label: 'Bernstein', dot: '#ffb000',
+                background: '#1a0e00', foreground: '#ffb000',
+                cursor: '#ffb000', selectionBackground: '#4a2800',
+                black: '#1a0e00', red: '#ffb000', green: '#ffb000', yellow: '#ffb000',
+                blue: '#ffb000', magenta: '#ffb000', cyan: '#ffb000', white: '#ffb000',
+                brightBlack: '#805800', brightRed: '#ffb000', brightGreen: '#ffb000', brightYellow: '#ffb000',
+                brightBlue: '#ffb000', brightMagenta: '#ffb000', brightCyan: '#ffb000', brightWhite: '#ffb000',
+            },
+            green: {
+                label: 'Green', dot: '#33ff00',
+                background: '#001a00', foreground: '#33ff00',
+                cursor: '#33ff00', selectionBackground: '#0a4400',
+                black: '#001a00', red: '#33ff00', green: '#33ff00', yellow: '#33ff00',
+                blue: '#33ff00', magenta: '#33ff00', cyan: '#33ff00', white: '#33ff00',
+                brightBlack: '#1a8000', brightRed: '#33ff00', brightGreen: '#33ff00', brightYellow: '#33ff00',
+                brightBlue: '#33ff00', brightMagenta: '#33ff00', brightCyan: '#33ff00', brightWhite: '#33ff00',
+            },
+        };
+        const THEME_ORDER = ['default', 'dark', 'mid', 'bright', 'bernstein', 'green'];
+
+        // Compute inverse color for contrast rings
+        function invertColor(hex) {
+            const c = hex.replace('#', '');
+            const r = (255 - parseInt(c.substring(0, 2), 16)).toString(16).padStart(2, '0');
+            const g = (255 - parseInt(c.substring(2, 4), 16)).toString(16).padStart(2, '0');
+            const b = (255 - parseInt(c.substring(4, 6), 16)).toString(16).padStart(2, '0');
+            return '#' + r + g + b;
+        }
+
+        // Debounce helper
+        function debounce(fn, ms) {
+            let timer;
+            return (...args) => {
+                clearTimeout(timer);
+                timer = setTimeout(() => fn(...args), ms);
+            };
+        }
+
+        // Debounced fit + resize per panel.
+        // Batches rapid ResizeObserver / window resize events into one fit() call.
+        const _panelFitters = {};
+        function fitPanel(panel) {
+            if (!_panelFitters[panel.id]) {
+                _panelFitters[panel.id] = debounce((p) => {
+                    if (!p.fitAddon || !p._termOpened) return;
+                    try {
+                        p.fitAddon.fit();
+                    } catch (e) { return; }
+
+                    // Enforce minimum columns — narrow panels get horizontal scroll instead of reflow
+                    if (p.terminal.cols < MIN_COLS) {
+                        p.terminal.resize(MIN_COLS, p.terminal.rows);
+                    }
+
+                    // Send actual applied dimensions to PTY
+                    syncResizeToPTY(p);
+                }, 100);
+            }
+            _panelFitters[panel.id](panel);
+        }
 
         // --- Config ---
         async function fetchConfig() {
@@ -467,6 +956,11 @@
             } catch (e) {}
         }
 
+        function getCommandLabel(command) {
+            const match = allowedCommands.find(c => c.command === command);
+            return match ? match.label : command.split(/\s/)[0];
+        }
+
         function renderSessionList() {
             const list = document.getElementById('session-list');
             if (sessions.length === 0) {
@@ -475,9 +969,14 @@
             }
             list.innerHTML = sessions.map(s => {
                 const isOpen = panels.some(p => p.id === s.id);
+                const isFocused = focusedPanelId === s.id;
+                const appLabel = getCommandLabel(s.command);
                 return `
-                    <div class="session-item ${isOpen ? 'active' : ''}" onclick="openSession('${s.id}', '${s.name}')">
-                        <span class="session-name">${s.name}</span>
+                    <div class="session-item ${isFocused ? 'focused' : isOpen ? 'open' : ''}" onclick="focusSession('${s.id}', '${s.name}')">
+                        <div class="session-name">
+                            <div>${s.name}</div>
+                            <div style="font-size:10px;color:#606080;font-weight:400;">${appLabel}</div>
+                        </div>
                         <div style="display:flex;align-items:center;gap:4px;">
                             <span class="session-status ${s.status}">${s.status}</span>
                             <div class="session-actions">
@@ -490,14 +989,35 @@
         }
 
         // --- Panels ---
+        function setFocus(id) {
+            if (focusedPanelId === id) return;
+            focusedPanelId = id;
+            // Update panel visual focus
+            panels.forEach(p => {
+                if (p.element) p.element.classList.toggle('panel-focused', p.id === id);
+            });
+            renderSessionList();
+        }
+
+        function focusSession(id, name) {
+            closeDrawer();
+            const existing = panels.find(p => p.id === id);
+            if (existing) {
+                setFocus(id);
+                if (existing.terminal) existing.terminal.focus();
+                return;
+            }
+            openSession(id, name);
+        }
+
         function openSession(id, name) {
             if (panels.find(p => p.id === id)) return;
 
-            // No hard limit — add the panel, rebuild handles it
-            const panel = { id, name, ws: null, terminal: null, fitAddon: null, element: null };
+            const panel = { id, name, ws: null, terminal: null, fitAddon: null, element: null, _resizeObserver: null, _theme: 'default' };
             panels.push(panel);
-            rebuildPanels();
-            connectWebSocket(panel);
+            buildPanelElement(panel);
+            layoutPanels();
+            setFocus(id);
         }
 
         function updateToolbar() {
@@ -505,9 +1025,130 @@
             toolbar.classList.toggle('visible', panels.length >= 2);
         }
 
-        function rebuildPanels() {
+        const MIN_COLS = 80;
+
+        // Build the panel DOM + terminal ONCE. This is only called when a session is first opened.
+        function buildPanelElement(panel) {
+            const div = document.createElement('div');
+            div.className = 'panel';
+
+            const termEl = document.createElement('div');
+            termEl.className = 'panel-terminal';
+
+            // Wrapper enforces min-width so the terminal never shrinks below MIN_COLS.
+            // When the panel is narrower, .panel-terminal scrolls horizontally.
+            const termWrapper = document.createElement('div');
+            termWrapper.className = 'terminal-wrapper';
+            termEl.appendChild(termWrapper);
+
+            div.innerHTML = `
+                <div class="panel-header">
+                    <span class="panel-title">${panel.name}</span>
+                    <div class="panel-header-actions" style="position:relative;">
+                        <button class="theme-btn" id="theme-btn-${panel.id}" onclick="toggleThemeMenu('${panel.id}')" title="Color scheme"><span class="theme-ring" style="background:${THEMES['default'].dot};border-color:${invertColor(THEMES['default'].dot)}"></span></button>
+                        <div class="theme-menu" id="theme-menu-${panel.id}">
+                            ${THEME_ORDER.map(k => `<a onclick="event.stopPropagation();setTheme('${panel.id}','${k}')" data-theme="${k}" data-cursor="${THEMES[k].cursor}"><span class="theme-dot" style="background:${THEMES[k].dot};border-color:${invertColor(THEMES[k].dot)}"></span>${THEMES[k].label}</a>`).join('')}
+                        </div>
+                        <button class="font-btn" onclick="changeFontSize('${panel.id}', -1)" title="Smaller">&#8722;</button>
+                        <button class="font-btn" onclick="changeFontSize('${panel.id}', 1)" title="Bigger">+</button>
+                        <button class="close-btn" onclick="closePanel('${panel.id}')">&times;</button>
+                    </div>
+                </div>
+            `;
+            div.appendChild(termEl);
+
+            panel.element = div;
+            panel._termEl = termEl;
+            panel._termWrapper = termWrapper;
+
+            if (hasXterm) {
+                const defT = THEMES['default'];
+                const term = new Terminal({
+                    cursorBlink: true,
+                    fontSize: window.innerWidth <= 700 ? 8 : 14,
+                    fontFamily: "'Consolas', 'Monaco', 'Courier New', monospace",
+                    theme: {
+                        background: defT.background, foreground: defT.foreground,
+                        cursor: defT.cursor, selectionBackground: defT.selectionBackground,
+                        black: defT.black, red: defT.red, green: defT.green, yellow: defT.yellow,
+                        blue: defT.blue, magenta: defT.magenta, cyan: defT.cyan, white: defT.white,
+                        brightBlack: defT.brightBlack, brightRed: defT.brightRed,
+                        brightGreen: defT.brightGreen, brightYellow: defT.brightYellow,
+                        brightBlue: defT.brightBlue, brightMagenta: defT.brightMagenta,
+                        brightCyan: defT.brightCyan, brightWhite: defT.brightWhite,
+                    },
+                    scrollback: 5000,
+                    convertEol: false,
+                });
+
+                panel.terminal = term;
+
+                if (typeof FitAddon !== 'undefined') {
+                    const fitAddon = new FitAddon.FitAddon();
+                    term.loadAddon(fitAddon);
+                    panel.fitAddon = fitAddon;
+                }
+
+                term.onData((data) => {
+                    if (panel.ws && panel.ws.readyState === WebSocket.OPEN) {
+                        panel.ws.send(data);
+                    }
+                });
+            }
+
+            // Clicking anywhere on the panel sets focus
+            div.addEventListener('mousedown', () => setFocus(panel.id));
+            div.addEventListener('touchstart', () => setFocus(panel.id), { passive: true });
+        }
+
+        // Ensure the xterm terminal is opened into its container and sized correctly.
+        // Safe to call multiple times — only opens once.
+        function ensureTerminalOpen(panel) {
+            if (!panel.terminal || !panel._termEl) return;
+            if (panel._termOpened) {
+                // Already open — just refit
+                fitPanel(panel);
+                return;
+            }
+
+            // Open into the wrapper (which has min-width for horizontal scroll)
+            const target = panel._termWrapper || panel._termEl;
+            panel.terminal.open(target);
+            panel._termOpened = true;
+
+            if (panel.fitAddon) {
+                panel.fitAddon.fit();
+
+                // Measure actual char width and set wrapper min-width so terminal never shrinks below MIN_COLS
+                if (panel.terminal.cols > 0 && target.clientWidth > 0) {
+                    const charWidth = target.clientWidth / panel.terminal.cols;
+                    target.style.minWidth = Math.ceil(MIN_COLS * charWidth) + 'px';
+                }
+
+                // Send resize to PTY so the app redraws at the correct size,
+                // then connect WebSocket — buffer replay will arrive after redraw.
+                syncResizeToPTY(panel);
+                setTimeout(() => {
+                    if (!panel.ws) connectWebSocket(panel);
+                }, 150);
+
+                // Watch the scroll container (not the wrapper) for size changes
+                if (typeof ResizeObserver !== 'undefined') {
+                    panel._resizeObserver = new ResizeObserver(() => fitPanel(panel));
+                    panel._resizeObserver.observe(panel._termEl);
+                }
+            }
+        }
+
+        // Rearrange existing panel elements into the layout WITHOUT destroying terminals.
+        function layoutPanels() {
             const container = document.getElementById('panels');
-            container.innerHTML = '';
+
+            // Detach all children without destroying them
+            while (container.firstChild) {
+                container.removeChild(container.firstChild);
+            }
+
             updateToolbar();
 
             if (panels.length === 0) {
@@ -521,19 +1162,17 @@
             }
 
             if (panels.length === 1) {
-                // Single panel — fullscreen, no split
                 const pane = document.createElement('div');
                 pane.className = 'split-pane';
-                pane.appendChild(buildPanelElement(panels[0]));
+                pane.style.flex = '1';
+                pane.appendChild(panels[0].element);
                 container.appendChild(pane);
             } else {
-                // Multiple panels with draggable dividers
                 const wrapper = document.createElement('div');
                 wrapper.className = `split-container ${splitDir}`;
 
                 panels.forEach((panel, i) => {
                     if (i > 0) {
-                        // Insert a drag handle between panels
                         const prevPane = wrapper.lastElementChild;
                         const handle = document.createElement('div');
                         handle.className = `split-handle ${splitDir === 'horizontal' ? 'h-handle' : 'v-handle'}`;
@@ -543,7 +1182,8 @@
 
                     const pane = document.createElement('div');
                     pane.className = 'split-pane';
-                    pane.appendChild(buildPanelElement(panel));
+                    pane.style.flex = '1';
+                    pane.appendChild(panel.element);
                     wrapper.appendChild(pane);
                 });
 
@@ -551,83 +1191,117 @@
             }
 
             renderSessionList();
-            requestAnimationFrame(() => requestAnimationFrame(handleResize));
-        }
 
-        function buildPanelElement(panel) {
-            const div = document.createElement('div');
-            div.className = 'panel';
-            div.id = `panel-${panel.id}`;
-
-            const termId = `term-${panel.id}`;
-
-            div.innerHTML = `
-                <div class="panel-header">
-                    <span class="panel-title">${panel.name}</span>
-                    <button onclick="closePanel('${panel.id}')">&times;</button>
-                </div>
-                <div class="panel-terminal" id="${termId}"></div>
-            `;
-
-            panel.element = div;
-
+            // Open terminals that haven't been opened yet + refit all
             requestAnimationFrame(() => {
-                const termEl = document.getElementById(termId);
-                if (!termEl) return;
-
-                if (hasXterm) {
-                    const term = new Terminal({
-                        cursorBlink: true,
-                        fontSize: 14,
-                        fontFamily: "'Consolas', 'Monaco', 'Courier New', monospace",
-                        theme: {
-                            background: '#12122a',
-                            foreground: '#d0d0e0',
-                            cursor: '#8080ff',
-                            selectionBackground: '#3a3a7a',
-                        },
-                        scrollback: 5000,
-                        convertEol: false,
-                    });
-
-                    if (typeof FitAddon !== 'undefined') {
-                        const fitAddon = new FitAddon.FitAddon();
-                        term.loadAddon(fitAddon);
-                        term.open(termEl);
-                        fitAddon.fit();
-                        panel.fitAddon = fitAddon;
-                    } else {
-                        term.open(termEl);
-                    }
-
-                    term.onData((data) => {
-                        if (panel.ws && panel.ws.readyState === WebSocket.OPEN) {
-                            panel.ws.send(data);
-                        }
-                    });
-
-                    panel.terminal = term;
-                } else {
-                    termEl.innerHTML = '<pre></pre>';
-                    const inputDiv = document.createElement('div');
-                    inputDiv.className = 'panel-input';
-                    inputDiv.innerHTML = `<input type="text" placeholder="Send input..."
-                        onkeydown="handlePanelInput(event, '${panel.id}')">`;
-                    div.appendChild(inputDiv);
-                }
+                panels.forEach(p => ensureTerminalOpen(p));
             });
-
-            return div;
         }
+
+        function changeFontSize(id, delta) {
+            const panel = panels.find(p => p.id === id);
+            if (!panel || !panel.terminal) return;
+            const current = panel.terminal.options.fontSize || 14;
+            const next = Math.min(28, Math.max(3, current + delta));
+            panel.terminal.options.fontSize = next;
+            // Recalculate wrapper min-width for new char size
+            const target = panel._termWrapper || panel._termEl;
+            if (panel.fitAddon) {
+                panel.fitAddon.fit();
+                if (panel.terminal.cols > 0 && target.clientWidth > 0) {
+                    const charWidth = target.clientWidth / panel.terminal.cols;
+                    target.style.minWidth = Math.ceil(MIN_COLS * charWidth) + 'px';
+                }
+                if (panel.terminal.cols < MIN_COLS) {
+                    panel.terminal.resize(MIN_COLS, panel.terminal.rows);
+                }
+                syncResizeToPTY(panel);
+            }
+        }
+
+        function toggleThemeMenu(id) {
+            const menu = document.getElementById(`theme-menu-${id}`);
+            // Close all other theme menus first
+            document.querySelectorAll('.theme-menu.open').forEach(m => {
+                if (m !== menu) m.classList.remove('open');
+            });
+            menu.classList.toggle('open');
+            // Mark active theme
+            const panel = panels.find(p => p.id === id);
+            const current = panel?._theme || 'default';
+            menu.querySelectorAll('a').forEach(a => {
+                const isActive = a.dataset.theme === current;
+                a.classList.toggle('active', isActive);
+                const dot = a.querySelector('.theme-dot');
+                if (dot) dot.style.outlineColor = isActive ? a.dataset.cursor : 'transparent';
+            });
+        }
+
+        function setTheme(id, themeKey) {
+            const panel = panels.find(p => p.id === id);
+            if (!panel || !panel.terminal) return;
+            const t = THEMES[themeKey];
+            if (!t) return;
+            panel._theme = themeKey;
+            const themeObj = {
+                background: t.background, foreground: t.foreground,
+                cursor: t.cursor, selectionBackground: t.selectionBackground,
+                black: t.black, red: t.red, green: t.green, yellow: t.yellow,
+                blue: t.blue, magenta: t.magenta, cyan: t.cyan, white: t.white,
+            };
+            if (t.brightBlack) {
+                themeObj.brightBlack = t.brightBlack; themeObj.brightRed = t.brightRed;
+                themeObj.brightGreen = t.brightGreen; themeObj.brightYellow = t.brightYellow;
+                themeObj.brightBlue = t.brightBlue; themeObj.brightMagenta = t.brightMagenta;
+                themeObj.brightCyan = t.brightCyan; themeObj.brightWhite = t.brightWhite;
+            }
+            panel.terminal.options.theme = themeObj;
+            // Also update the panel background to match
+            panel.element.style.background = t.background;
+            // Update the theme button ring to reflect active theme
+            const btn = document.getElementById(`theme-btn-${id}`);
+            if (btn) {
+                const ring = btn.querySelector('.theme-ring');
+                if (ring) {
+                    ring.style.background = t.dot;
+                    ring.style.borderColor = invertColor(t.dot);
+                }
+            }
+            // Update active markers in the menu
+            const menu = document.getElementById(`theme-menu-${id}`);
+            if (menu) {
+                menu.querySelectorAll('a').forEach(a => {
+                    const isActive = a.dataset.theme === themeKey;
+                    a.classList.toggle('active', isActive);
+                    const dot = a.querySelector('.theme-dot');
+                    if (dot) dot.style.outlineColor = isActive ? a.dataset.cursor : 'transparent';
+                });
+                menu.classList.remove('open');
+            }
+        }
+
+        // Close theme menus when clicking elsewhere
+        document.addEventListener('click', (e) => {
+            if (!e.target.closest('.theme-menu') && !e.target.closest('.theme-btn')) {
+                document.querySelectorAll('.theme-menu.open').forEach(m => m.classList.remove('open'));
+            }
+        });
 
         function closePanel(id) {
             const idx = panels.findIndex(p => p.id === id);
             if (idx < 0) return;
             const panel = panels[idx];
+            if (panel._resizeObserver) { panel._resizeObserver.disconnect(); panel._resizeObserver = null; }
             if (panel.ws) { panel.ws.close(); panel.ws = null; }
             if (panel.terminal) { panel.terminal.dispose(); }
+            delete _panelFitters[panel.id];
             panels.splice(idx, 1);
-            rebuildPanels();
+            // Move focus to next remaining panel
+            if (focusedPanelId === id) {
+                focusedPanelId = panels.length > 0 ? panels[0].id : null;
+            }
+            layoutPanels();
+            if (panels.length === 0) openDrawer();
         }
 
         // --- Drag handle for resizable splits ---
@@ -652,14 +1326,13 @@
                 } else {
                     pane.style.height = newSize + 'px';
                 }
-                handleResize();
+                // ResizeObserver on each terminal container handles fit + server resize
             }
 
             function onEnd() {
                 handle.classList.remove('dragging');
                 document.body.style.cursor = '';
                 document.body.style.userSelect = '';
-                handleResize();
             }
 
             // Mouse
@@ -692,14 +1365,40 @@
             }, { passive: false });
         }
 
+        // Send current terminal size to PTY via REST
+        function syncResizeToPTY(panel) {
+            if (!panel.terminal) return;
+            const cols = panel.terminal.cols;
+            const rows = panel.terminal.rows;
+            if (cols > 0 && rows > 0) {
+                fetch(`/sessions/${panel.id}/resize`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ rows, cols }),
+                });
+            }
+        }
+
         // --- WebSocket ---
         function connectWebSocket(panel) {
             const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
             const ws = new WebSocket(`${protocol}//${location.host}/sessions/${panel.id}/stream`);
             ws.binaryType = 'arraybuffer';
 
+            ws.onopen = () => {
+                // Buffer replays immediately after connect; give it time to arrive,
+                // then re-sync size so the app gets SIGWINCH and redraws correctly.
+                panel._bufferReplay = true;
+                setTimeout(() => {
+                    syncResizeToPTY(panel);
+                    panel._bufferReplay = false;
+                }, 1500);
+            };
+
             ws.onmessage = (event) => {
                 if (event.data instanceof ArrayBuffer && event.data.byteLength === 0) return;
+                // Track activity for idle notifications (skip initial buffer replay)
+                if (!panel._bufferReplay) trackActivity(panel);
                 if (panel.terminal) {
                     const data = event.data instanceof ArrayBuffer
                         ? new Uint8Array(event.data) : event.data;
@@ -745,12 +1444,128 @@
                 btn.classList.toggle('active', btn.dataset.split === dir);
             });
             if (panels.length >= 2) {
-                // Reset custom sizes so flex: 1 distributes evenly
-                rebuildPanels();
+                layoutPanels();
             }
         }
 
         // --- New Session ---
+        function toggleDrawer() {
+            const layout = document.getElementById('layout');
+            const sidebar = document.getElementById('sidebar');
+            const toggle = document.getElementById('drawer-toggle');
+            const isMobile = window.innerWidth <= 700;
+
+            if (isMobile) {
+                sidebar.classList.toggle('open');
+                document.getElementById('sidebar-overlay').classList.toggle('open');
+            } else {
+                layout.classList.toggle('sidebar-collapsed');
+            }
+
+            // Update chevron direction and position
+            const collapsed = layout.classList.contains('sidebar-collapsed');
+            const mobileOpen = sidebar.classList.contains('open');
+            const isOpen = (!isMobile && !collapsed) || (isMobile && mobileOpen);
+            toggle.innerHTML = isOpen ? '&#x2039;' : '&#x203a;';
+            toggle.classList.toggle('collapsed', !isOpen);
+
+            // Refit terminals after sidebar transition
+            setTimeout(() => panels.forEach(p => fitPanel(p)), 250);
+        }
+
+        function closeDrawer() {
+            if (window.innerWidth > 700) return;
+            const sidebar = document.getElementById('sidebar');
+            const toggle = document.getElementById('drawer-toggle');
+            sidebar.classList.remove('open');
+            document.getElementById('sidebar-overlay').classList.remove('open');
+            toggle.innerHTML = '&#x203a;';
+            toggle.classList.add('collapsed');
+        }
+
+        function openDrawer() {
+            const layout = document.getElementById('layout');
+            const sidebar = document.getElementById('sidebar');
+            const toggle = document.getElementById('drawer-toggle');
+            if (window.innerWidth <= 700) {
+                sidebar.classList.add('open');
+                document.getElementById('sidebar-overlay').classList.add('open');
+            } else {
+                layout.classList.remove('sidebar-collapsed');
+            }
+            toggle.innerHTML = '&#x2039;';
+            toggle.classList.remove('collapsed');
+        }
+
+        function toggleMenu() {
+            document.getElementById('hamburger-menu').classList.toggle('open');
+        }
+
+        // Close menu when clicking outside
+        document.addEventListener('click', (e) => {
+            const menu = document.getElementById('hamburger-menu');
+            if (menu.classList.contains('open') && !e.target.closest('.menu-wrapper')) {
+                menu.classList.remove('open');
+            }
+        });
+
+        function toggleAbout() {
+            document.getElementById('about-dialog').classList.toggle('open');
+        }
+
+        function isLocalhost() {
+            const h = location.hostname;
+            return h === 'localhost' || h === '127.0.0.1' || h === '::1' || h === '0.0.0.0';
+        }
+
+        function toggleQR() {
+            const dialog = document.getElementById('qr-dialog');
+            dialog.classList.toggle('open');
+            if (dialog.classList.contains('open')) {
+                const container = document.getElementById('qr-content');
+                if (isLocalhost()) {
+                    container.innerHTML = `
+                        <div style="padding:16px 8px;">
+                            <div style="font-size:28px;margin-bottom:10px;">&#9888;</div>
+                            <p style="font-size:13px;color:#ff9944;margin:0 0 8px;">You are on localhost</p>
+                            <p style="font-size:12px;color:#808090;margin:0;line-height:1.5;">
+                                Other devices cannot reach this address.<br>
+                                Connect via your Tailscale IP or network IP to generate a QR code.
+                            </p>
+                        </div>`;
+                } else {
+                    const url = window.location.href;
+                    container.innerHTML = `
+                        <p style="font-size:12px;color:#808090;margin-bottom:14px;">Scan to open on another device</p>
+                        <div id="qr-img" style="margin:0 auto 12px;"></div>
+                        <p style="font-size:11px;color:#606080;word-break:break-all;margin:0;"></p>`;
+                    container.querySelector('p:last-child').textContent = url;
+                    try {
+                        const qr = qrcode(0, 'M');
+                        qr.addData(url);
+                        qr.make();
+                        document.getElementById('qr-img').innerHTML = qr.createSvgTag({
+                            scalable: true,
+                            cellSize: 4,
+                            margin: 2,
+                        });
+                        // Style the SVG
+                        const svg = document.querySelector('#qr-img svg');
+                        if (svg) {
+                            svg.style.width = '200px';
+                            svg.style.height = '200px';
+                            svg.style.borderRadius = '8px';
+                            // Invert colors for dark theme
+                            svg.querySelectorAll('rect[fill="#ffffff"]').forEach(r => r.setAttribute('fill', '#16163a'));
+                            svg.querySelectorAll('rect[fill="#000000"]').forEach(r => r.setAttribute('fill', '#d0d0e0'));
+                        }
+                    } catch (e) {
+                        document.getElementById('qr-img').innerHTML = '<p style="color:#ff6666;font-size:12px;">Failed to generate QR code</p>';
+                    }
+                }
+            }
+        }
+
         function toggleNewSession() {
             const dialog = document.getElementById('new-session-dialog');
             dialog.classList.toggle('open');
@@ -785,7 +1600,29 @@
             }
         }
 
+        function showConfirm(message) {
+            return new Promise(resolve => {
+                const overlay = document.getElementById('confirm-dialog');
+                document.getElementById('confirm-msg').textContent = message;
+                overlay.classList.add('open');
+                const yes = document.getElementById('confirm-yes');
+                const no = document.getElementById('confirm-no');
+                function cleanup(result) {
+                    overlay.classList.remove('open');
+                    yes.replaceWith(yes.cloneNode(true));
+                    no.replaceWith(no.cloneNode(true));
+                    resolve(result);
+                }
+                yes.addEventListener('click', () => cleanup(true), { once: true });
+                no.addEventListener('click', () => cleanup(false), { once: true });
+                overlay.addEventListener('click', (e) => { if (e.target === overlay) cleanup(false); }, { once: true });
+            });
+        }
+
         async function killSession(id) {
+            const session = sessions.find(s => s.id === id);
+            const label = session ? session.name : 'this session';
+            if (!await showConfirm(`Stop "${label}"? This will terminate the process.`)) return;
             try {
                 await fetch(`/sessions/${id}`, { method: 'DELETE' });
                 closePanel(id);
@@ -793,33 +1630,64 @@
             } catch (e) {}
         }
 
-        // --- Resize ---
-        function handleResize() {
-            panels.forEach(panel => {
-                if (panel.fitAddon) {
-                    try {
-                        panel.fitAddon.fit();
-                        if (panel.terminal && panel.ws && panel.ws.readyState === WebSocket.OPEN) {
-                            const dims = panel.fitAddon.proposeDimensions();
-                            if (dims) {
-                                fetch(`/sessions/${panel.id}/resize`, {
-                                    method: 'POST',
-                                    headers: { 'Content-Type': 'application/json' },
-                                    body: JSON.stringify({ rows: dims.rows, cols: dims.cols }),
-                                });
-                            }
-                        }
-                    } catch (e) {}
-                }
-            });
+        // --- Window resize fallback ---
+        window.addEventListener('resize', debounce(() => {
+            panels.forEach(p => fitPanel(p));
+        }, 150));
+
+        // --- Notifications ---
+        // Detect when Claude becomes idle (waiting for input) and send a browser notification.
+        // Watches for the idle prompt pattern in recent terminal output.
+        let notificationsEnabled = false;
+
+        async function requestNotificationPermission() {
+            if (!('Notification' in window)) return false;
+            if (Notification.permission === 'granted') return true;
+            if (Notification.permission === 'denied') return false;
+            const result = await Notification.requestPermission();
+            return result === 'granted';
         }
 
-        window.addEventListener('resize', () => {
-            clearTimeout(window._resizeTimer);
-            window._resizeTimer = setTimeout(handleResize, 200);
-        });
+        function sendNotification(title, body) {
+            if (!notificationsEnabled) return;
+            if (document.visibilityState === 'visible') return; // Don't notify if user is looking
+            try {
+                new Notification(title, {
+                    body: body,
+                    icon: 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><text y="80" font-size="80">♭</text></svg>',
+                    tag: 'conductor-idle', // Replaces previous notification
+                });
+            } catch (e) {}
+        }
+
+        // Track per-panel activity state.
+        // When output stops arriving for a while after a burst, Claude is likely idle.
+        const _activityTimers = {};
+        function trackActivity(panel) {
+            // Reset the idle timer every time output arrives
+            if (_activityTimers[panel.id]) clearTimeout(_activityTimers[panel.id]);
+            panel._wasActive = true;
+            _activityTimers[panel.id] = setTimeout(() => {
+                // No output for 3 seconds after activity — likely idle
+                if (panel._wasActive) {
+                    panel._wasActive = false;
+                    sendNotification(`♭ ${panel.name}`, 'Session is waiting for input');
+                }
+            }, 3000);
+        }
 
         // --- Init ---
+        // On mobile, open the sidebar drawer on load
+        if (window.innerWidth <= 700) {
+            document.getElementById('sidebar').classList.add('open');
+        }
+
+        // Request notification permission on first user interaction
+        document.addEventListener('click', async function initNotif() {
+            notificationsEnabled = await requestNotificationPermission();
+            document.removeEventListener('click', initNotif);
+        }, { once: true });
+
         fetchConfig();
         fetchSessions();
         setInterval(fetchSessions, 3000);
