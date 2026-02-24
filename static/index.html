@@ -141,7 +141,7 @@
 
         .new-session select option { background: #0a0a1a; }
 
-        .new-session button {
+        .new-session .run-btn {
             width: 100%;
             padding: 7px;
             margin-top: 10px;
@@ -153,7 +153,69 @@
             font-size: 13px;
         }
 
-        .new-session button:hover { background: #3a3a7a; }
+        .new-session .run-btn:hover { background: #3a3a7a; }
+
+        /* Directory picker */
+        .dir-picker {
+            background: #0a0a1a;
+            border: 1px solid #2a2a5a;
+            border-radius: 5px;
+            margin-top: 2px;
+            max-height: 200px;
+            overflow-y: auto;
+        }
+
+        .dir-picker .dir-current {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            padding: 6px 10px;
+            border-bottom: 1px solid #1a1a3a;
+            font-size: 12px;
+            color: #8080ff;
+            word-break: break-all;
+        }
+
+        .dir-picker .dir-current button {
+            flex-shrink: 0;
+            background: none;
+            border: none;
+            color: #808090;
+            cursor: pointer;
+            font-size: 14px;
+            padding: 2px 6px;
+            border-radius: 3px;
+        }
+
+        .dir-picker .dir-current button:hover {
+            background: #1a1a3e;
+            color: #e0e0e0;
+        }
+
+        .dir-picker .dir-entry {
+            padding: 5px 10px;
+            font-size: 12px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            color: #c0c0e0;
+        }
+
+        .dir-picker .dir-entry:hover {
+            background: #1a1a3e;
+        }
+
+        .dir-picker .dir-icon {
+            color: #6060aa;
+            font-size: 11px;
+        }
+
+        .dir-picker .dir-empty {
+            padding: 8px 10px;
+            font-size: 11px;
+            color: #505070;
+        }
 
         /* Content area */
         .content {
@@ -326,9 +388,8 @@
                 <label>Command</label>
                 <select id="new-command"></select>
                 <label>Working directory</label>
-                <input type="text" id="new-cwd" placeholder="/home/user/project" autocomplete="off" list="dir-suggestions">
-                <datalist id="dir-suggestions"></datalist>
-                <button onclick="createSession()">Run</button>
+                <div class="dir-picker" id="dir-picker"></div>
+                <button class="run-btn" onclick="createSession()">Run</button>
             </div>
         </aside>
         <main class="content">
@@ -355,7 +416,7 @@
         let panels = [];       // [{id, name, ws, terminal, fitAddon, element}]
         let layout = 'single'; // 'single' | 'hsplit' | 'vsplit'
         let allowedCommands = [];
-        let defaultDirs = [];
+        let selectedCwd = null;
         const hasXterm = typeof Terminal !== 'undefined';
 
         // --- Config ---
@@ -364,9 +425,8 @@
                 const resp = await fetch('/config');
                 const cfg = await resp.json();
                 allowedCommands = cfg.allowed_commands || [];
-                defaultDirs = cfg.default_directories || [];
                 populateCommandSelect();
-                populateDirSuggestions();
+                browseTo('~');
             } catch (e) {}
         }
 
@@ -377,11 +437,36 @@
             ).join('');
         }
 
-        function populateDirSuggestions() {
-            const dl = document.getElementById('dir-suggestions');
-            dl.innerHTML = defaultDirs.map(d =>
-                `<option value="${d}">`
-            ).join('');
+        // --- Directory Browser ---
+        async function browseTo(path) {
+            try {
+                const resp = await fetch(`/browse?path=${encodeURIComponent(path)}`);
+                const data = await resp.json();
+                selectedCwd = data.current;
+                renderDirPicker(data);
+            } catch (e) {}
+        }
+
+        function renderDirPicker(data) {
+            const picker = document.getElementById('dir-picker');
+            const shortPath = data.current.replace(/^\/home\/[^/]+/, '~');
+            let html = `
+                <div class="dir-current">
+                    ${data.parent ? `<button onclick="browseTo('${data.parent}')" title="Go up">&#8592;</button>` : ''}
+                    <span>${shortPath}</span>
+                </div>
+            `;
+            if (data.directories.length === 0) {
+                html += '<div class="dir-empty">No subdirectories</div>';
+            } else {
+                html += data.directories.map(d =>
+                    `<div class="dir-entry" onclick="browseTo('${d.path}')">
+                        <span class="dir-icon">&#128193;</span>
+                        <span>${d.name}</span>
+                    </div>`
+                ).join('');
+            }
+            picker.innerHTML = html;
         }
 
         // --- Session List ---
@@ -706,7 +791,7 @@
         async function createSession() {
             const name = document.getElementById('new-name').value.trim();
             const command = document.getElementById('new-command').value;
-            const cwd = document.getElementById('new-cwd').value.trim() || null;
+            const cwd = selectedCwd || null;
             if (!name || !command) return;
 
             try {

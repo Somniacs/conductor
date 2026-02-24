@@ -1,5 +1,7 @@
 import asyncio
+import os
 import shlex
+from pathlib import Path
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect, HTTPException
 from pydantic import BaseModel
@@ -36,6 +38,33 @@ async def get_config():
         "allowed_commands": ALLOWED_COMMANDS,
         "default_directories": DEFAULT_DIRECTORIES,
     }
+
+
+@router.get("/browse")
+async def browse_directory(path: str = "~"):
+    """List subdirectories of a given path for the directory picker."""
+    try:
+        resolved = Path(path).expanduser().resolve()
+        if not resolved.is_dir():
+            raise HTTPException(status_code=400, detail="Not a directory")
+
+        dirs = []
+        try:
+            for entry in sorted(resolved.iterdir()):
+                if entry.name.startswith("."):
+                    continue
+                if entry.is_dir():
+                    dirs.append({"name": entry.name, "path": str(entry)})
+        except PermissionError:
+            pass
+
+        return {
+            "current": str(resolved),
+            "parent": str(resolved.parent) if resolved != resolved.parent else None,
+            "directories": dirs,
+        }
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
 
 @router.get("/sessions")
