@@ -2,24 +2,40 @@
 
 Local orchestration layer that manages interactive terminal processes and exposes them through a web dashboard for observation and remote input.
 
-Start an AI agent, a training script, or any long-running process — then monitor and interact with it from your phone, tablet, or any browser on your network.
+Start Claude sessions, training scripts, or any long-running process on your workstation — then monitor and interact with them from your phone over Tailscale. Walk away from the desk, pull out your phone, and keep prompting.
+
+## The Workflow
+
+```
+You at your desk                          You on the couch
+─────────────────                         ──────────────────
+conductor run claude research             Open phone browser
+conductor run claude coding               → http://solos-gpu:7777
+conductor run "python train.py" training
+                                          Select "research"
+Leave your desk.                          Send a prompt
+                                          Check "training" progress
+                                          Switch to "coding"
+Come back later.
+Everything still running.                 Close phone. Reconnect anytime.
+```
 
 ## How It Works
 
 ```
 Terminal Process
       │
-  PTY Wrapper
+  PTY Wrapper          ← each process gets its own pseudo-terminal
       │
- Conductor Session
+ Conductor Session     ← captures output, accepts input, survives disconnects
       │
 ┌──────────────────┐
-│ Conductor Server │  ← 127.0.0.1:7777
+│ Conductor Server │   ← 127.0.0.1:7777
 └──────────────────┘
       │
-  WebSocket API
+  WebSocket API        ← bidirectional: output streams out, keystrokes stream in
       │
- Browser Dashboard
+ Browser Dashboard     ← phone, tablet, laptop — anything on your Tailscale network
 ```
 
 Conductor wraps each process in a pseudo-terminal (PTY), captures all output into a rolling buffer, and streams it over WebSocket to any connected browser. Sessions survive browser disconnects — reconnect anytime and pick up where you left off.
@@ -29,15 +45,10 @@ Conductor wraps each process in a pseudo-terminal (PTY), captures all output int
 ### Install
 
 ```bash
-# Clone
 git clone git@github.com:xohm/conductor.git
 cd conductor
-
-# Create a virtual environment
 python -m venv .venv
 source .venv/bin/activate
-
-# Install in development mode
 pip install -e .
 ```
 
@@ -47,14 +58,86 @@ pip install -e .
 # Start the server
 conductor serve
 
-# In another terminal — start a session
-conductor run bash myshell
+# In another terminal — start sessions
 conductor run claude research
+conductor run claude coding
 conductor run "python train.py" training
 
 # Open the dashboard
 open http://127.0.0.1:7777
 ```
+
+## Tailscale Setup (Remote Access from Phone)
+
+This is the primary use case — run Claude sessions on your workstation, interact with them from anywhere on your Tailscale network.
+
+### Prerequisites
+
+- [Tailscale](https://tailscale.com/) installed on your workstation and your phone
+- Both devices on the same Tailnet
+
+### 1. Start Conductor on your workstation
+
+```bash
+# Password-protect it since it's accessible over the network
+CONDUCTOR_PASSWORD=mysecret conductor serve
+```
+
+### 2. Find your Tailscale hostname
+
+```bash
+tailscale status
+# Example output:
+# 100.64.0.1    solos-gpu    linux   -
+```
+
+### 3. Open on your phone
+
+Open Safari/Chrome on your phone and go to:
+
+```
+http://solos-gpu:7777?token=mysecret
+```
+
+That's it. You now have full terminal access to all your running sessions from your phone.
+
+### What you can do from your phone
+
+- **See all running sessions** in the sidebar
+- **Tap a session** to view its live terminal output
+- **Type prompts** into Claude sessions using the input bar
+- **Split-view** multiple sessions side by side
+- **Create new sessions** directly from the dashboard
+- **Kill sessions** you no longer need
+- **Walk away and come back** — sessions keep running, reconnect picks up the full buffer
+
+### Example: Claude on your GPU box
+
+```bash
+# On your workstation
+conductor run claude research
+conductor run claude "write me a web scraper"
+conductor run "python long_training.py" training
+
+# On your phone (over Tailscale)
+# → http://solos-gpu:7777
+# Select "research", send: "summarize the latest papers on diffusion models"
+# Switch to "training", check progress
+# Go to bed. Check again in the morning.
+```
+
+### Security
+
+Conductor binds to `127.0.0.1` by default — it is **not** exposed to the public internet. Tailscale provides encrypted point-to-point connections between your devices with no open ports.
+
+For extra protection:
+
+```bash
+# Set a password (recommended for Tailscale access)
+CONDUCTOR_PASSWORD=mysecret conductor serve
+```
+
+API requests must then include `Authorization: Bearer mysecret` header or `?token=mysecret` query parameter. The dashboard prompts for the token on first load.
 
 ## CLI Reference
 
@@ -101,32 +184,6 @@ Connect to `ws://127.0.0.1:7777/sessions/{id}/stream`:
 1. Server immediately sends the output buffer (everything captured so far)
 2. Server streams new PTY output as binary frames
 3. Client sends text or binary frames — forwarded as stdin to the process
-
-## Remote Access
-
-Conductor binds to `127.0.0.1` only — it is not exposed to the network by default.
-
-For remote access (e.g. from your phone to a GPU box), use [Tailscale](https://tailscale.com/):
-
-1. Install Tailscale on both machines
-2. Start Conductor: `conductor serve`
-3. On your phone/laptop, open: `http://<tailscale-hostname>:7777`
-
-To bind to all interfaces (use with caution on trusted networks only):
-
-```bash
-conductor serve --host 0.0.0.0
-```
-
-### Password Protection
-
-Set the `CONDUCTOR_PASSWORD` environment variable to require authentication:
-
-```bash
-CONDUCTOR_PASSWORD=mysecret conductor serve
-```
-
-API requests must include `Authorization: Bearer mysecret` or `?token=mysecret`.
 
 ## Persistence
 
@@ -197,4 +254,5 @@ pip install dist/conductor-0.1.0-py3-none-any.whl
 - **No IDE integration required** — works with any terminal
 - **Processes remain normal terminals** — PTY preserves full terminal behavior
 - **Browser is a secondary control surface** — not a replacement for your terminal
+- **Secure by default** — localhost only, Tailscale for remote, optional password
 - **Minimal dependencies** — standard Python + FastAPI
