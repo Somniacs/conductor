@@ -199,12 +199,35 @@ def qr():
     qr_obj.print_ascii(invert=True)
     click.echo(f"\n  {url}\n")
 
-    # Also generate a clean SVG and open it in the browser/viewer
-    svg_path = os.path.join(tempfile.gettempdir(), "conductor-qr.svg")
+    # Generate a clean SVG, wrap in HTML page, and open in browser
     img = qrcode.make(url, image_factory=qrcode.image.svg.SvgPathImage)
+    svg_path = os.path.join(tempfile.gettempdir(), "conductor-qr.svg")
     img.save(svg_path)
-    click.echo(f"  QR image: {svg_path}")
-    webbrowser.open(f"file://{svg_path}")
+
+    svg_data = Path(svg_path).read_text()
+
+    html_path = os.path.join(tempfile.gettempdir(), "conductor-qr.html")
+    Path(html_path).write_text(f"""<!DOCTYPE html>
+<html><head><title>conductor — Link Device</title>
+<style>
+body {{ margin:0; min-height:100vh; display:flex; flex-direction:column;
+       align-items:center; justify-content:center; background:#0a0a1a;
+       color:#e0e0e0; font-family:Helvetica,Arial,sans-serif; }}
+h1 {{ font-size:28px; color:#8080ff; margin:0 0 6px; font-weight:600; }}
+.sub {{ font-size:14px; color:#808090; margin-bottom:30px; }}
+.qr {{ width:400px; height:400px; }}
+.qr svg {{ width:100%; height:100%; }}
+.url {{ font-size:16px; color:#a0a0d0; margin-top:24px;
+        font-family:monospace; letter-spacing:0.5px; }}
+</style></head><body>
+<h1>&#9837; conductor</h1>
+<p class="sub">Scan to open on another device</p>
+<div class="qr">{svg_data}</div>
+<p class="url">{url}</p>
+</body></html>""")
+
+    click.echo(f"  QR page: {html_path}")
+    webbrowser.open(f"file://{html_path}")
 
 
 if __name__ == "__main__":
