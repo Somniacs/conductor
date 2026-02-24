@@ -51,11 +51,9 @@ If you're on Windows and want to use Conductor now, run it inside **WSL** (Windo
 
 ```bash
 # Inside WSL
-git clone git@github.com:xohm/conductor.git
+git clone https://github.com/xohm/conductor.git
 cd conductor
-python3 -m venv .venv
-source .venv/bin/activate
-pip install -e .
+./install.sh
 conductor run claude research
 ```
 

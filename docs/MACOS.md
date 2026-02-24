@@ -2,29 +2,32 @@
 
 Conductor runs natively on macOS. No extra dependencies beyond Python.
 
+## Prerequisites
+
+- **Python 3.10+** — check with `python3 --version` (ships with Xcode CLI tools)
+- **Git** — `xcode-select --install` if not already present
+
 ## Install
 
+### From release
+
 ```bash
-git clone git@github.com:xohm/conductor.git
+curl -sL https://github.com/xohm/conductor/releases/latest/download/conductor.tar.gz | tar xz
 cd conductor
-python3 -m venv .venv
-source .venv/bin/activate
-pip install -e .
+./install.sh
 ```
 
-## Make it available system-wide
-
-Add to your `~/.zshrc`:
+### From source
 
 ```bash
-export PATH="$HOME/path/to/conductor/.venv/bin:$PATH"
+git clone https://github.com/xohm/conductor.git
+cd conductor
+./install.sh
 ```
 
-Then reload:
+The install script uses [pipx](https://pipx.pypa.io/) to install Conductor system-wide. After install, the `conductor` command is available from any terminal.
 
-```bash
-source ~/.zshrc
-```
+If the command is not found, restart your terminal or run `source ~/.zshrc`.
 
 ## Start sessions
 

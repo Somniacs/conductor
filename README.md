@@ -42,7 +42,7 @@ Or download manually from the [Releases](https://github.com/xohm/conductor/relea
 ### Option B — From source
 
 ```bash
-git clone git@github.com:xohm/conductor.git
+git clone https://github.com/xohm/conductor.git
 cd conductor
 ./install.sh
 ```
@@ -55,7 +55,7 @@ If the command is not found after install, restart your terminal or run `source 
 <summary>Manual install (without install script)</summary>
 
 ```bash
-git clone git@github.com:xohm/conductor.git
+git clone https://github.com/xohm/conductor.git
 cd conductor
 python3 -m venv .venv
 source .venv/bin/activate
