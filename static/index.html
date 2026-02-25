@@ -41,7 +41,8 @@
             border-bottom: 1px solid #1e1e3e;
             display: flex;
             align-items: center;
-            justify-content: space-between;
+            justify-content: center;
+            position: relative;
         }
 
         .sidebar-header h1 {
@@ -101,7 +102,11 @@
         }
 
         .session-item:hover { background: #1a1a3e; }
-        .session-item.open { background: #151535; }
+        .session-item.open {
+            background: #151535;
+            padding-left: 10px;
+            border-left: 2px solid #404080;
+        }
         .session-item.focused {
             background: #252560;
             padding-left: 10px;
@@ -182,7 +187,8 @@
             font-size: 13px;
         }
 
-        .new-session .run-btn:hover { background: #3a3a7a; }
+        .new-session .run-btn:disabled { background: #1a1a3a; border-color: #2a2a4a; color: #505070; cursor: not-allowed; }
+        .new-session .run-btn:hover:not(:disabled) { background: #3a3a7a; }
 
         /* Confirm dialog */
         .confirm-overlay {
@@ -317,7 +323,7 @@
         .menu-btn:hover { color: #a0a0d0; }
 
         /* Hamburger dropdown */
-        .menu-wrapper { position: relative; }
+        .menu-wrapper { position: absolute; right: 16px; }
         .menu-dropdown {
             display: none;
             position: absolute;
@@ -413,34 +419,41 @@
             min-width: 0;
         }
 
-        /* Split toolbar - only visible with 2+ panels */
-        .toolbar {
+        /* Placement menu — anchored to sidebar session item */
+        .placement-menu {
             display: none;
-            align-items: center;
-            justify-content: flex-end;
-            gap: 8px;
-            padding: 4px 12px;
-            background: #10102a;
-            border-bottom: 1px solid #1e1e3e;
-            font-size: 12px;
-            color: #808090;
-            flex-shrink: 0;
+            position: absolute;
+            z-index: 600;
+            background: #16163a;
+            border: 1px solid #2a2a5a;
+            border-radius: 6px;
+            box-shadow: 0 4px 16px rgba(0,0,0,0.5);
+            padding: 4px;
+            gap: 2px;
         }
-
-        .toolbar.visible { display: flex; }
-
-        .toolbar button {
-            padding: 3px 10px;
+        .placement-menu.open { display: grid; grid-template-columns: 1fr 1fr 1fr; grid-template-rows: auto auto auto auto auto; width: 120px; }
+        .placement-menu button {
             background: #1a1a3e;
             border: 1px solid #2a2a5a;
-            color: #a0a0c0;
+            color: #c0c0e0;
             border-radius: 4px;
             cursor: pointer;
-            font-size: 11px;
+            font-size: 16px;
+            padding: 6px;
+            line-height: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
         }
-
-        .toolbar button:hover { background: #242450; }
-        .toolbar button.active { background: #2a2a6a; border-color: #4a4aaa; color: #e0e0e0; }
+        .placement-menu button:hover { background: #2a2a6a; border-color: #4a4aaa; color: #fff; }
+        .placement-menu .pm-top    { grid-column: 2; grid-row: 2; }
+        .placement-menu .pm-left   { grid-column: 1; grid-row: 3; }
+        .placement-menu .pm-right  { grid-column: 3; grid-row: 3; }
+        .placement-menu .pm-bottom { grid-column: 2; grid-row: 4; }
+        .placement-menu .pm-title  { grid-column: 1 / 4; text-align: center; font-size: 11px; color: #808090; padding: 2px 0 4px; }
+        .placement-menu .pm-status { grid-column: 1 / 4; text-align: center; font-size: 9px; color: #606080; padding: 2px 0 0; min-height: 14px; white-space: nowrap; }
+        .placement-menu .pm-center { grid-column: 2; grid-row: 3; background: #0a0a1a; border-color: #1a1a3a; color: #808090; font-size: 14px; }
+        .placement-menu .pm-center:hover { background: #1a1a3e; color: #fff; border-color: #4a4aaa; }
 
         /* Panels container */
         #panels {
@@ -652,7 +665,7 @@
             color: #8080c0;
             font-size: 14px;
             width: 16px;
-            height: 32px;
+            height: 36px;
             border-radius: 0 4px 4px 0;
             cursor: pointer;
             display: flex;
@@ -741,19 +754,15 @@
                 </div>
                 <label>Session name</label>
                 <input type="text" id="new-name" placeholder="e.g. research" autocomplete="off">
+                <div id="name-error" style="font-size:11px;color:#ff6666;margin-top:2px;display:none;">Name already taken</div>
                 <label>Command</label>
                 <select id="new-command"></select>
                 <label>Working directory</label>
                 <div class="dir-picker" id="dir-picker"></div>
-                <button class="run-btn" onclick="createSession()">Run</button>
+                <button class="run-btn" id="run-btn" onclick="createSession()" disabled>Run</button>
             </div>
         </aside>
         <main class="content">
-            <div class="toolbar" id="toolbar">
-                <span>Split:</span>
-                <button class="active" data-split="horizontal" onclick="setSplitDir('horizontal')">&#8596; Horizontal</button>
-                <button data-split="vertical" onclick="setSplitDir('vertical')">&#8597; Vertical</button>
-            </div>
             <div id="panels">
                 <div class="empty-state">
                     <div class="icon">&#9837;</div>
@@ -761,6 +770,16 @@
                 </div>
             </div>
         </main>
+    </div>
+
+    <div class="placement-menu" id="placement-menu">
+        <div class="pm-title">Placement</div>
+        <button class="pm-top" onclick="placeSession('top')" data-hint="Place above">&#x2B06;</button>
+        <button class="pm-left" onclick="placeSession('left')" data-hint="Place left">&#x2B05;</button>
+        <button class="pm-center" onclick="placeSession('single')" data-hint="Single view">&#x25A3;</button>
+        <button class="pm-right" onclick="placeSession('right')" data-hint="Place right">&#x27A1;</button>
+        <button class="pm-bottom" onclick="placeSession('bottom')" data-hint="Place below">&#x2B07;</button>
+        <div class="pm-status" id="pm-status"></div>
     </div>
 
     <div class="about-overlay" id="about-dialog" onclick="if(event.target===this)toggleAbout()">
@@ -809,7 +828,9 @@
         // --- State ---
         let sessions = [];
         let panels = [];
-        let splitDir = 'horizontal';
+        let layoutRoot = null;   // binary tree: { type:'leaf', panelId } | { type:'split', direction, children:[a,b], ratio }
+        let _pendingSessionId = null;
+        let _pendingSessionName = null;
         let allowedCommands = [];
         let selectedCwd = null;
         let focusedPanelId = null;
@@ -933,6 +954,7 @@
                 const data = await resp.json();
                 selectedCwd = data.current;
                 renderDirPicker(data);
+                validateNewSession();
             } catch (e) {}
         }
 
@@ -975,6 +997,7 @@
                 sessions = await resp.json();
                 setServerStatus(true);
                 renderSessionList();
+                validateNewSession();
             } catch (e) {
                 setServerStatus(false);
             }
@@ -996,7 +1019,7 @@
                 const isFocused = focusedPanelId === s.id;
                 const appLabel = getCommandLabel(s.command);
                 return `
-                    <div class="session-item ${isFocused ? 'focused' : isOpen ? 'open' : ''}" onclick="focusSession('${s.id}', '${s.name}')">
+                    <div class="session-item ${isFocused ? 'focused' : isOpen ? 'open' : ''}" onclick="focusSession('${s.id}', '${s.name}', event)">
                         <div class="session-name">
                             <div>${s.name}</div>
                             <div style="font-size:10px;color:#606080;font-weight:400;">${appLabel}</div>
@@ -1023,30 +1046,176 @@
             renderSessionList();
         }
 
-        function focusSession(id, name) {
+        function focusSession(id, name, evt) {
             closeDrawer();
             const existing = panels.find(p => p.id === id);
             if (existing) {
+                hidePlacementMenu();
                 setFocus(id);
                 if (existing.terminal) existing.terminal.focus();
                 return;
             }
-            openSession(id, name);
+            // If no panels open or on mobile, open directly
+            if (panels.length === 0 || window.innerWidth <= 700) {
+                openSession(id, name, 'right');
+                return;
+            }
+            // Show placement menu at the click position
+            showPlacementMenu(id, name, evt);
         }
 
-        function openSession(id, name) {
+        function showPlacementMenu(id, name, evt) {
+            _pendingSessionId = id;
+            _pendingSessionName = name;
+            const menu = document.getElementById('placement-menu');
+            // Position at click location
+            if (evt) {
+                const menuW = 120, menuH = 160;
+                let x = evt.clientX - menuW / 2;
+                let y = evt.clientY - menuH / 2;
+                // Keep within viewport
+                x = Math.max(4, Math.min(x, window.innerWidth - menuW - 4));
+                y = Math.max(4, Math.min(y, window.innerHeight - menuH - 4));
+                menu.style.left = x + 'px';
+                menu.style.top = y + 'px';
+            } else {
+                menu.style.left = '220px';
+                menu.style.top = '100px';
+            }
+            menu.classList.add('open');
+        }
+
+        function hidePlacementMenu() {
+            document.getElementById('placement-menu').classList.remove('open');
+            _pendingSessionId = null;
+            _pendingSessionName = null;
+        }
+
+        function placeSession(direction) {
+            if (!_pendingSessionId) return;
+            const id = _pendingSessionId;
+            const name = _pendingSessionName;
+            hidePlacementMenu();
+            if (direction === 'single') {
+                // Close all other panels, open this one full-screen
+                const toClose = panels.map(p => p.id);
+                toClose.forEach(pid => closePanel(pid));
+                openSession(id, name, 'right');
+            } else {
+                openSession(id, name, direction);
+            }
+        }
+
+        // Close placement menu on click-outside or Escape
+        document.addEventListener('mousedown', (e) => {
+            const menu = document.getElementById('placement-menu');
+            if (menu.classList.contains('open') && !menu.contains(e.target)) {
+                hidePlacementMenu();
+            }
+        });
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') hidePlacementMenu();
+        });
+
+        // Placement menu status line on hover
+        document.getElementById('placement-menu').addEventListener('mouseover', (e) => {
+            const btn = e.target.closest('button[data-hint]');
+            document.getElementById('pm-status').textContent = btn ? btn.dataset.hint : '';
+        });
+        document.getElementById('placement-menu').addEventListener('mouseleave', () => {
+            document.getElementById('pm-status').textContent = '';
+        });
+
+        function openSession(id, name, direction) {
             if (panels.find(p => p.id === id)) return;
 
             const panel = { id, name, ws: null, terminal: null, fitAddon: null, element: null, _resizeObserver: null, _theme: 'default' };
             panels.push(panel);
             buildPanelElement(panel);
+            insertIntoTree(id, direction || 'right');
             layoutPanels();
             setFocus(id);
         }
 
-        function updateToolbar() {
-            const toolbar = document.getElementById('toolbar');
-            toolbar.classList.toggle('visible', panels.length >= 2);
+        // --- Layout Tree ---
+        function findLeaf(node, panelId) {
+            if (!node) return null;
+            if (node.type === 'leaf') return node.panelId === panelId ? node : null;
+            return findLeaf(node.children[0], panelId) || findLeaf(node.children[1], panelId);
+        }
+
+        function replaceInTree(node, target, replacement) {
+            // If root itself is the target
+            if (node === target) {
+                Object.keys(node).forEach(k => delete node[k]);
+                Object.assign(node, replacement);
+                return true;
+            }
+            if (node.type !== 'split') return false;
+            for (let i = 0; i < 2; i++) {
+                if (node.children[i] === target) {
+                    node.children[i] = replacement;
+                    return true;
+                }
+                if (replaceInTree(node.children[i], target, replacement)) return true;
+            }
+            return false;
+        }
+
+        function insertIntoTree(panelId, direction) {
+            const newLeaf = { type: 'leaf', panelId };
+            if (!layoutRoot) {
+                layoutRoot = newLeaf;
+                return;
+            }
+            if (panels.length <= 1) {
+                // Only one panel — just set as root
+                layoutRoot = newLeaf;
+                return;
+            }
+            const focusedLeaf = findLeaf(layoutRoot, focusedPanelId);
+            if (!focusedLeaf) {
+                // Fallback: wrap root
+                const splitDir = (direction === 'left' || direction === 'right') ? 'horizontal' : 'vertical';
+                const first = (direction === 'right' || direction === 'bottom') ? layoutRoot : newLeaf;
+                const second = (direction === 'right' || direction === 'bottom') ? newLeaf : layoutRoot;
+                layoutRoot = { type: 'split', direction: splitDir, children: [first, second], ratio: 0.5 };
+                return;
+            }
+            const splitDir = (direction === 'left' || direction === 'right') ? 'horizontal' : 'vertical';
+            const existingLeaf = { type: 'leaf', panelId: focusedPanelId };
+            const first = (direction === 'right' || direction === 'bottom') ? existingLeaf : newLeaf;
+            const second = (direction === 'right' || direction === 'bottom') ? newLeaf : existingLeaf;
+            const newSplit = { type: 'split', direction: splitDir, children: [first, second], ratio: 0.5 };
+            replaceInTree(layoutRoot, focusedLeaf, newSplit);
+        }
+
+        function removeFromTree(panelId) {
+            if (!layoutRoot) return;
+            if (layoutRoot.type === 'leaf') {
+                if (layoutRoot.panelId === panelId) layoutRoot = null;
+                return;
+            }
+            _removeLeaf(layoutRoot, null, -1, panelId);
+        }
+
+        function _removeLeaf(node, parent, childIdx, panelId) {
+            if (node.type === 'leaf') {
+                if (node.panelId === panelId && parent) {
+                    const sibling = parent.children[1 - childIdx];
+                    replaceInTree(layoutRoot, parent, sibling);
+                    return true;
+                }
+                return false;
+            }
+            if (_removeLeaf(node.children[0], node, 0, panelId)) return true;
+            return _removeLeaf(node.children[1], node, 1, panelId);
+        }
+
+        function firstLeafId(node) {
+            if (!node) return null;
+            if (node.type === 'leaf') return node.panelId;
+            return firstLeafId(node.children[0]);
         }
 
         const MIN_COLS = 80;
@@ -1164,7 +1333,7 @@
             }
         }
 
-        // Rearrange existing panel elements into the layout WITHOUT destroying terminals.
+        // Rearrange existing panel elements into the layout using the binary tree.
         function layoutPanels() {
             const container = document.getElementById('panels');
 
@@ -1173,9 +1342,7 @@
                 container.removeChild(container.firstChild);
             }
 
-            updateToolbar();
-
-            if (panels.length === 0) {
+            if (!layoutRoot || panels.length === 0) {
                 container.innerHTML = `
                     <div class="empty-state">
                         <div class="icon">&#9837;</div>
@@ -1185,34 +1352,8 @@
                 return;
             }
 
-            if (panels.length === 1) {
-                const pane = document.createElement('div');
-                pane.className = 'split-pane';
-                pane.style.flex = '1';
-                pane.appendChild(panels[0].element);
-                container.appendChild(pane);
-            } else {
-                const wrapper = document.createElement('div');
-                wrapper.className = `split-container ${splitDir}`;
-
-                panels.forEach((panel, i) => {
-                    if (i > 0) {
-                        const prevPane = wrapper.lastElementChild;
-                        const handle = document.createElement('div');
-                        handle.className = `split-handle ${splitDir === 'horizontal' ? 'h-handle' : 'v-handle'}`;
-                        initDragHandle(handle, prevPane, splitDir);
-                        wrapper.appendChild(handle);
-                    }
-
-                    const pane = document.createElement('div');
-                    pane.className = 'split-pane';
-                    pane.style.flex = '1';
-                    pane.appendChild(panel.element);
-                    wrapper.appendChild(pane);
-                });
-
-                container.appendChild(wrapper);
-            }
+            const dom = renderNode(layoutRoot);
+            container.appendChild(dom);
 
             renderSessionList();
 
@@ -1220,6 +1361,48 @@
             requestAnimationFrame(() => {
                 panels.forEach(p => ensureTerminalOpen(p));
             });
+        }
+
+        function renderNode(node) {
+            if (node.type === 'leaf') {
+                const panel = panels.find(p => p.id === node.panelId);
+                const pane = document.createElement('div');
+                pane.className = 'split-pane';
+                pane.style.flex = '1';
+                if (panel && panel.element) pane.appendChild(panel.element);
+                return pane;
+            }
+
+            // Split node
+            const wrapper = document.createElement('div');
+            wrapper.className = `split-container ${node.direction}`;
+
+            const child1 = renderNode(node.children[0]);
+            const pane1 = wrapInSplitPane(child1);
+            pane1.style.flex = String(node.ratio);
+            wrapper.appendChild(pane1);
+
+            const handle = document.createElement('div');
+            handle.className = `split-handle ${node.direction === 'horizontal' ? 'h-handle' : 'v-handle'}`;
+            initDragHandle(handle, wrapper, node.direction, node);
+            wrapper.appendChild(handle);
+
+            const child2 = renderNode(node.children[1]);
+            const pane2 = wrapInSplitPane(child2);
+            pane2.style.flex = String(1 - node.ratio);
+            wrapper.appendChild(pane2);
+
+            return wrapper;
+        }
+
+        // Ensure a rendered child is always wrapped in a split-pane for consistent flex layout.
+        // Leaf nodes already return a split-pane; split nodes return a split-container that needs wrapping.
+        function wrapInSplitPane(el) {
+            if (el.classList.contains('split-pane')) return el;
+            const pane = document.createElement('div');
+            pane.className = 'split-pane';
+            pane.appendChild(el);
+            return pane;
         }
 
         function changeFontSize(id, delta) {
@@ -1320,37 +1503,43 @@
             if (panel.terminal) { panel.terminal.dispose(); }
             delete _panelFitters[panel.id];
             panels.splice(idx, 1);
+            removeFromTree(id);
             // Move focus to next remaining panel
             if (focusedPanelId === id) {
-                focusedPanelId = panels.length > 0 ? panels[0].id : null;
+                focusedPanelId = firstLeafId(layoutRoot);
             }
             layoutPanels();
             if (panels.length === 0) openDrawer();
         }
 
         // --- Drag handle for resizable splits ---
-        function initDragHandle(handle, pane, direction) {
-            let startPos, startSize;
+        function initDragHandle(handle, container, direction, treeNode) {
+            let startPos, containerSize;
 
             function onStart(clientX, clientY) {
                 handle.classList.add('dragging');
                 startPos = direction === 'horizontal' ? clientX : clientY;
-                startSize = direction === 'horizontal' ? pane.offsetWidth : pane.offsetHeight;
+                containerSize = direction === 'horizontal' ? container.offsetWidth : container.offsetHeight;
                 document.body.style.cursor = direction === 'horizontal' ? 'col-resize' : 'row-resize';
                 document.body.style.userSelect = 'none';
             }
 
             function onMove(clientX, clientY) {
+                if (!containerSize) return;
                 const currentPos = direction === 'horizontal' ? clientX : clientY;
                 const delta = currentPos - startPos;
-                const newSize = Math.max(80, startSize + delta);
-                pane.style.flex = 'none';
-                if (direction === 'horizontal') {
-                    pane.style.width = newSize + 'px';
-                } else {
-                    pane.style.height = newSize + 'px';
+                const handleSize = direction === 'horizontal' ? 5 : 5;
+                const usable = containerSize - handleSize;
+                let newRatio = (treeNode.ratio * usable + delta) / usable;
+                newRatio = Math.max(0.1, Math.min(0.9, newRatio));
+                treeNode.ratio = newRatio;
+                // Update flex values on sibling panes
+                const panes = container.querySelectorAll(':scope > .split-pane');
+                if (panes.length === 2) {
+                    panes[0].style.flex = String(newRatio);
+                    panes[1].style.flex = String(1 - newRatio);
                 }
-                // ResizeObserver on each terminal container handles fit + server resize
+                startPos = currentPos;
             }
 
             function onEnd() {
@@ -1465,17 +1654,6 @@
             if (panel && panel.ws && panel.ws.readyState === WebSocket.OPEN) {
                 panel.ws.send(input.value + '\n');
                 input.value = '';
-            }
-        }
-
-        // --- Split Direction ---
-        function setSplitDir(dir) {
-            splitDir = dir;
-            document.querySelectorAll('.toolbar button[data-split]').forEach(btn => {
-                btn.classList.toggle('active', btn.dataset.split === dir);
-            });
-            if (panels.length >= 2) {
-                layoutPanels();
             }
         }
 
@@ -1603,11 +1781,23 @@
             }
         }
 
+        function validateNewSession() {
+            const name = document.getElementById('new-name').value.trim();
+            const nameInput = document.getElementById('new-name');
+            const nameError = document.getElementById('name-error');
+            const btn = document.getElementById('run-btn');
+            const nameTaken = name && sessions.some(s => s.name === name);
+            nameError.style.display = nameTaken ? 'block' : 'none';
+            nameInput.style.borderColor = nameTaken ? '#ff6666' : '#2a2a5a';
+            btn.disabled = !name || nameTaken || !selectedCwd;
+        }
+
         function toggleNewSession() {
             const dialog = document.getElementById('new-session-dialog');
             dialog.classList.toggle('open');
             if (dialog.classList.contains('open')) {
                 document.getElementById('new-name').focus();
+                validateNewSession();
             }
         }
 
@@ -1767,6 +1957,8 @@
             notificationsEnabled = await requestNotificationPermission();
             document.removeEventListener('click', initNotif);
         }, { once: true });
+
+        document.getElementById('new-name').addEventListener('input', validateNewSession);
 
         fetchConfig();
         fetchSessions();
