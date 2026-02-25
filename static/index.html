@@ -634,32 +634,34 @@
 
         .extra-keys-bar {
             position: fixed;
-            bottom: 0;
             left: 0;
             right: 0;
+            bottom: 0;
             z-index: 600;
-            background: #0e0e24;
-            border-top: 1px solid #2a2a5a;
+            display: none;
             user-select: none;
             -webkit-user-select: none;
-            display: none;
         }
-        @media (pointer: coarse) {
-            .extra-keys-bar { display: block; }
-        }
-        .extra-keys-bar.collapsed .extra-keys-rows { display: none; }
+        .extra-keys-bar.visible { display: flex; flex-direction: column; align-items: flex-end; }
         .extra-keys-chevron {
-            display: block;
-            width: fit-content;
-            margin-left: auto;
-            padding: 3px 10px;
+            padding: 4px 10px;
             cursor: pointer;
             color: #606080;
             font-size: 10px;
             line-height: 1;
+            background: #0e0e24;
+            border: 1px solid #2a2a5a;
+            border-bottom: none;
+            border-radius: 4px 4px 0 0;
             -webkit-tap-highlight-color: transparent;
         }
-        .extra-keys-chevron:hover { color: #a0a0d0; }
+        .extra-keys-chevron:active { color: #a0a0d0; }
+        .extra-keys-drawer {
+            width: 100%;
+            background: #0e0e24;
+            border-top: 1px solid #2a2a5a;
+        }
+        .extra-keys-bar.collapsed .extra-keys-drawer { display: none; }
         .extra-keys-rows {
             display: flex;
             flex-direction: column;
@@ -1096,25 +1098,27 @@
     </div>
 
     <div class="extra-keys-bar" id="extra-keys-bar" onpointerdown="event.preventDefault()">
-        <span class="extra-keys-chevron" onpointerdown="toggleExtraKeysBar()" id="ek-chevron">&#9660;</span>
-        <div class="extra-keys-rows">
-            <div class="extra-keys-row">
-                <button onpointerdown="sendKey('Escape')">ESC</button>
-                <button onpointerdown="sendKey('/')">/</button>
-                <button onpointerdown="sendKey('-')">&#8211;</button>
-                <button onpointerdown="sendKey('Home')">HOME</button>
-                <button onpointerdown="sendKey('ArrowUp')">&uarr;</button>
-                <button onpointerdown="sendKey('End')">END</button>
-                <button onpointerdown="sendKey('PageUp')">PGUP</button>
-            </div>
-            <div class="extra-keys-row">
-                <button onpointerdown="sendKey('Tab')">TAB</button>
-                <button onpointerdown="toggleModifier('ctrl')" id="ek-ctrl">CTRL</button>
-                <button onpointerdown="toggleModifier('alt')" id="ek-alt">ALT</button>
-                <button onpointerdown="sendKey('ArrowLeft')">&larr;</button>
-                <button onpointerdown="sendKey('ArrowDown')">&darr;</button>
-                <button onpointerdown="sendKey('ArrowRight')">&rarr;</button>
-                <button onpointerdown="sendKey('PageDown')">PGDN</button>
+        <span class="extra-keys-chevron" onpointerdown="toggleExtraKeysBar()" id="ek-chevron">&#9650;</span>
+        <div class="extra-keys-drawer">
+            <div class="extra-keys-rows">
+                <div class="extra-keys-row">
+                    <button onpointerdown="sendKey('Escape')">ESC</button>
+                    <button onpointerdown="sendKey('/')">/</button>
+                    <button onpointerdown="sendKey('-')">&#8211;</button>
+                    <button onpointerdown="sendKey('Home')">HOME</button>
+                    <button onpointerdown="sendKey('ArrowUp')">&uarr;</button>
+                    <button onpointerdown="sendKey('End')">END</button>
+                    <button onpointerdown="sendKey('PageUp')">PGUP</button>
+                </div>
+                <div class="extra-keys-row">
+                    <button onpointerdown="sendKey('Tab')">TAB</button>
+                    <button onpointerdown="toggleModifier('ctrl')" id="ek-ctrl">CTRL</button>
+                    <button onpointerdown="toggleModifier('alt')" id="ek-alt">ALT</button>
+                    <button onpointerdown="sendKey('ArrowLeft')">&larr;</button>
+                    <button onpointerdown="sendKey('ArrowDown')">&darr;</button>
+                    <button onpointerdown="sendKey('ArrowRight')">&rarr;</button>
+                    <button onpointerdown="sendKey('PageDown')">PGDN</button>
+                </div>
             </div>
         </div>
     </div>
@@ -2005,16 +2009,22 @@
             }
         }
 
-        // Reposition the extra-keys bar above the virtual keyboard.
-        // With `interactive-widget=resizes-visual`, the layout viewport
-        // (window.innerHeight) stays constant while visualViewport shrinks
-        // when the keyboard opens — the difference gives us the keyboard height.
+        // Show/hide the extra-keys bar based on virtual keyboard visibility.
+        // With `interactive-widget=resizes-visual`, window.innerHeight stays
+        // constant while visualViewport.height shrinks when the keyboard opens.
         function _updateExtraKeysPosition() {
             const bar = document.getElementById('extra-keys-bar');
             if (!bar || !window.visualViewport) return;
             const vv = window.visualViewport;
             const kbHeight = Math.round(window.innerHeight - vv.height - vv.offsetTop);
-            bar.style.bottom = (kbHeight > 50 ? kbHeight : 0) + 'px';
+            if (kbHeight > 50) {
+                bar.classList.add('visible');
+                bar.style.bottom = kbHeight + 'px';
+                _applyEkState();
+            } else {
+                bar.classList.remove('visible');
+                bar.style.bottom = '0';
+            }
         }
         if (window.visualViewport) {
             window.visualViewport.addEventListener('resize', _updateExtraKeysPosition);
