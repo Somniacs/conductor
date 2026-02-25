@@ -25,9 +25,10 @@ _IS_WIN = sys.platform == "win32"
 class BasePTYProcess:
     """Common interface for PTY wrappers on all platforms."""
 
-    def __init__(self, command: str, cwd: str | None = None):
+    def __init__(self, command: str, cwd: str | None = None, env: dict | None = None):
         self.command = command
         self.cwd = cwd
+        self.extra_env = env
         self.closed = False
 
     def spawn(self, rows: int = 24, cols: int = 80) -> None:
@@ -75,8 +76,8 @@ if not _IS_WIN:
     class UnixPTYProcess(BasePTYProcess):
         """Wraps a subprocess in a Unix pseudo-terminal."""
 
-        def __init__(self, command: str, cwd: str | None = None):
-            super().__init__(command, cwd)
+        def __init__(self, command: str, cwd: str | None = None, env: dict | None = None):
+            super().__init__(command, cwd, env=env)
             self.master_fd: int = -1
             self.process: subprocess.Popen | None = None
 
@@ -92,6 +93,8 @@ if not _IS_WIN:
             for key in list(env):
                 if key.startswith("CLAUDE"):
                     del env[key]
+            if self.extra_env:
+                env.update(self.extra_env)
 
             self.process = subprocess.Popen(
                 args,
@@ -163,8 +166,8 @@ else:
     class WindowsPTYProcess(BasePTYProcess):
         """Wraps a subprocess in a Windows ConPTY pseudo-terminal."""
 
-        def __init__(self, command: str, cwd: str | None = None):
-            super().__init__(command, cwd)
+        def __init__(self, command: str, cwd: str | None = None, env: dict | None = None):
+            super().__init__(command, cwd, env=env)
             self._pty: WinPTY | None = None
             self._pid: int | None = None
 
@@ -176,6 +179,8 @@ else:
             for key in list(env):
                 if key.startswith("CLAUDE"):
                     del env[key]
+            if self.extra_env:
+                env.update(self.extra_env)
 
             # pywinpty spawn() expects: appname (str), cmdline (str|None),
             # cwd (str|None), env (null-separated str|None)
@@ -240,8 +245,8 @@ else:
 # Factory — returns the right class for the current platform
 # ---------------------------------------------------------------------------
 
-def PTYProcess(command: str, cwd: str | None = None) -> BasePTYProcess:
+def PTYProcess(command: str, cwd: str | None = None, env: dict | None = None) -> BasePTYProcess:
     """Create a platform-appropriate PTY wrapper."""
     if _IS_WIN:
-        return WindowsPTYProcess(command, cwd=cwd)
-    return UnixPTYProcess(command, cwd=cwd)
+        return WindowsPTYProcess(command, cwd=cwd, env=env)
+    return UnixPTYProcess(command, cwd=cwd, env=env)

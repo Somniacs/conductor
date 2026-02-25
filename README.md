@@ -287,10 +287,13 @@ The web dashboard provides:
 - **Idle notifications** — browser notification when a session is waiting for input (when tab not visible)
 - **Link Device** — QR code in the hamburger menu for opening the dashboard on another device
 - **Server management** — add/remove servers, Tailscale device picker, QR scanner, connection status
+- **Image upload** — paste (Ctrl+V), drag-and-drop, or use the attachment button to upload an image; shows an upload dialog with progress, then lets you insert the file path into the terminal or copy it to clipboard. Uploaded files are auto-cleaned when the session ends
+- **Mobile extra keys** — on-screen toolbar with ESC, TAB, arrows, CTRL, ALT, Page Up/Down, Home/End, and attachment button; appears above the virtual keyboard on touch devices, with collapsible drawer (state persisted)
+- **Mobile touch scroll** — one-finger scroll with momentum in terminal panels
 - **Collapsible sidebar** — chevron toggle, auto-reopens when all panels close
 - **Auto-reconnect** — WebSocket reconnects automatically on disconnect
 - **Minimum 80 columns** — narrow panels get horizontal scroll instead of reflow
-- **Mobile-friendly** — responsive drawer, touch targets, dynamic viewport height
+- **Mobile-friendly** — responsive drawer, touch targets, dynamic viewport height, adaptive font size and scrollback
 
 ## CLI Reference
 
@@ -300,8 +303,12 @@ The web dashboard provides:
 | `conductor serve --host 0.0.0.0 --port 8888` | Custom host/port |
 | `conductor run COMMAND [NAME]` | Start session and attach (see output in terminal) |
 | `conductor run -d COMMAND [NAME]` | Start session in background (detached) |
+| `conductor run --json COMMAND [NAME]` | Start session and print JSON (implies detach) |
 | `conductor attach NAME` | Attach to a running session |
 | `conductor list` | List active sessions |
+| `conductor list --json` | List sessions as JSON |
+| `conductor status` | Show server status |
+| `conductor status --json` | Show server status as JSON |
 | `conductor stop NAME` | Stop a session |
 | `conductor shutdown` | Stop the server and all sessions |
 | `conductor restart` | Restart the server (picks up config changes) |
@@ -312,21 +319,125 @@ The web dashboard provides:
 
 ## API
 
-Default port `7777`. All endpoints relative to your host.
+Default port `7777`. All endpoints relative to your host. OpenAPI spec at `/openapi.json`.
 
 | Method | Endpoint | Description |
 |---|---|---|
+| `GET` | `/health` | Health check (`{"ok": true, "version": "..."}`) — always public |
 | `GET` | `/sessions` | List all sessions |
+| `GET` | `/sessions/{id}` | Get a single session |
 | `POST` | `/sessions/run` | Create session (`{"name": "...", "command": "..."}`) |
-| `POST` | `/sessions/{id}/input` | Send input (`{"text": "..."}`) |
+| `POST` | `/sessions/{id}/input` | Send input (`{"text": "..."}` and/or `{"keys": ["CTRL+C"]}`) |
 | `POST` | `/sessions/{id}/resize` | Resize PTY (`{"rows": 24, "cols": 80}`) |
+| `POST` | `/sessions/{id}/upload` | Upload an image (raw body, `Content-Type: image/*`) → `{"path": "...", "filename": "..."}` |
 | `POST` | `/sessions/{id}/resume` | Resume an exited session with a stored resume token |
+| `POST` | `/sessions/{id}/stop` | Stop a session (alias for DELETE) |
 | `DELETE` | `/sessions/{id}` | Kill session (or dismiss a resumable session) |
 | `WS` | `/sessions/{id}/stream` | Bidirectional WebSocket — output out, keystrokes in |
+| `WS` | `/sessions/{id}/stream?typed=true` | Typed JSON WebSocket for agents |
 | `GET` | `/info` | Server identity (hostname, port, Tailscale IP/name) |
 | `GET` | `/tailscale/peers` | Online Tailscale peers for device picker |
 | `GET` | `/config` | Allowed commands and default directories |
 | `GET` | `/browse?path=~` | Directory listing for the directory picker |
+
+## Agent Integration
+
+Conductor exposes a stable API that AI agents and automation tools can use to start, monitor, and interact with terminal sessions programmatically.
+
+### Discovery
+
+Check if the server is running and get connection details:
+
+```bash
+# CLI
+conductor status --json
+# → {"ok": true, "version": "0.2.1", "base_url": "http://127.0.0.1:7777", ...}
+
+# HTTP
+curl http://127.0.0.1:7777/health
+# → {"ok": true, "version": "0.2.1"}
+```
+
+The full OpenAPI spec is at `http://127.0.0.1:7777/openapi.json`.
+
+### Start a session
+
+```bash
+curl -X POST http://127.0.0.1:7777/sessions/run \
+  -H "Content-Type: application/json" \
+  -d '{"name": "my-agent", "command": "echo hello", "source": "cli"}'
+```
+
+The response includes a `ws_url` field for streaming output.
+
+### Stream output (typed WebSocket)
+
+Connect to the typed WebSocket endpoint for structured JSON messages:
+
+```
+ws://127.0.0.1:7777/sessions/my-agent/stream?typed=true
+```
+
+**Server sends:**
+- `{"type": "stdout", "data": "..."}` — terminal output
+- `{"type": "exit", "exit_code": 0}` — session ended
+- `{"type": "ping"}` — keepalive
+
+**Client sends:**
+- `{"type": "input", "data": "..."}` — text input
+- `{"type": "resize", "rows": 40, "cols": 120}` — resize terminal
+- Plain text fallback: non-JSON text is treated as raw input
+
+### Send input
+
+```bash
+# Text input
+curl -X POST http://127.0.0.1:7777/sessions/my-agent/input \
+  -H "Content-Type: application/json" \
+  -d '{"text": "yes\n"}'
+
+# Key sequences
+curl -X POST http://127.0.0.1:7777/sessions/my-agent/input \
+  -H "Content-Type: application/json" \
+  -d '{"keys": ["CTRL+C"]}'
+```
+
+**Supported key names:** `ENTER`, `TAB`, `ESCAPE`, `BACKSPACE`, `UP`, `DOWN`, `LEFT`, `RIGHT`, `CTRL+A`, `CTRL+C`, `CTRL+D`, `CTRL+E`, `CTRL+K`, `CTRL+L`, `CTRL+R`, `CTRL+U`, `CTRL+W`, `CTRL+Z`, `CTRL+\`
+
+### Resume a session
+
+List sessions, find one by name, and reconnect:
+
+```bash
+# List all sessions
+curl http://127.0.0.1:7777/sessions
+
+# Reconnect WebSocket to an existing session
+ws://127.0.0.1:7777/sessions/my-agent/stream?typed=true
+```
+
+### Authentication
+
+Set `CONDUCTOR_TOKEN` as an environment variable before starting the server:
+
+```bash
+export CONDUCTOR_TOKEN=my-secret-token
+conductor serve
+```
+
+When set, all API requests (except `/health`) require a Bearer token:
+
+```bash
+curl -H "Authorization: Bearer my-secret-token" http://127.0.0.1:7777/sessions
+```
+
+WebSocket connections accept the token as a query parameter:
+
+```
+ws://127.0.0.1:7777/sessions/my-agent/stream?typed=true&token=my-secret-token
+```
+
+When no token is configured, the API is open (same as before).
 
 ## Project Structure
 

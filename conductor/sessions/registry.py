@@ -59,7 +59,7 @@ class SessionRegistry:
         else:
             self._delete_metadata(session_id)
 
-    async def create(self, name: str, command: str, cwd: str | None = None) -> Session:
+    async def create(self, name: str, command: str, cwd: str | None = None, env: dict | None = None) -> Session:
         if name in self.sessions:
             existing = self.sessions[name]
             if existing.status == "running":
@@ -76,6 +76,7 @@ class SessionRegistry:
             session_id=name,
             cwd=cwd,
             on_exit=self._on_session_exit,
+            env=env,
         )
         await session.start()
         self.sessions[name] = session

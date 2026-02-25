@@ -13,7 +13,11 @@
 
 """Central configuration — networking, paths, buffer sizes, command whitelist."""
 
+import os
 from pathlib import Path
+
+VERSION = "0.2.1"
+CONDUCTOR_TOKEN = os.environ.get("CONDUCTOR_TOKEN")
 
 HOST = "0.0.0.0"
 PORT = 7777
@@ -22,9 +26,12 @@ BASE_URL = f"http://127.0.0.1:{PORT}"
 CONDUCTOR_DIR = Path.home() / ".conductor"
 SESSIONS_DIR = CONDUCTOR_DIR / "sessions"
 LOG_DIR = CONDUCTOR_DIR / "logs"
+UPLOADS_DIR = CONDUCTOR_DIR / "uploads"
 PID_FILE = CONDUCTOR_DIR / "server.pid"
 
 BUFFER_MAX_BYTES = 1_000_000  # 1MB rolling buffer
+MAX_UPLOAD_SIZE = 10 * 1024 * 1024  # 10 MB
+ALLOWED_IMAGE_TYPES = {"image/png", "image/jpeg", "image/gif", "image/webp", "image/bmp"}
 
 # Allowed commands for the web dashboard "New Session" form.
 # Only the base command name is checked (first token before args).
@@ -48,3 +55,4 @@ DEFAULT_DIRECTORIES = [
 def ensure_dirs():
     SESSIONS_DIR.mkdir(parents=True, exist_ok=True)
     LOG_DIR.mkdir(parents=True, exist_ok=True)
+    UPLOADS_DIR.mkdir(parents=True, exist_ok=True)

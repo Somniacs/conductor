@@ -19,6 +19,7 @@ import re
 import sys
 import threading
 import time
+from datetime import datetime, timezone
 from typing import Set
 
 # Regex to strip ANSI escape sequences from terminal output.
@@ -37,8 +38,10 @@ _ANSI_RE = re.compile(
 # Pattern to find `--resume <id>` in Claude Code exit output.
 _RESUME_RE = re.compile(r'--resume\s+(\S+)')
 
+import shutil
+
 from conductor.proxy.pty_wrapper import PTYProcess
-from conductor.utils.config import BUFFER_MAX_BYTES
+from conductor.utils.config import BUFFER_MAX_BYTES, UPLOADS_DIR
 
 _IS_WIN = sys.platform == "win32"
 
@@ -46,17 +49,19 @@ _IS_WIN = sys.platform == "win32"
 class Session:
     """A single managed terminal session backed by a PTY."""
 
-    def __init__(self, name: str, command: str, session_id: str | None = None, cwd: str | None = None, on_exit=None):
+    def __init__(self, name: str, command: str, session_id: str | None = None, cwd: str | None = None, on_exit=None, env: dict | None = None):
         self.id = session_id or name
         self.name = name
         self.command = command
         self.cwd = cwd
-        self.pty = PTYProcess(command, cwd=cwd)
+        self.pty = PTYProcess(command, cwd=cwd, env=env)
         self.buffer = bytearray()
         self.subscribers: Set[asyncio.Queue] = set()
         self.status = "starting"
         self.pid: int | None = None
         self.start_time: float | None = None
+        self.created_at: str | None = None
+        self.exit_code: int | None = None
         self.resume_id: str | None = None
         self._monitor_task: asyncio.Task | None = None
         self._on_exit = on_exit
@@ -66,6 +71,7 @@ class Session:
         self.pty.spawn()
         self.pid = self.pty.pid
         self.start_time = time.time()
+        self.created_at = datetime.fromtimestamp(self.start_time, tz=timezone.utc).isoformat()
         self.status = "running"
 
         if _IS_WIN:
@@ -154,6 +160,12 @@ class Session:
     def resize(self, rows: int, cols: int):
         self.pty.resize(rows, cols)
 
+    def _cleanup_uploads(self):
+        """Remove the session's upload directory."""
+        upload_dir = UPLOADS_DIR / self.id
+        if upload_dir.is_dir():
+            shutil.rmtree(upload_dir, ignore_errors=True)
+
     def _extract_resume_id(self):
         """Scan the tail of the terminal buffer for a --resume <id> token."""
         try:
@@ -169,6 +181,7 @@ class Session:
     async def _monitor_process(self):
         while self.pty.poll() is None:
             await asyncio.sleep(0.5)
+        self.exit_code = self.pty.poll()
         self.status = "exited"
 
         if not _IS_WIN:
@@ -181,6 +194,7 @@ class Session:
         self._broadcast(b"\r\n[Process exited]\r\n")
         self._broadcast_close()
         self.pty.close()
+        self._cleanup_uploads()
         if self._on_exit:
             await self._on_exit(self.id)
 
@@ -195,6 +209,7 @@ class Session:
                 pass
 
         self._broadcast_close()
+        self._cleanup_uploads()
 
     async def cleanup(self):
         if self._monitor_task:
@@ -213,6 +228,8 @@ class Session:
             "status": self.status,
             "pid": self.pid,
             "start_time": self.start_time,
+            "created_at": self.created_at,
+            "exit_code": self.exit_code,
             "cwd": self.cwd,
         }
         if self.resume_id:

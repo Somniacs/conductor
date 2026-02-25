@@ -667,9 +667,16 @@
         .extra-keys-bar.collapsed .extra-keys-drawer { display: none; }
         .extra-keys-rows {
             display: flex;
-            flex-direction: column;
+            flex-direction: row;
             padding: 3px 4px;
             gap: 2px;
+        }
+        .extra-keys-cols {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+            min-width: 0;
         }
         .extra-keys-row {
             display: flex;
@@ -692,6 +699,21 @@
             touch-action: manipulation;
         }
         .extra-keys-row button:active { background: #2a2a5a; color: #e0e0ff; }
+        .ek-attach-btn {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: #1a1a3a;
+            border: 1px solid #2a2a5a;
+            color: #b0b0d0;
+            border-radius: 4px;
+            cursor: pointer;
+            padding: 0 12px;
+            -webkit-tap-highlight-color: transparent;
+            touch-action: manipulation;
+        }
+        .ek-attach-btn:active { background: #2a2a5a; color: #e0e0ff; }
+        .ek-attach-btn svg { pointer-events: none; }
         .extra-keys-row button.modifier-active {
             background: #3a3a7a;
             color: #ffffff;
@@ -1002,6 +1024,87 @@
         .upload-toast.visible { opacity: 1; }
         .upload-toast.success { border-color: #2a6a2a; background: #1a2e1a; }
         .upload-toast.error { border-color: #6a2a2a; background: #2e1a1a; }
+
+        .upload-overlay {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,0.5);
+            z-index: 1100;
+            align-items: center;
+            justify-content: center;
+        }
+        .upload-overlay.open { display: flex; }
+        .upload-box {
+            background: #16163a;
+            border: 1px solid #2a2a5a;
+            border-radius: 8px;
+            padding: 20px 24px;
+            min-width: 300px;
+            max-width: 400px;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+        }
+        .upload-filename {
+            color: #d0d0e0;
+            font-size: 13px;
+            margin: 0 0 12px;
+            word-break: break-all;
+            line-height: 1.4;
+        }
+        .upload-status {
+            color: #a0a0c0;
+            font-size: 13px;
+            margin: 0 0 16px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .upload-spinner {
+            width: 16px; height: 16px;
+            border: 2px solid #2a2a5a;
+            border-top-color: #7070ff;
+            border-radius: 50%;
+            animation: upload-spin 0.6s linear infinite;
+        }
+        @keyframes upload-spin { to { transform: rotate(360deg); } }
+        .upload-path {
+            background: #0e0e20;
+            border: 1px solid #2a2a5a;
+            border-radius: 4px;
+            padding: 8px 10px;
+            font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+            font-size: 12px;
+            color: #90d090;
+            word-break: break-all;
+            margin: 0 0 16px;
+            user-select: all;
+        }
+        .upload-error-msg {
+            color: #f09090;
+            font-size: 13px;
+            margin: 0 0 16px;
+        }
+        .upload-actions {
+            display: flex;
+            gap: 8px;
+            justify-content: flex-end;
+        }
+        .upload-actions button {
+            padding: 6px 16px;
+            border-radius: 5px;
+            border: 1px solid #2a2a5a;
+            cursor: pointer;
+            font-size: 13px;
+            background: transparent;
+            color: #a0a0b0;
+        }
+        .upload-actions button:hover { background: #1e1e3e; }
+        .upload-actions .upload-insert {
+            background: #1a3a1a;
+            border-color: #2a6a2a;
+            color: #a0e0a0;
+        }
+        .upload-actions .upload-insert:hover { background: #2a4a2a; }
     </style>
 </head>
 <body>
@@ -1072,7 +1175,7 @@
         <div class="about-box">
             <button class="about-close" onclick="toggleAbout()">&times;</button>
             <h2><span style="font-size:1.4em;vertical-align:middle">♭</span> conductor</h2>
-            <div class="about-version">v0.2.0</div>
+            <div class="about-version">v0.2.1</div>
             <p>Local orchestration layer for interactive terminal processes. Run sessions on your workstation, interact from anywhere.</p>
             <div class="about-section">Built with</div>
             <ul>
@@ -1138,28 +1241,43 @@
         </div>
     </div>
 
+    <div class="upload-overlay" id="upload-dialog" onclick="if(event.target===this)closeUploadDialog()">
+        <div class="upload-box">
+            <div class="upload-filename" id="upload-filename"></div>
+            <div class="upload-status" id="upload-status"><div class="upload-spinner"></div> Uploading&hellip;</div>
+            <div class="upload-path" id="upload-path" style="display:none"></div>
+            <div class="upload-error-msg" id="upload-error" style="display:none"></div>
+            <div class="upload-actions" id="upload-actions">
+                <button onclick="cancelUpload()">Cancel</button>
+            </div>
+        </div>
+    </div>
+
     <div class="extra-keys-bar" id="extra-keys-bar" onpointerdown="event.preventDefault()">
         <span class="extra-keys-chevron" onpointerdown="toggleExtraKeysBar()" id="ek-chevron">&#9650;</span>
         <div class="extra-keys-drawer">
             <div class="extra-keys-rows">
-                <div class="extra-keys-row">
-                    <button onpointerdown="sendKey('Escape')">ESC</button>
-                    <button onpointerdown="sendKey('/')">/</button>
-                    <button onpointerdown="sendKey('-')">&#8211;</button>
-                    <button onpointerdown="sendKey('Home')">HOME</button>
-                    <button onpointerdown="sendKey('ArrowUp')">&uarr;</button>
-                    <button onpointerdown="sendKey('End')">END</button>
-                    <button onpointerdown="sendKey('PageUp')">PGUP</button>
+                <div class="extra-keys-cols">
+                    <div class="extra-keys-row">
+                        <button onpointerdown="sendKey('Escape')">ESC</button>
+                        <button onpointerdown="sendKey('/')">/</button>
+                        <button onpointerdown="sendKey('-')">&#8211;</button>
+                        <button onpointerdown="sendKey('Home')">HOME</button>
+                        <button onpointerdown="sendKey('ArrowUp')">&uarr;</button>
+                        <button onpointerdown="sendKey('End')">END</button>
+                        <button onpointerdown="sendKey('PageUp')">PGUP</button>
+                    </div>
+                    <div class="extra-keys-row">
+                        <button onpointerdown="sendKey('Tab')">TAB</button>
+                        <button onpointerdown="toggleModifier('ctrl')" id="ek-ctrl">CTRL</button>
+                        <button onpointerdown="toggleModifier('alt')" id="ek-alt">ALT</button>
+                        <button onpointerdown="sendKey('ArrowLeft')">&larr;</button>
+                        <button onpointerdown="sendKey('ArrowDown')">&darr;</button>
+                        <button onpointerdown="sendKey('ArrowRight')">&rarr;</button>
+                        <button onpointerdown="sendKey('PageDown')">PGDN</button>
+                    </div>
                 </div>
-                <div class="extra-keys-row">
-                    <button onpointerdown="sendKey('Tab')">TAB</button>
-                    <button onpointerdown="toggleModifier('ctrl')" id="ek-ctrl">CTRL</button>
-                    <button onpointerdown="toggleModifier('alt')" id="ek-alt">ALT</button>
-                    <button onpointerdown="sendKey('ArrowLeft')">&larr;</button>
-                    <button onpointerdown="sendKey('ArrowDown')">&darr;</button>
-                    <button onpointerdown="sendKey('ArrowRight')">&rarr;</button>
-                    <button onpointerdown="sendKey('PageDown')">PGDN</button>
-                </div>
+                <button onpointerdown="event.stopPropagation(); triggerUpload()" title="Upload file" class="ek-attach-btn"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.49"/></svg></button>
             </div>
         </div>
     </div>
@@ -1793,6 +1911,20 @@
             `;
             div.appendChild(termEl);
 
+            // Hidden file input for image upload (mobile photo picker)
+            const fileInput = document.createElement('input');
+            fileInput.type = 'file';
+            fileInput.accept = 'image/*';
+            fileInput.id = 'upload-' + panel.id;
+            fileInput.style.display = 'none';
+            fileInput.addEventListener('change', () => {
+                if (fileInput.files && fileInput.files[0]) {
+                    uploadImageToSession(panel, fileInput.files[0]);
+                    fileInput.value = '';
+                }
+            });
+            div.appendChild(fileInput);
+
             panel.element = div;
             panel._termEl = termEl;
             panel._termWrapper = termWrapper;
@@ -2156,6 +2288,13 @@
             }
         }
 
+        function triggerUpload() {
+            const panel = _getFocusedPanel();
+            if (!panel) return;
+            const inp = document.getElementById('upload-' + panel.id);
+            if (inp) inp.click();
+        }
+
         // Show/hide the extra-keys bar based on virtual keyboard visibility.
         // With `interactive-widget=resizes-visual`, window.innerHeight stays
         // constant while visualViewport.height shrinks when the keyboard opens.
@@ -2379,6 +2518,63 @@
             }, duration);
         }
 
+        let _uploadAbort = null;
+        let _uploadPanel = null;
+        let _uploadResultPath = null;
+
+        function showUploadDialog(filename) {
+            document.getElementById('upload-filename').textContent = filename;
+            document.getElementById('upload-status').style.display = '';
+            document.getElementById('upload-path').style.display = 'none';
+            document.getElementById('upload-error').style.display = 'none';
+            document.getElementById('upload-actions').innerHTML = '<button onclick="cancelUpload()">Cancel</button>';
+            document.getElementById('upload-dialog').classList.add('open');
+        }
+
+        function showUploadSuccess(path) {
+            _uploadResultPath = path;
+            document.getElementById('upload-status').style.display = 'none';
+            document.getElementById('upload-path').style.display = '';
+            document.getElementById('upload-path').textContent = path;
+            document.getElementById('upload-actions').innerHTML =
+                '<button onclick="closeUploadDialog()">Close</button>' +
+                '<button onclick="copyUploadPath()" title="Copy path">Copy</button>' +
+                '<button class="upload-insert" onclick="insertUploadPath()">Insert</button>';
+        }
+
+        function showUploadError(msg) {
+            document.getElementById('upload-status').style.display = 'none';
+            document.getElementById('upload-error').style.display = '';
+            document.getElementById('upload-error').textContent = msg;
+            document.getElementById('upload-actions').innerHTML = '<button onclick="closeUploadDialog()">Close</button>';
+        }
+
+        function closeUploadDialog() {
+            document.getElementById('upload-dialog').classList.remove('open');
+            _uploadAbort = null;
+            _uploadResultPath = null;
+        }
+
+        function cancelUpload() {
+            if (_uploadAbort) { _uploadAbort.abort(); _uploadAbort = null; }
+            closeUploadDialog();
+        }
+
+        function copyUploadPath() {
+            if (_uploadResultPath) {
+                navigator.clipboard.writeText(_uploadResultPath).then(() => {
+                    showUploadToast('Path copied', 'success', 1500);
+                });
+            }
+        }
+
+        function insertUploadPath() {
+            if (_uploadResultPath && _uploadPanel && _uploadPanel.ws && _uploadPanel.ws.readyState === WebSocket.OPEN) {
+                _uploadPanel.ws.send(_uploadResultPath);
+            }
+            closeUploadDialog();
+        }
+
         async function uploadImageToSession(panel, blob) {
             if (!_ALLOWED_IMAGE_TYPES.has(blob.type)) {
                 showUploadToast('Unsupported image type: ' + blob.type, 'error');
@@ -2388,24 +2584,28 @@
                 showUploadToast('Image too large (max 10 MB)', 'error');
                 return;
             }
+            _uploadPanel = panel;
+            _uploadAbort = new AbortController();
+            const name = blob.name || 'image';
+            const sizeMB = (blob.size / 1024 / 1024).toFixed(1);
+            showUploadDialog(name + ' (' + sizeMB + ' MB)');
             try {
                 const resp = await fetch(serverUrl(panel.server, `/sessions/${panel.sessionId}/upload`), {
                     method: 'POST',
                     headers: { 'Content-Type': blob.type },
                     body: blob,
+                    signal: _uploadAbort.signal,
                 });
                 if (!resp.ok) {
                     const err = await resp.json().catch(() => ({ detail: resp.statusText }));
-                    showUploadToast(err.detail || 'Upload failed', 'error');
+                    showUploadError(err.detail || 'Upload failed');
                     return;
                 }
                 const data = await resp.json();
-                if (panel.ws && panel.ws.readyState === WebSocket.OPEN) {
-                    panel.ws.send(data.path);
-                }
-                showUploadToast('Image path inserted', 'success', 2000);
+                showUploadSuccess(data.path);
             } catch (e) {
-                showUploadToast('Upload failed: ' + e.message, 'error');
+                if (e.name === 'AbortError') return;
+                showUploadError('Upload failed: ' + e.message);
             }
         }
 

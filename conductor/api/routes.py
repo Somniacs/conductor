@@ -14,22 +14,29 @@
 """REST and WebSocket API routes for session management and server info."""
 
 import asyncio
+import hashlib
+import json
 import os
 import re
 import shlex
 import shutil
 import socket
 import subprocess
+import time
 from pathlib import Path
+from typing import Any
 
-from fastapi import APIRouter, WebSocket, WebSocketDisconnect, HTTPException
+from fastapi import APIRouter, Request, WebSocket, WebSocketDisconnect, HTTPException
 from pydantic import BaseModel
 
 # Session names: alphanumeric, hyphens, underscores, spaces, dots. Max 64 chars.
 _SAFE_NAME = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9 _.~-]{0,63}$")
 
 from conductor.sessions.registry import SessionRegistry
-from conductor.utils.config import ALLOWED_COMMANDS, DEFAULT_DIRECTORIES, PORT
+from conductor.utils.config import (
+    ALLOWED_COMMANDS, ALLOWED_IMAGE_TYPES, CONDUCTOR_TOKEN,
+    DEFAULT_DIRECTORIES, MAX_UPLOAD_SIZE, PORT, UPLOADS_DIR, VERSION,
+)
 
 router = APIRouter()
 registry = SessionRegistry()
@@ -37,22 +44,100 @@ registry = SessionRegistry()
 # Build set of allowed base commands for fast lookup
 _allowed_commands = {shlex.split(c["command"])[0] for c in ALLOWED_COMMANDS}
 
+# Content-type to file extension mapping for image uploads
+_IMAGE_EXTENSIONS: dict[str, str] = {
+    "image/png": "png",
+    "image/jpeg": "jpg",
+    "image/gif": "gif",
+    "image/webp": "webp",
+    "image/bmp": "bmp",
+}
+
+
+# ---------------------------------------------------------------------------
+# Key mapping — human-readable names to terminal escape sequences
+# ---------------------------------------------------------------------------
+
+_KEY_MAP: dict[str, str] = {
+    "ENTER": "\r",
+    "TAB": "\t",
+    "ESCAPE": "\x1b",
+    "BACKSPACE": "\x7f",
+    "UP": "\x1b[A",
+    "DOWN": "\x1b[B",
+    "RIGHT": "\x1b[C",
+    "LEFT": "\x1b[D",
+    "CTRL+C": "\x03",
+    "CTRL+D": "\x04",
+    "CTRL+Z": "\x1a",
+    "CTRL+L": "\x0c",
+    "CTRL+A": "\x01",
+    "CTRL+E": "\x05",
+    "CTRL+K": "\x0b",
+    "CTRL+U": "\x15",
+    "CTRL+W": "\x17",
+    "CTRL+R": "\x12",
+    "CTRL+\\": "\x1c",
+}
+
+
+# ---------------------------------------------------------------------------
+# Request models
+# ---------------------------------------------------------------------------
 
 class RunRequest(BaseModel):
     name: str
     command: str
     cwd: str | None = None
     source: str | None = None  # "cli" bypasses whitelist; dashboard is restricted
+    env: dict[str, str] | None = None
 
 
 class InputRequest(BaseModel):
-    text: str
+    text: str | None = None
+    keys: list[str] | None = None
 
 
 class ResizeRequest(BaseModel):
     rows: int
     cols: int
 
+
+# ---------------------------------------------------------------------------
+# Response models (gives typed OpenAPI schemas)
+# ---------------------------------------------------------------------------
+
+class HealthResponse(BaseModel):
+    ok: bool
+    version: str
+
+
+class SessionResponse(BaseModel):
+    id: str
+    name: str
+    command: str
+    status: str
+    pid: int | None = None
+    start_time: float | None = None
+    created_at: str | None = None
+    exit_code: int | None = None
+    cwd: str | None = None
+    resume_id: str | None = None
+    ws_url: str | None = None
+
+
+class StatusResponse(BaseModel):
+    status: str
+
+
+class UploadResponse(BaseModel):
+    path: str
+    filename: str
+
+
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
 
 def _get_tailscale_ip() -> str | None:
     """Get the machine's Tailscale IPv4 address, if available."""
@@ -80,7 +165,6 @@ def _get_tailscale_name() -> str | None:
             capture_output=True, text=True, timeout=5,
         )
         if result.returncode == 0:
-            import json
             status = json.loads(result.stdout)
             dns_name = status.get("Self", {}).get("DNSName", "")
             if dns_name:
@@ -88,6 +172,38 @@ def _get_tailscale_name() -> str | None:
     except Exception:
         pass
     return None
+
+
+def _ws_url_for(request: Request, session_id: str) -> str:
+    """Build the WebSocket URL for a session based on the incoming request."""
+    host = request.headers.get("host", f"127.0.0.1:{PORT}")
+    scheme = "wss" if request.url.scheme == "https" else "ws"
+    return f"{scheme}://{host}/sessions/{session_id}/stream"
+
+
+def _check_ws_auth(ws: WebSocket) -> bool:
+    """Validate WebSocket auth when CONDUCTOR_TOKEN is set. Returns True if ok."""
+    if not CONDUCTOR_TOKEN:
+        return True
+    # Check Authorization header
+    auth = ws.headers.get("authorization", "")
+    if auth == f"Bearer {CONDUCTOR_TOKEN}":
+        return True
+    # Check query parameter
+    token = ws.query_params.get("token", "")
+    if token == CONDUCTOR_TOKEN:
+        return True
+    return False
+
+
+# ---------------------------------------------------------------------------
+# Endpoints
+# ---------------------------------------------------------------------------
+
+@router.get("/health", response_model=HealthResponse)
+async def health():
+    """Health/discovery endpoint — always public, no auth required."""
+    return {"ok": True, "version": VERSION}
 
 
 @router.get("/info")
@@ -113,7 +229,6 @@ async def tailscale_peers():
         )
         if result.returncode != 0:
             return []
-        import json
         status = json.loads(result.stdout)
         peers = []
         for peer in (status.get("Peer") or {}).values():
@@ -175,8 +290,19 @@ async def list_sessions():
     return registry.list_all()
 
 
-@router.post("/sessions/run")
-async def create_session(req: RunRequest):
+@router.get("/sessions/{session_id}", response_model=SessionResponse)
+async def get_session(session_id: str):
+    """Return a single session by ID (checks live and resumable)."""
+    session = registry.get(session_id)
+    if session:
+        return session.to_dict()
+    if session_id in registry.resumable:
+        return registry.resumable[session_id]
+    raise HTTPException(status_code=404, detail="Session not found")
+
+
+@router.post("/sessions/run", response_model=SessionResponse)
+async def create_session(req: RunRequest, request: Request):
     # Validate session name — no path traversal, shell metacharacters, etc.
     req.name = req.name.strip()
     if not _SAFE_NAME.match(req.name):
@@ -199,8 +325,10 @@ async def create_session(req: RunRequest):
             )
 
     try:
-        session = await registry.create(req.name, req.command, cwd=req.cwd)
-        return session.to_dict()
+        session = await registry.create(req.name, req.command, cwd=req.cwd, env=req.env)
+        d = session.to_dict()
+        d["ws_url"] = _ws_url_for(request, session.id)
+        return d
     except ValueError as e:
         raise HTTPException(status_code=409, detail=str(e))
     except FileNotFoundError as e:
@@ -209,16 +337,32 @@ async def create_session(req: RunRequest):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.post("/sessions/{session_id}/input")
+@router.post("/sessions/{session_id}/input", response_model=StatusResponse)
 async def send_input(session_id: str, req: InputRequest):
     session = registry.get(session_id)
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
-    session.send_input(req.text)
+
+    if not req.text and not req.keys:
+        raise HTTPException(status_code=400, detail="Provide at least one of 'text' or 'keys'")
+
+    if req.text:
+        session.send_input(req.text)
+
+    if req.keys:
+        for key_name in req.keys:
+            seq = _KEY_MAP.get(key_name.upper())
+            if seq is None:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Unknown key: '{key_name}'. Supported: {', '.join(sorted(_KEY_MAP))}",
+                )
+            session.send_input(seq)
+
     return {"status": "ok"}
 
 
-@router.post("/sessions/{session_id}/resize")
+@router.post("/sessions/{session_id}/resize", response_model=StatusResponse)
 async def resize_session(session_id: str, req: ResizeRequest):
     session = registry.get(session_id)
     if not session:
@@ -227,7 +371,36 @@ async def resize_session(session_id: str, req: ResizeRequest):
     return {"status": "ok"}
 
 
-@router.post("/sessions/{session_id}/resume")
+@router.post("/sessions/{session_id}/upload", response_model=UploadResponse)
+async def upload_image(session_id: str, request: Request):
+    """Upload an image and return its file path for use in the terminal."""
+    session = registry.get(session_id)
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    content_type = (request.headers.get("content-type") or "").split(";")[0].strip()
+    if content_type not in ALLOWED_IMAGE_TYPES:
+        raise HTTPException(status_code=400, detail=f"Unsupported image type: {content_type}")
+
+    body = await request.body()
+    if not body:
+        raise HTTPException(status_code=400, detail="Empty request body")
+    if len(body) > MAX_UPLOAD_SIZE:
+        raise HTTPException(status_code=413, detail="File too large (max 10 MB)")
+
+    ext = _IMAGE_EXTENSIONS.get(content_type, "bin")
+    hash8 = hashlib.sha256(body).hexdigest()[:8]
+    filename = f"image-{int(time.time())}-{hash8}.{ext}"
+
+    upload_dir = UPLOADS_DIR / session_id
+    upload_dir.mkdir(parents=True, exist_ok=True)
+    file_path = upload_dir / filename
+    file_path.write_bytes(body)
+
+    return {"path": str(file_path.resolve()), "filename": filename}
+
+
+@router.post("/sessions/{session_id}/resume", response_model=SessionResponse)
 async def resume_session(session_id: str):
     """Resume an exited session that has a stored --resume id."""
     try:
@@ -241,7 +414,22 @@ async def resume_session(session_id: str):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.delete("/sessions/{session_id}")
+@router.post("/sessions/{session_id}/stop", response_model=StatusResponse)
+async def stop_session(session_id: str):
+    """Stop a session (alias for DELETE)."""
+    session = registry.get(session_id)
+    if session:
+        await registry.remove(session_id)
+        return {"status": "stopped"}
+
+    if session_id in registry.resumable:
+        registry.dismiss_resumable(session_id)
+        return {"status": "dismissed"}
+
+    raise HTTPException(status_code=404, detail="Session not found")
+
+
+@router.delete("/sessions/{session_id}", response_model=StatusResponse)
 async def kill_session(session_id: str):
     session = registry.get(session_id)
     if session:
@@ -256,8 +444,17 @@ async def kill_session(session_id: str):
     raise HTTPException(status_code=404, detail="Session not found")
 
 
+# ---------------------------------------------------------------------------
+# WebSocket — supports typed=true mode for agent clients
+# ---------------------------------------------------------------------------
+
 @router.websocket("/sessions/{session_id}/stream")
-async def stream_session(ws: WebSocket, session_id: str):
+async def stream_session(ws: WebSocket, session_id: str, typed: bool = False):
+    # Auth check
+    if not _check_ws_auth(ws):
+        await ws.close(code=4001, reason="Unauthorized")
+        return
+
     session = registry.get(session_id)
     if not session:
         await ws.close(code=4004, reason="Session not found")
@@ -265,6 +462,14 @@ async def stream_session(ws: WebSocket, session_id: str):
 
     await ws.accept()
 
+    if typed:
+        await _stream_typed(ws, session)
+    else:
+        await _stream_raw(ws, session)
+
+
+async def _stream_raw(ws: WebSocket, session: Any):
+    """Original raw binary WebSocket protocol (dashboard default)."""
     # Send buffered output first
     buffer = session.get_buffer()
     if buffer:
@@ -301,6 +506,85 @@ async def stream_session(ws: WebSocket, session_id: str):
                 raw = message.get("bytes")
                 if text:
                     session.send_input(text)
+                elif raw:
+                    session.send_input_bytes(raw)
+        except WebSocketDisconnect:
+            pass
+        except Exception:
+            pass
+
+    writer_task = asyncio.create_task(writer())
+    reader_task = asyncio.create_task(reader())
+
+    try:
+        done, pending = await asyncio.wait(
+            {writer_task, reader_task},
+            return_when=asyncio.FIRST_COMPLETED,
+        )
+        for task in pending:
+            task.cancel()
+    finally:
+        session.unsubscribe(queue)
+
+
+async def _stream_typed(ws: WebSocket, session: Any):
+    """Typed JSON WebSocket protocol for agent clients."""
+    # Send buffered output as a typed stdout message
+    buffer = session.get_buffer()
+    if buffer:
+        await ws.send_json({"type": "stdout", "data": buffer.decode("utf-8", errors="replace")})
+
+    queue = session.subscribe()
+
+    async def writer():
+        try:
+            while True:
+                try:
+                    data = await asyncio.wait_for(queue.get(), timeout=30)
+                    if data is None:
+                        # Session ended
+                        await ws.send_json({
+                            "type": "exit",
+                            "exit_code": session.exit_code,
+                        })
+                        await ws.close()
+                        break
+                    await ws.send_json({
+                        "type": "stdout",
+                        "data": data.decode("utf-8", errors="replace"),
+                    })
+                except asyncio.TimeoutError:
+                    try:
+                        await ws.send_json({"type": "ping"})
+                    except Exception:
+                        break
+        except Exception:
+            pass
+
+    async def reader():
+        try:
+            while True:
+                message = await ws.receive()
+                if message["type"] == "websocket.disconnect":
+                    break
+
+                text = message.get("text")
+                raw = message.get("bytes")
+
+                if text:
+                    # Try parsing as JSON typed message
+                    try:
+                        msg = json.loads(text)
+                        msg_type = msg.get("type")
+                        if msg_type == "input":
+                            session.send_input(msg.get("data", ""))
+                        elif msg_type == "resize":
+                            rows = msg.get("rows", 24)
+                            cols = msg.get("cols", 80)
+                            session.resize(rows, cols)
+                    except (json.JSONDecodeError, TypeError):
+                        # Plain text fallback — treat as raw input
+                        session.send_input(text)
                 elif raw:
                     session.send_input_bytes(raw)
         except WebSocketDisconnect:
