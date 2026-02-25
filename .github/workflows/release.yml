@@ -1,0 +1,22 @@
+name: Upload release tarball
+
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: write
+
+jobs:
+  upload-tarball:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Create tarball
+        run: git archive --format=tar.gz --prefix=conductor/ -o conductor.tar.gz HEAD
+
+      - name: Upload to release
+        run: gh release upload "${{ github.event.release.tag_name }}" conductor.tar.gz --clobber
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
