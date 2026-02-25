@@ -27,6 +27,12 @@ def start_server_daemon() -> bool:
     env = os.environ.copy()
     env["PYTHONPATH"] = str(project_root) + os.pathsep + env.get("PYTHONPATH", "")
 
+    click.echo(f"  [debug] python: {sys.executable}")
+    click.echo(f"  [debug] project_root: {project_root}")
+    click.echo(f"  [debug] PYTHONPATH: {env['PYTHONPATH']}")
+    click.echo(f"  [debug] log: {log_path}")
+    click.echo(f"  [debug] BASE_URL: {BASE_URL}")
+
     log = log_path.open("a")
     popen_kwargs = dict(
         stdout=log,
@@ -39,13 +45,39 @@ def start_server_daemon() -> bool:
     else:
         popen_kwargs["start_new_session"] = True
 
-    subprocess.Popen([sys.executable, "-m", "conductor.server.app"], **popen_kwargs)
+    cmd = [sys.executable, "-m", "conductor.server.app"]
+    click.echo(f"  [debug] cmd: {cmd}")
+    proc = subprocess.Popen(cmd, **popen_kwargs)
+    click.echo(f"  [debug] daemon pid: {proc.pid}")
     log.close()
 
-    for _ in range(20):
+    for i in range(20):
         time.sleep(0.25)
         if server_running():
+            click.echo(f"  [debug] server responded after {(i+1)*0.25:.1f}s")
             return True
+        # Check if process died immediately
+        ret = proc.poll()
+        if ret is not None:
+            click.echo(f"  [debug] daemon exited with code {ret}", err=True)
+            # Show last lines of server log
+            try:
+                tail = log_path.read_text().strip().split("\n")[-20:]
+                click.echo("  [debug] server.log tail:", err=True)
+                for line in tail:
+                    click.echo(f"    {line}", err=True)
+            except Exception:
+                pass
+            return False
+
+    click.echo("  [debug] timeout — server did not respond in 5s", err=True)
+    try:
+        tail = log_path.read_text().strip().split("\n")[-20:]
+        click.echo("  [debug] server.log tail:", err=True)
+        for line in tail:
+            click.echo(f"    {line}", err=True)
+    except Exception:
+        pass
     return False
 
 
