@@ -70,6 +70,22 @@ Open `http://127.0.0.1:7777` in your browser for the dashboard.
 - `conductor attach research` — reattach later
 - `conductor run -d claude coding` — start detached (background)
 
+## Remote access from another device
+
+1. Install [Tailscale](https://tailscale.com/download/windows) on your Windows machine and your phone, tablet, or laptop
+2. Sign in with the same account on all devices
+3. Run `conductor qr` to get a scannable QR code — or open the dashboard's **Servers** dialog (hamburger menu → Servers) to discover Tailscale devices automatically
+
+## Multi-machine setup
+
+To monitor sessions from multiple machines (Windows, Linux, Mac — any mix):
+
+1. Install and start Conductor on each machine
+2. Open the dashboard on any device
+3. Add machines via the **Servers** dialog — Tailscale device picker, manual URL, or QR scan
+
+All machines appear in a single sidebar, grouped by machine. Open terminals from different machines side by side in split view.
+
 ## How it works on Windows
 
 | Component | Implementation |

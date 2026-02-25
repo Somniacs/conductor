@@ -38,12 +38,21 @@ conductor run claude coding
 
 Open `http://127.0.0.1:7777` in Safari or any browser.
 
-## Remote access from iPhone/iPad
+## Remote access from another device
 
-1. Install [Tailscale](https://apps.apple.com/app/tailscale/id1470499037) on your Mac and iOS device
-2. Sign in with the same account on both
-3. Run `conductor qr` to get a scannable QR code
-4. Or use the dashboard's **Link Device** feature (hamburger menu)
+1. Install [Tailscale](https://apps.apple.com/app/tailscale/id1470499037) on your Mac and your phone, tablet, or laptop
+2. Sign in with the same account on all devices
+3. Run `conductor qr` to get a scannable QR code — or open the dashboard's **Servers** dialog (hamburger menu → Servers) to discover Tailscale devices automatically
+
+## Multi-machine setup
+
+To monitor sessions from multiple Macs (or a mix of Mac, Linux, Windows):
+
+1. Install and start Conductor on each machine
+2. Open the dashboard on any device
+3. Add machines via the **Servers** dialog — Tailscale device picker, manual URL, or QR scan
+
+All machines appear in a single sidebar, grouped by machine. Open terminals from different machines side by side in split view.
 
 ## Notes
 

@@ -1,3 +1,20 @@
+<!--
+  conductor — Local orchestration for terminal sessions.
+
+  Copyright (c) 2026 Max Rheiner / Somniacs AG
+
+  Licensed under the MIT License. You may obtain a copy
+  of the license at:
+
+      https://opensource.org/licenses/MIT
+
+  Unless required by applicable law or agreed to in writing,
+  software distributed under the License is distributed on an
+  "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND.
+
+  Dashboard — single-file web UI with multi-server support,
+  split-pane xterm.js terminals, and QR-based server pairing.
+-->
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -278,6 +295,8 @@
             padding: 24px 28px;
             min-width: 300px;
             max-width: 420px;
+            max-height: 80vh;
+            overflow-y: auto;
             box-shadow: 0 8px 32px rgba(0,0,0,0.5);
             position: relative;
         }
@@ -912,7 +931,7 @@
                     <button onclick="toggleNewSession()" style="background:none;border:none;color:#606080;cursor:pointer;font-size:16px;padding:0 2px;line-height:1;" title="Cancel">&times;</button>
                 </div>
                 <div id="server-selector-row" style="display:none;">
-                    <label>Server</label>
+                    <label>Machine</label>
                     <select id="new-session-server" onchange="onNewSessionServerChange()"></select>
                 </div>
                 <label>Session name</label>
@@ -958,9 +977,15 @@
                 <li><a href="https://uvicorn.org" target="_blank">Uvicorn</a> &mdash; ASGI server</li>
                 <li><a href="https://click.palletsprojects.com" target="_blank">Click</a> &mdash; CLI framework</li>
                 <li><a href="https://tailscale.com" target="_blank">Tailscale</a> &mdash; secure remote access</li>
+                <li><a href="https://websockets.readthedocs.io" target="_blank">websockets</a> &mdash; real-time terminal I/O</li>
+                <li><a href="https://www.python-httpx.org" target="_blank">httpx</a> &mdash; HTTP client</li>
+                <li><a href="https://github.com/andfoy/pywinpty" target="_blank">pywinpty</a> &mdash; Windows ConPTY support</li>
+                <li><a href="https://github.com/lincolnloop/python-qrcode" target="_blank">qrcode</a> &mdash; QR device linking</li>
             </ul>
             <div class="about-section">Author</div>
-            <p>Max Rheiner</p>
+            <p>Max Rheiner / Somniacs AG</p>
+            <div class="about-section">License</div>
+            <p><a href="https://github.com/somniacs/conductor/blob/master/LICENSE" target="_blank">MIT License</a></p>
             <div class="about-section">Source</div>
             <p style="margin-bottom:0"><a href="https://github.com/somniacs/conductor" target="_blank">github.com/somniacs/conductor</a></p>
         </div>
@@ -979,19 +1004,20 @@
             <button class="about-close" onclick="toggleServersDialog()">&times;</button>
             <h2>Servers</h2>
             <div id="servers-list"></div>
-            <div id="tailscale-picker" style="display:none;margin-top:12px;">
+            <div id="tailscale-picker" style="margin-top:12px;">
                 <label style="display:block;font-size:11px;color:#808090;margin-bottom:4px;">Tailscale devices</label>
-                <div style="display:flex;gap:6px;">
-                    <select id="tailscale-select" style="flex:1;padding:7px 10px;background:#0a0a1a;border:1px solid #2a2a5a;color:#e0e0e0;border-radius:5px;font-size:13px;">
-                    </select>
-                    <button onclick="addTailscaleDevice()" style="padding:7px 14px;background:#2a2a6a;border:1px solid #3a3aaa;color:#e0e0e0;border-radius:5px;cursor:pointer;font-size:13px;white-space:nowrap;">Add</button>
+                <div id="tailscale-picker-content">
+                    <div style="font-size:12px;color:#505070;padding:4px 0;">Loading...</div>
                 </div>
             </div>
-            <div class="server-add-form">
-                <input type="text" id="server-url-input" placeholder="http://100.x.x.x:7777" autocomplete="off"
-                    onkeydown="if(event.key==='Enter')addServerFromInput()">
-                <button onclick="addServerFromInput()">Add</button>
-                <button onclick="toggleQRScanner()" id="qr-scan-btn" title="Scan QR code">&#x1F4F7;</button>
+            <div style="margin-top:10px;">
+                <label style="display:block;font-size:11px;color:#808090;margin-bottom:4px;">Or add manually</label>
+                <div class="server-add-form">
+                    <input type="text" id="server-url-input" placeholder="http://100.x.x.x:7777" autocomplete="off"
+                        onkeydown="if(event.key==='Enter')addServerFromInput()">
+                    <button onclick="addServerFromInput()">Add</button>
+                    <button onclick="toggleQRScanner()" id="qr-scan-btn" title="Scan QR code">&#x1F4F7;</button>
+                </div>
             </div>
             <div id="qr-scanner-area"></div>
             <div class="server-self-info" id="server-self-info"></div>
@@ -1110,6 +1136,12 @@
         function getServerLabel(serverKey) {
             const server = servers.find(s => s.key === serverKey);
             return server ? server.label : serverKey;
+        }
+
+        // HTML-escape untrusted strings before interpolating into innerHTML
+        function escHtml(str) {
+            if (typeof str !== 'string') return '';
+            return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
         }
 
         function setServerConnectedStatus(serverKey, connected) {
@@ -1345,7 +1377,7 @@
                 const dotClass = connected ? 'connected' : 'disconnected';
                 html += `<div class="server-group-header">
                     <span class="server-dot ${dotClass}"></span>
-                    <span>${label}</span>
+                    <span>${escHtml(label)}</span>
                 </div>`;
                 if (groups[key] && groups[key].length > 0) {
                     html += groups[key].map(s => renderSessionItem(s)).join('');
@@ -1367,14 +1399,11 @@
             return `
                 <div class="session-item ${isFocused ? 'focused' : isOpen ? 'open' : ''}" onclick="focusSession('${cidEsc}', '${nameEsc}', event)">
                     <div class="session-name">
-                        <div>${s.name}</div>
-                        <div style="font-size:10px;color:#606080;font-weight:400;">${appLabel}</div>
+                        <div>${escHtml(s.name)}</div>
+                        <div style="font-size:10px;color:#606080;font-weight:400;">${escHtml(appLabel)}</div>
                     </div>
-                    <div style="display:flex;align-items:center;gap:4px;">
-                        <span class="session-status ${s.status}">${s.status}</span>
-                        <div class="session-actions">
-                            <button onclick="event.stopPropagation();killSession('${cidEsc}')" title="Stop">&times;</button>
-                        </div>
+                    <div class="session-actions">
+                        <button onclick="event.stopPropagation();killSession('${cidEsc}')" title="Stop">&times;</button>
                     </div>
                 </div>
             `;
@@ -1585,19 +1614,22 @@
             termEl.appendChild(termWrapper);
 
             // Show server name in panel header when multi-server
-            const serverLabel = _isMultiServer() ? ` <span style="font-size:10px;color:#606080;">(${getServerLabel(panel.server)})</span>` : '';
+            const serverLabel = _isMultiServer() ? ` <span style="font-size:10px;color:#606080;">(${escHtml(getServerLabel(panel.server))})</span>` : '';
 
+            // panel.id is serverKey::sessionName — safe chars only (validated by _SAFE_NAME + IP:port)
+            // Escape for JS string context (defense in depth)
+            const pid = panel.id.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
             div.innerHTML = `
                 <div class="panel-header">
-                    <span class="panel-title">${panel.name}${serverLabel}</span>
+                    <span class="panel-title">${escHtml(panel.name)}${serverLabel}</span>
                     <div class="panel-header-actions" style="position:relative;">
-                        <button class="theme-btn" id="theme-btn-${panel.id}" onclick="toggleThemeMenu('${panel.id}')" title="Color scheme"><span class="theme-ring" style="background:${THEMES['default'].dot};border-color:${contrastGrey(THEMES['default'].dot)}"></span></button>
-                        <div class="theme-menu" id="theme-menu-${panel.id}">
-                            ${THEME_ORDER.map(k => `<a onclick="event.stopPropagation();setTheme('${panel.id}','${k}')" data-theme="${k}" data-cursor="${THEMES[k].cursor}"><span class="theme-dot" style="background:${THEMES[k].dot};border-color:${contrastGrey(THEMES[k].dot)}"></span>${THEMES[k].label}</a>`).join('')}
+                        <button class="theme-btn" id="theme-btn-${escHtml(panel.id)}" onclick="toggleThemeMenu('${pid}')" title="Color scheme"><span class="theme-ring" style="background:${THEMES['default'].dot};border-color:${contrastGrey(THEMES['default'].dot)}"></span></button>
+                        <div class="theme-menu" id="theme-menu-${escHtml(panel.id)}">
+                            ${THEME_ORDER.map(k => `<a onclick="event.stopPropagation();setTheme('${pid}','${k}')" data-theme="${k}" data-cursor="${THEMES[k].cursor}"><span class="theme-dot" style="background:${THEMES[k].dot};border-color:${contrastGrey(THEMES[k].dot)}"></span>${THEMES[k].label}</a>`).join('')}
                         </div>
-                        <button class="font-btn" onclick="changeFontSize('${panel.id}', -1)" title="Smaller">&#8722;</button>
-                        <button class="font-btn" onclick="changeFontSize('${panel.id}', 1)" title="Bigger">+</button>
-                        <button class="close-btn" onclick="closePanel('${panel.id}')">&times;</button>
+                        <button class="font-btn" onclick="changeFontSize('${pid}', -1)" title="Smaller">&#8722;</button>
+                        <button class="font-btn" onclick="changeFontSize('${pid}', 1)" title="Bigger">+</button>
+                        <button class="close-btn" onclick="closePanel('${pid}')">&times;</button>
                     </div>
                 </div>
             `;
@@ -2080,67 +2112,82 @@
             return h === 'localhost' || h === '127.0.0.1' || h === '::1' || h === '0.0.0.0';
         }
 
-        function toggleQR() {
+        async function toggleQR() {
             const dialog = document.getElementById('qr-dialog');
             dialog.classList.toggle('open');
             if (dialog.classList.contains('open')) {
                 const container = document.getElementById('qr-content');
+                container.innerHTML = '<p style="font-size:12px;color:#606080;">Loading...</p>';
+
+                // Determine the best reachable URL for other devices
+                let url = window.location.href;
                 if (isLocalhost()) {
-                    container.innerHTML = `
-                        <div style="padding:16px 8px;">
-                            <div style="font-size:28px;margin-bottom:10px;">&#9888;</div>
-                            <p style="font-size:13px;color:#ff9944;margin:0 0 8px;">You are on localhost</p>
-                            <p style="font-size:12px;color:#808090;margin:0;line-height:1.5;">
-                                Other devices cannot reach this address.<br>
-                                Connect via your Tailscale IP or network IP to generate a QR code.
-                            </p>
-                        </div>`;
-                } else {
-                    const url = window.location.href;
-                    container.innerHTML = `
-                        <p style="font-size:12px;color:#808090;margin-bottom:14px;">Scan to open on another device</p>
-                        <canvas id="qr-canvas" style="margin:0 auto 12px;display:block;border-radius:6px;"></canvas>
-                        <p style="font-size:11px;color:#606080;word-break:break-all;margin:0;"></p>`;
-                    container.querySelector('p:last-child').textContent = url;
+                    // On localhost — ask the server for its Tailscale IP
                     try {
-                        const qr = qrcode(0, 'M');
-                        qr.addData(url);
-                        qr.make();
-                        const count = qr.getModuleCount();
-                        const scale = 6;
-                        const margin = 4;
-                        const size = count * scale + margin * 2 * scale;
-                        const canvas = document.getElementById('qr-canvas');
-                        canvas.width = size;
-                        canvas.height = size;
-                        canvas.style.width = '200px';
-                        canvas.style.height = '200px';
-                        canvas.style.imageRendering = 'pixelated';
-                        const ctx = canvas.getContext('2d');
-                        ctx.fillStyle = '#ffffff';
-                        ctx.fillRect(0, 0, size, size);
-                        ctx.fillStyle = '#000000';
-                        for (let r = 0; r < count; r++) {
-                            for (let c = 0; c < count; c++) {
-                                if (qr.isDark(r, c)) {
-                                    ctx.fillRect((c + margin) * scale, (r + margin) * scale, scale, scale);
-                                }
-                            }
+                        const resp = await fetch('/info');
+                        const info = await resp.json();
+                        if (info.tailscale_ip) {
+                            url = `http://${info.tailscale_ip}:${info.port}`;
+                        } else {
+                            container.innerHTML = `
+                                <div style="padding:16px 8px;">
+                                    <div style="font-size:28px;margin-bottom:10px;">&#9888;</div>
+                                    <p style="font-size:13px;color:#ff9944;margin:0 0 8px;">No reachable address found</p>
+                                    <p style="font-size:12px;color:#808090;margin:0;line-height:1.5;">
+                                        Install Tailscale to make this server reachable from other devices.
+                                    </p>
+                                </div>`;
+                            return;
                         }
                     } catch (e) {
-                        document.getElementById('qr-canvas').parentElement.innerHTML = '<p style="color:#ff6666;font-size:12px;">Failed to generate QR code</p>';
+                        container.innerHTML = '<p style="color:#ff6666;font-size:12px;">Could not fetch server info</p>';
+                        return;
                     }
+                }
+
+                container.innerHTML = `
+                    <p style="font-size:12px;color:#808090;margin-bottom:14px;">Scan to open on another device</p>
+                    <canvas id="qr-canvas" style="margin:0 auto 12px;display:block;border-radius:6px;"></canvas>
+                    <p style="font-size:11px;color:#606080;word-break:break-all;margin:0;"></p>`;
+                container.querySelector('p:last-child').textContent = url;
+                try {
+                    const qr = qrcode(0, 'M');
+                    qr.addData(url);
+                    qr.make();
+                    const count = qr.getModuleCount();
+                    const scale = 6;
+                    const margin = 4;
+                    const size = count * scale + margin * 2 * scale;
+                    const canvas = document.getElementById('qr-canvas');
+                    canvas.width = size;
+                    canvas.height = size;
+                    canvas.style.width = '200px';
+                    canvas.style.height = '200px';
+                    canvas.style.imageRendering = 'pixelated';
+                    const ctx = canvas.getContext('2d');
+                    ctx.fillStyle = '#ffffff';
+                    ctx.fillRect(0, 0, size, size);
+                    ctx.fillStyle = '#000000';
+                    for (let r = 0; r < count; r++) {
+                        for (let c = 0; c < count; c++) {
+                            if (qr.isDark(r, c)) {
+                                ctx.fillRect((c + margin) * scale, (r + margin) * scale, scale, scale);
+                            }
+                        }
+                    }
+                } catch (e) {
+                    document.getElementById('qr-canvas').parentElement.innerHTML = '<p style="color:#ff6666;font-size:12px;">Failed to generate QR code</p>';
                 }
             }
         }
 
         // --- Server Management Dialog ---
-        function toggleServersDialog() {
+        async function toggleServersDialog() {
             const dialog = document.getElementById('servers-dialog');
             dialog.classList.toggle('open');
             if (dialog.classList.contains('open')) {
                 renderServersDialog();
-                fetchSelfInfo();
+                await fetchSelfInfo();   // sets PORT before peer URLs are built
                 fetchTailscalePeers();
             } else {
                 stopQRScanner();
@@ -2154,15 +2201,15 @@
                 const info = await resp.json();
                 if (info.port) PORT = info.port;
                 let html = '<div style="margin-bottom:4px;font-weight:500;color:#a0a0d0;">This server</div>';
-                html += `<div>Hostname: ${info.hostname}</div>`;
+                html += `<div>Hostname: ${escHtml(info.hostname)}</div>`;
                 if (info.tailscale_name) {
-                    html += `<div>MagicDNS: <span class="self-url">${info.tailscale_name}:${info.port}</span></div>`;
+                    html += `<div>MagicDNS: <span class="self-url">${escHtml(info.tailscale_name)}:${escHtml(String(info.port))}</span></div>`;
                 }
                 if (info.tailscale_ip) {
-                    html += `<div>Tailscale: <span class="self-url">${info.tailscale_ip}:${info.port}</span></div>`;
+                    html += `<div>Tailscale: <span class="self-url">${escHtml(info.tailscale_ip)}:${escHtml(String(info.port))}</span></div>`;
                 }
                 if (!info.tailscale_ip && !info.tailscale_name) {
-                    html += `<div>Port: ${info.port}</div>`;
+                    html += `<div>Port: ${escHtml(String(info.port))}</div>`;
                 }
                 el.innerHTML = html;
             } catch (e) {
@@ -2171,13 +2218,13 @@
         }
 
         async function fetchTailscalePeers() {
-            const picker = document.getElementById('tailscale-picker');
-            const sel = document.getElementById('tailscale-select');
+            const content = document.getElementById('tailscale-picker-content');
+            if (!content) return;
             try {
                 const resp = await fetch('/tailscale/peers');
                 const peers = await resp.json();
                 if (!peers || peers.length === 0) {
-                    picker.style.display = 'none';
+                    content.innerHTML = '<div style="font-size:12px;color:#505070;padding:4px 0;">No Tailscale peers online</div>';
                     return;
                 }
                 // Filter out peers already added as servers
@@ -2188,17 +2235,22 @@
                     return !existingKeys.has(key) && (!dnsKey || !existingKeys.has(dnsKey));
                 });
                 if (available.length === 0) {
-                    picker.style.display = 'none';
+                    content.innerHTML = '<div style="font-size:12px;color:#505070;padding:4px 0;">All Tailscale peers already added</div>';
                     return;
                 }
-                picker.style.display = 'block';
-                sel.innerHTML = available.map(p => {
-                    const label = p.dns_name || p.hostname || p.ip;
-                    const url = 'http://' + p.ip + ':' + PORT;
-                    return `<option value="${url}" data-label="${label}">${p.hostname} (${p.ip})</option>`;
-                }).join('');
+                content.innerHTML = `
+                    <div style="display:flex;gap:6px;">
+                        <select id="tailscale-select" style="flex:1;padding:7px 10px;background:#0a0a1a;border:1px solid #2a2a5a;color:#e0e0e0;border-radius:5px;font-size:13px;">
+                            ${available.map(p => {
+                                const label = p.dns_name || p.hostname || p.ip;
+                                const url = 'http://' + p.ip + ':' + PORT;
+                                return `<option value="${escHtml(url)}" data-label="${escHtml(label)}">${escHtml(p.hostname)} (${escHtml(p.ip)})</option>`;
+                            }).join('')}
+                        </select>
+                        <button onclick="addTailscaleDevice()" style="padding:7px 14px;background:#2a2a6a;border:1px solid #3a3aaa;color:#e0e0e0;border-radius:5px;cursor:pointer;font-size:13px;white-space:nowrap;">Add</button>
+                    </div>`;
             } catch (e) {
-                picker.style.display = 'none';
+                content.innerHTML = '<div style="font-size:12px;color:#505070;padding:4px 0;">Tailscale not available</div>';
             }
         }
 
@@ -2243,8 +2295,8 @@
                 return `<div class="server-list-item">
                     <span class="server-dot ${dotClass}"></span>
                     <div class="server-info">
-                        <div class="server-label">${s.label}</div>
-                        <div class="server-url-text">${urlText}</div>
+                        <div class="server-label">${escHtml(s.label)}</div>
+                        <div class="server-url-text">${escHtml(urlText)}</div>
                     </div>
                     ${removeBtn}
                 </div>`;
@@ -2309,6 +2361,20 @@
             const area = document.getElementById('qr-scanner-area');
             if (typeof jsQR === 'undefined') {
                 area.innerHTML = '<div style="padding:8px;font-size:12px;color:#ff6666;">QR scanner not available. Paste the URL manually.</div>';
+                return;
+            }
+
+            // Camera requires HTTPS (secure context) — plain HTTP only works on localhost
+            if (!window.isSecureContext) {
+                area.innerHTML = `<div style="padding:10px;font-size:12px;color:#ff9944;line-height:1.5;">
+                    Camera requires HTTPS.<br>
+                    Use the Tailscale device picker above, or paste the URL manually.
+                </div>`;
+                return;
+            }
+
+            if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+                area.innerHTML = '<div style="padding:8px;font-size:12px;color:#ff9944;">Camera not available on this device. Paste the URL manually.</div>';
                 return;
             }
 
@@ -2378,7 +2444,7 @@
             if (!info) {
                 const area = document.getElementById('qr-scanner-area');
                 area.innerHTML = `<div style="padding:8px;font-size:12px;color:#ff9944;">
-                    Could not connect to ${url}. Make sure the server is running.
+                    Could not connect to ${escHtml(url)}. Make sure the server is running.
                 </div>`;
                 return;
             }
@@ -2393,7 +2459,7 @@
             }
             const area = document.getElementById('qr-scanner-area');
             area.innerHTML = `<div style="padding:8px;font-size:12px;color:#44dd77;">
-                Added: ${label}
+                Added: ${escHtml(label)}
             </div>`;
         }
 
@@ -2417,7 +2483,7 @@
             if (_isMultiServer()) {
                 row.style.display = 'block';
                 sel.innerHTML = servers.filter(s => s.enabled).map(s =>
-                    `<option value="${s.key}">${s.label}</option>`
+                    `<option value="${escHtml(s.key)}">${escHtml(s.label)}</option>`
                 ).join('');
                 sel.value = _newSessionServer;
             } else {

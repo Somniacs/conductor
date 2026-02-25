@@ -1,28 +1,58 @@
 # ♭ conductor
 
-Local orchestration layer that manages interactive terminal processes and exposes them through a web dashboard. Start Claude Code sessions on your workstation, then monitor and interact with them from your phone over Tailscale.
+Orchestrate your AI coding agents from anywhere.
 
-## The Idea
+AI agents run for minutes, sometimes hours — then stall on a single question, waiting for your input. If you're not at that terminal, the session idles until you get back. Running agents in a cloud VM doesn't always help either — your dev environment, build tools, and hardware are on your local machine.
 
-You start a few Claude Code sessions on your workstation. You walk away. On the couch, you pull out your phone, open the dashboard, and keep prompting. Sessions survive disconnects — close the browser, reopen it later, everything is still there.
+Conductor keeps them moving. It wraps terminal sessions in a lightweight server and exposes them through a web dashboard you can open from your phone, tablet, or laptop. Pair it with [Tailscale](https://tailscale.com/) and you get secure remote access to all your machines — no port forwarding, no VPN setup, just works.
+
+## What It Looks Like
 
 ```
-You at your desk                          You on the couch
-─────────────────                         ──────────────────
-conductor run claude research             Open phone browser
-conductor run claude coding               → http://100.x.x.x:7777
-
-Leave your desk.                          Select "research"
-                                          Send a prompt
-Come back later.                          Switch to "coding"
-Everything still running.                 Close phone. Reconnect anytime.
+Start agents               Leave your desk            Answer from anywhere
+─────────────              ───────────────            ────────────────────
+conductor run claude dev   Go to a meeting.           Open dashboard on phone.
+conductor run claude test  Grab coffee.               See all sessions.
+conductor run aider api    Sit on the couch.          Type a response. Done.
+                                                      Agent keeps going.
 ```
+
+Sessions survive disconnects. Close the browser, reopen it later — everything is still there.
+
+## How It Works
+
+```
+  Machine A (workstation)          Machine B (GPU box)
+  ───────────────────────          ────────────────────
+  Terminal Process × N             Terminal Process × N
+        │                                │
+    PTY Wrapper                      PTY Wrapper
+        │                                │
+  Conductor Server                 Conductor Server
+    0.0.0.0:7777                     0.0.0.0:7777
+        │                                │
+        └──────── Tailscale ─────────────┘
+                      │
+              Browser Dashboard
+          (connects to both servers)
+```
+
+Each process runs in a PTY on your machine. Output goes into a rolling in-memory buffer. When a browser connects, it gets the full buffer first, then live output over WebSocket. The dashboard connects directly to each server — no proxy, no hub. Each server stays independent.
+
+## What You Can Run
+
+Conductor works with any interactive terminal process. The dashboard ships with presets for common AI agents, but you can run anything from the CLI:
+
+- **AI coding agents** — Claude Code, Aider, Codex CLI, GitHub Copilot CLI, Goose
+- **Training jobs** — long-running GPU training with live output
+- **Builds and test suites** — compilation, CI pipelines, test runs
+- **Any terminal process** — if it runs in a terminal, Conductor can manage it
 
 ## Prerequisites
 
 - **Python 3.10+** — check with `python3 --version` (or `py --version` on Windows)
 - **Git** — to clone the repository
-- **Tailscale** (optional, for remote access) — install on your workstation and your phone/tablet, sign in with the same account on both. See [tailscale.com](https://tailscale.com/)
+- **Tailscale** (optional, for remote access) — install on your workstation and your phone, tablet, or laptop. Sign in with the same account on all devices. See [tailscale.com](https://tailscale.com/)
 
 ## Install
 
@@ -112,9 +142,62 @@ conductor run claude review
 
 Open the dashboard in your browser — locally at `http://127.0.0.1:7777`, or from any device on your Tailscale network at `http://100.x.x.x:7777` (your Tailscale IP).
 
-### Remote access from phone/tablet
+### Multi-machine setup
 
-This requires [Tailscale](https://tailscale.com/) on both your workstation and your phone/tablet.
+Conductor supports connecting to multiple machines from a single dashboard. Each machine runs its own independent Conductor server. The dashboard in your browser connects to all of them directly — no central hub or proxy needed.
+
+**1. Install and start Conductor on each machine:**
+
+```bash
+# On workstation
+conductor run claude research
+conductor run claude coding
+
+# On GPU box (install Conductor there too)
+conductor run claude train
+```
+
+**2. Add machines to the dashboard:**
+
+Open the dashboard on any device, then hamburger menu → **Servers**.
+
+- **Tailscale device picker** — your online Tailscale devices appear in a dropdown. Select one and click Add. This is the easiest way.
+- **Manual URL** — paste `http://100.x.x.x:7777` (or a MagicDNS name) for any machine on your network.
+- **QR code** — run `conductor qr` on a machine, then use **Link Device** in the dashboard to scan it.
+
+**How it works:**
+
+The dashboard polls each server independently for sessions and connects via separate WebSockets. The sidebar groups sessions by machine with connection status indicators:
+
+```
+● Workstation (local)
+  research
+  coding
+● GPU Box
+  train
+```
+
+You can open terminals from different machines side by side in split view — one panel showing your workstation session, another showing your GPU box, both live.
+
+**What happens when a machine goes offline:**
+
+The dashboard detects the disconnect within seconds. Sessions from that machine disappear from the sidebar and any open terminal panels for it close automatically. When the machine comes back, sessions reappear.
+
+**Persistence:**
+
+Added machines are saved in your browser's localStorage. Refresh the page or close and reopen — your server list is preserved. Each browser/device maintains its own list independently.
+
+**Creating sessions on remote machines:**
+
+Click **+ New** in the sidebar. When multiple machines are connected, a **Machine** dropdown appears at the top of the form. Select the target machine, pick a command and directory (fetched from that machine's config), and click Run. The session starts on the remote machine and opens in a terminal panel.
+
+**Single-server mode:**
+
+When only one server is configured (the default), the dashboard looks and works exactly as a standalone single-machine setup. No server group headers, no machine selector — zero visual overhead.
+
+### Remote access from another device
+
+This requires [Tailscale](https://tailscale.com/) on both your workstation and your phone, tablet, or laptop.
 
 **1. Start Conductor on your workstation** (if not already running):
 
@@ -122,7 +205,7 @@ This requires [Tailscale](https://tailscale.com/) on both your workstation and y
 conductor run claude research
 ```
 
-**2. Open on your phone/tablet:**
+**2. Open on your other device:**
 
 Option A — run `conductor qr` to show a scannable QR code:
 
@@ -130,7 +213,7 @@ Option A — run `conductor qr` to show a scannable QR code:
 conductor qr
 ```
 
-Option B — use the dashboard's **Link Device** feature (hamburger menu → Link Device).
+Option B — use the dashboard's **Servers** dialog (hamburger menu → Servers) to see Tailscale devices and add them.
 
 Option C — find your Tailscale IP and type the URL:
 
@@ -141,7 +224,24 @@ tailscale ip -4
 
 Then open `http://100.x.x.x:7777` on your phone.
 
-Done. Full terminal access to all sessions from your phone — type prompts, view output, create or kill sessions.
+Done. Full terminal access to all sessions from your phone — type prompts, view output, create or kill sessions. Add more machines from the Servers dialog.
+
+### Using Tailscale MagicDNS names
+
+Tailscale assigns each device a [MagicDNS](https://tailscale.com/kb/1081/magicdns) name like `my-workstation.tailnet-name.ts.net`. You can use these instead of IP addresses:
+
+```
+http://my-workstation.tailnet-name.ts.net:7777
+```
+
+To find your machine's name:
+
+```bash
+tailscale status
+# or check the Conductor dashboard: hamburger menu → Servers → "This server"
+```
+
+The Servers dialog shows your machine's MagicDNS name, Tailscale IP, and hostname — all fetched from the `/info` endpoint. MagicDNS names are easier to remember and don't change when IPs rotate.
 
 ### Why remote access works
 
@@ -165,16 +265,19 @@ If you're running Conductor on a shared network without Tailscale, anyone on tha
 
 The web dashboard provides:
 
-- **Session sidebar** — all sessions with live status, focus tracking
+- **Multi-machine view** — connect to multiple Conductor servers, sessions grouped by machine
+- **Tailscale device picker** — discover and add machines from your Tailscale network
+- **Session sidebar** — all sessions with focus tracking, grouped by machine in multi-server mode
 - **Terminal panels** — full xterm.js rendering with colors, cursor, scrollback
 - **Split view** — place panels Left, Right, Top, or Bottom with arbitrary nesting and draggable dividers
 - **Keyboard input** — type directly into the terminal
-- **New session** — create sessions from the browser with directory picker
+- **New session** — create sessions on any connected machine with directory picker
 - **Kill confirmation** — stop sessions with a confirmation dialog
 - **Color themes** — 6 presets per panel: Default, Dark, Mid, Bright, Bernstein, Green (retro CRT)
 - **Font size controls** — per-panel `+` / `−` buttons, adaptive defaults for desktop and mobile
 - **Idle notifications** — browser notification when a session is waiting for input (when tab not visible)
 - **Link Device** — QR code in the hamburger menu for opening the dashboard on another device
+- **Server management** — add/remove servers, Tailscale device picker, QR scanner, connection status
 - **Collapsible sidebar** — chevron toggle, auto-reopens when all panels close
 - **Auto-reconnect** — WebSocket reconnects automatically on disconnect
 - **Minimum 80 columns** — narrow panels get horizontal scroll instead of reflow
@@ -210,26 +313,10 @@ Default port `7777`. All endpoints relative to your host.
 | `POST` | `/sessions/{id}/resize` | Resize PTY (`{"rows": 24, "cols": 80}`) |
 | `DELETE` | `/sessions/{id}` | Kill session |
 | `WS` | `/sessions/{id}/stream` | Bidirectional WebSocket — output out, keystrokes in |
-
-## How It Works
-
-```
-Terminal Process
-      │
-  PTY Wrapper          ← each process gets its own pseudo-terminal
-      │
- Conductor Session     ← captures output, accepts input, survives disconnects
-      │
-┌──────────────────┐
-│ Conductor Server │   ← 0.0.0.0:7777
-└──────────────────┘
-      │
-  WebSocket API        ← bidirectional: output streams out, keystrokes stream in
-      │
- Browser Dashboard     ← phone, tablet, laptop — anything on your Tailscale network
-```
-
-Each process is wrapped in a PTY. Output goes into a rolling in-memory buffer (~1MB). When a browser connects, it gets the full buffer first, then live output streams over WebSocket. Sessions survive browser disconnects — reconnect and pick up where you left off.
+| `GET` | `/info` | Server identity (hostname, port, Tailscale IP/name) |
+| `GET` | `/tailscale/peers` | Online Tailscale peers for device picker |
+| `GET` | `/config` | Allowed commands and default directories |
+| `GET` | `/browse?path=~` | Directory listing for the directory picker |
 
 ## Project Structure
 
