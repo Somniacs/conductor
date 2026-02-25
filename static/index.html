@@ -642,25 +642,24 @@
             border-top: 1px solid #2a2a5a;
             user-select: none;
             -webkit-user-select: none;
-            transition: transform 0.2s ease;
             display: none;
         }
         .extra-keys-bar.keyboard-visible { display: block; }
         .extra-keys-bar.collapsed .extra-keys-rows { display: none; }
-        .extra-keys-handle {
-            display: flex;
-            justify-content: flex-end;
-            padding: 0 4px;
-        }
         .extra-keys-chevron {
-            display: inline-block;
-            padding: 4px 12px;
+            position: absolute;
+            right: 4px;
+            top: -18px;
+            padding: 2px 8px;
             cursor: pointer;
             color: #606080;
             font-size: 10px;
             line-height: 1;
+            background: #0e0e24;
+            border: 1px solid #2a2a5a;
+            border-bottom: none;
+            border-radius: 4px 4px 0 0;
             -webkit-tap-highlight-color: transparent;
-            width: auto;
         }
         .extra-keys-chevron:hover { color: #a0a0d0; }
         .extra-keys-rows {
@@ -1098,8 +1097,8 @@
         </div>
     </div>
 
-    <div class="extra-keys-bar collapsed" id="extra-keys-bar" onpointerdown="event.preventDefault()">
-        <div class="extra-keys-handle"><span class="extra-keys-chevron" onpointerdown="toggleExtraKeysBar()" id="ek-chevron">&#9650;</span></div>
+    <div class="extra-keys-bar" id="extra-keys-bar" onpointerdown="event.preventDefault()">
+        <span class="extra-keys-chevron" onpointerdown="toggleExtraKeysBar()" id="ek-chevron">&#9660;</span>
         <div class="extra-keys-rows">
             <div class="extra-keys-row">
                 <button onpointerdown="sendKey('Escape')">ESC</button>
@@ -1939,12 +1938,20 @@
             return panels.find(p => p.id === focusedPanelId);
         }
 
-        function toggleExtraKeysBar() {
+        let _ekExpanded = localStorage.getItem('ek-expanded') !== 'false'; // default expanded
+
+        function _applyEkState() {
             const bar = document.getElementById('extra-keys-bar');
-            if (!bar) return;
-            bar.classList.toggle('collapsed');
             const chevron = document.getElementById('ek-chevron');
-            if (chevron) chevron.innerHTML = bar.classList.contains('collapsed') ? '&#9650;' : '&#9660;';
+            if (!bar) return;
+            bar.classList.toggle('collapsed', !_ekExpanded);
+            if (chevron) chevron.innerHTML = _ekExpanded ? '&#9660;' : '&#9650;';
+        }
+
+        function toggleExtraKeysBar() {
+            _ekExpanded = !_ekExpanded;
+            localStorage.setItem('ek-expanded', _ekExpanded);
+            _applyEkState();
         }
 
         function toggleModifier(mod) {
@@ -2004,29 +2011,20 @@
         // With `interactive-widget=resizes-visual`, the layout viewport
         // (window.innerHeight) stays constant while visualViewport shrinks
         // when the keyboard opens — the difference gives us the keyboard height.
-        let _ekKeyboardOpen = false;
         function _updateExtraKeysPosition() {
             const bar = document.getElementById('extra-keys-bar');
             if (!bar || !window.visualViewport) return;
             const vv = window.visualViewport;
             const kbHeight = Math.round(window.innerHeight - vv.height - vv.offsetTop);
             if (kbHeight > 50) {
-                // Keyboard is open — show the bar and offset above keyboard
+                // Keyboard is open — show the bar above it
                 bar.classList.add('keyboard-visible');
                 bar.style.bottom = kbHeight + 'px';
-                if (!_ekKeyboardOpen) {
-                    _ekKeyboardOpen = true;
-                    if (bar.classList.contains('collapsed')) {
-                        bar.classList.remove('collapsed');
-                        const chevron = document.getElementById('ek-chevron');
-                        if (chevron) chevron.innerHTML = '&#9660;';
-                    }
-                }
+                _applyEkState();
             } else {
                 // Keyboard closed — hide the bar entirely
                 bar.classList.remove('keyboard-visible');
                 bar.style.bottom = '0';
-                _ekKeyboardOpen = false;
             }
         }
         if (window.visualViewport) {
