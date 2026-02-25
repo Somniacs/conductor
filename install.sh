@@ -26,7 +26,13 @@ echo "Python $PY_VERSION ✓"
 # Install pipx if needed
 if ! command -v pipx &>/dev/null; then
     echo "Installing pipx..."
-    python3 -m pip install --user pipx
+    # On Debian/Ubuntu (PEP 668), pip install is blocked — use apt instead
+    if ls /usr/lib/python3*/EXTERNALLY-MANAGED &>/dev/null; then
+        echo "Detected externally-managed Python (PEP 668), using apt..."
+        sudo apt install -y pipx
+    else
+        python3 -m pip install --user pipx
+    fi
     python3 -m pipx ensurepath
     # Source the updated PATH
     export PATH="$HOME/.local/bin:$PATH"
