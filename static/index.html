@@ -643,7 +643,9 @@
             user-select: none;
             -webkit-user-select: none;
             transition: transform 0.2s ease;
+            display: none;
         }
+        .extra-keys-bar.keyboard-visible { display: block; }
         .extra-keys-bar.collapsed .extra-keys-rows { display: none; }
         .extra-keys-handle {
             display: flex;
@@ -652,12 +654,13 @@
         }
         .extra-keys-chevron {
             display: inline-block;
-            padding: 3px 10px;
+            padding: 4px 12px;
             cursor: pointer;
             color: #606080;
             font-size: 10px;
             line-height: 1;
             -webkit-tap-highlight-color: transparent;
+            width: auto;
         }
         .extra-keys-chevron:hover { color: #a0a0d0; }
         .extra-keys-rows {
@@ -2009,7 +2012,8 @@
             const vv = window.visualViewport;
             const kbHeight = Math.round(window.innerHeight - vv.height - vv.offsetTop);
             if (kbHeight > 50) {
-                // Keyboard is open — offset the bar and auto-expand
+                // Keyboard is open — show the bar and offset above keyboard
+                bar.classList.add('keyboard-visible');
                 bar.style.bottom = kbHeight + 'px';
                 if (!_ekKeyboardOpen) {
                     _ekKeyboardOpen = true;
@@ -2020,7 +2024,8 @@
                     }
                 }
             } else {
-                // Keyboard closed — back to bottom
+                // Keyboard closed — hide the bar entirely
+                bar.classList.remove('keyboard-visible');
                 bar.style.bottom = '0';
                 _ekKeyboardOpen = false;
             }
