@@ -1968,6 +1968,32 @@
             }
         }
 
+        // Reposition the extra-keys bar above the virtual keyboard.
+        // When the keyboard opens, visualViewport shrinks — we use that
+        // to compute the offset and auto-expand the drawer.
+        function _updateExtraKeysPosition() {
+            const bar = document.getElementById('extra-keys-bar');
+            if (!bar || !window.visualViewport) return;
+            const vv = window.visualViewport;
+            const kbHeight = window.innerHeight - vv.height - vv.offsetTop;
+            if (kbHeight > 50) {
+                // Keyboard is open — position above it and auto-expand
+                bar.style.bottom = kbHeight + 'px';
+                if (bar.classList.contains('collapsed')) {
+                    bar.classList.remove('collapsed');
+                    const chevron = document.getElementById('ek-chevron');
+                    if (chevron) chevron.innerHTML = '&#9660;';
+                }
+            } else {
+                // Keyboard closed — back to bottom
+                bar.style.bottom = '0';
+            }
+        }
+        if (window.visualViewport) {
+            window.visualViewport.addEventListener('resize', _updateExtraKeysPosition);
+            window.visualViewport.addEventListener('scroll', _updateExtraKeysPosition);
+        }
+
         function toggleThemeMenu(id) {
             const menu = document.getElementById(`theme-menu-${id}`);
             // Close all other theme menus first
