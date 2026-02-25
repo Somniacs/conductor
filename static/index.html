@@ -647,38 +647,43 @@
         .extra-keys-bar.collapsed .extra-keys-rows { display: none; }
         .extra-keys-chevron {
             display: flex;
-            justify-content: center;
-            padding: 2px 0;
+            justify-content: flex-end;
+            padding: 2px 8px;
             cursor: pointer;
             color: #606080;
-            font-size: 12px;
+            font-size: 10px;
             line-height: 1;
             -webkit-tap-highlight-color: transparent;
         }
         .extra-keys-chevron:hover { color: #a0a0d0; }
         .extra-keys-rows {
             display: flex;
+            flex-direction: column;
             padding: 3px 4px;
             gap: 2px;
-            flex-wrap: wrap;
         }
-        .extra-keys-rows button {
+        .extra-keys-row {
+            display: flex;
+            gap: 2px;
+        }
+        .extra-keys-row button {
             background: #1a1a3a;
             border: 1px solid #2a2a5a;
             color: #b0b0d0;
-            font-size: 11px;
+            font-size: 12px;
             font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
-            padding: 6px 0;
+            padding: 10px 0;
             border-radius: 4px;
             cursor: pointer;
             flex: 1;
             min-width: 0;
             text-align: center;
-            line-height: 1.2;
+            line-height: 1;
             -webkit-tap-highlight-color: transparent;
+            touch-action: manipulation;
         }
-        .extra-keys-rows button:active { background: #2a2a5a; color: #e0e0ff; }
-        .extra-keys-rows button.modifier-active {
+        .extra-keys-row button:active { background: #2a2a5a; color: #e0e0ff; }
+        .extra-keys-row button.modifier-active {
             background: #3a3a7a;
             color: #ffffff;
             border-color: #5050aa;
@@ -1086,21 +1091,27 @@
         </div>
     </div>
 
-    <div class="extra-keys-bar collapsed" id="extra-keys-bar">
-        <div class="extra-keys-chevron" onclick="toggleExtraKeysBar()" id="ek-chevron">&#9650;</div>
+    <div class="extra-keys-bar collapsed" id="extra-keys-bar" onpointerdown="event.preventDefault()">
+        <div class="extra-keys-chevron" onpointerdown="toggleExtraKeysBar()" id="ek-chevron">&#9650;</div>
         <div class="extra-keys-rows">
-            <button onpointerdown="sendKey('Escape')">ESC</button>
-            <button onpointerdown="sendKey('Tab')">TAB</button>
-            <button onpointerdown="toggleModifier('ctrl')" id="ek-ctrl">CTRL</button>
-            <button onpointerdown="toggleModifier('alt')" id="ek-alt">ALT</button>
-            <button onpointerdown="sendKey('ArrowUp')">&uarr;</button>
-            <button onpointerdown="sendKey('ArrowDown')">&darr;</button>
-            <button onpointerdown="sendKey('ArrowLeft')">&larr;</button>
-            <button onpointerdown="sendKey('ArrowRight')">&rarr;</button>
-            <button onpointerdown="sendKey('Home')">HOME</button>
-            <button onpointerdown="sendKey('End')">END</button>
-            <button onpointerdown="sendKey('PageUp')">PGUP</button>
-            <button onpointerdown="sendKey('PageDown')">PGDN</button>
+            <div class="extra-keys-row">
+                <button onpointerdown="sendKey('Escape')">ESC</button>
+                <button onpointerdown="sendKey('/')">/</button>
+                <button onpointerdown="sendKey('-')">&#8211;</button>
+                <button onpointerdown="sendKey('Home')">HOME</button>
+                <button onpointerdown="sendKey('ArrowUp')">&uarr;</button>
+                <button onpointerdown="sendKey('End')">END</button>
+                <button onpointerdown="sendKey('PageUp')">PGUP</button>
+            </div>
+            <div class="extra-keys-row">
+                <button onpointerdown="sendKey('Tab')">TAB</button>
+                <button onpointerdown="toggleModifier('ctrl')" id="ek-ctrl">CTRL</button>
+                <button onpointerdown="toggleModifier('alt')" id="ek-alt">ALT</button>
+                <button onpointerdown="sendKey('ArrowLeft')">&larr;</button>
+                <button onpointerdown="sendKey('ArrowDown')">&darr;</button>
+                <button onpointerdown="sendKey('ArrowRight')">&rarr;</button>
+                <button onpointerdown="sendKey('PageDown')">PGDN</button>
+            </div>
         </div>
     </div>
 
@@ -1902,6 +1913,8 @@
         const _KEY_SEQS = {
             Escape: '\x1b',
             Tab: '\t',
+            '/': '/',
+            '-': '-',
             ArrowUp: '\x1b[A',
             ArrowDown: '\x1b[B',
             ArrowRight: '\x1b[C',
