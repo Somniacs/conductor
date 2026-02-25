@@ -2,6 +2,9 @@ import asyncio
 import os
 import re
 import shlex
+import shutil
+import socket
+import subprocess
 from pathlib import Path
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect, HTTPException
@@ -11,7 +14,7 @@ from pydantic import BaseModel
 _SAFE_NAME = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9 _.~-]{0,63}$")
 
 from conductor.sessions.registry import SessionRegistry
-from conductor.utils.config import ALLOWED_COMMANDS, DEFAULT_DIRECTORIES
+from conductor.utils.config import ALLOWED_COMMANDS, DEFAULT_DIRECTORIES, PORT
 
 router = APIRouter()
 registry = SessionRegistry()
@@ -34,6 +37,53 @@ class InputRequest(BaseModel):
 class ResizeRequest(BaseModel):
     rows: int
     cols: int
+
+
+def _get_tailscale_ip() -> str | None:
+    """Get the machine's Tailscale IPv4 address, if available."""
+    if not shutil.which("tailscale"):
+        return None
+    try:
+        result = subprocess.run(
+            ["tailscale", "ip", "-4"],
+            capture_output=True, text=True, timeout=5,
+        )
+        if result.returncode == 0:
+            return result.stdout.strip().split("\n")[0]
+    except Exception:
+        pass
+    return None
+
+
+def _get_tailscale_name() -> str | None:
+    """Get the machine's Tailscale MagicDNS name, if available."""
+    if not shutil.which("tailscale"):
+        return None
+    try:
+        result = subprocess.run(
+            ["tailscale", "status", "--json"],
+            capture_output=True, text=True, timeout=5,
+        )
+        if result.returncode == 0:
+            import json
+            status = json.loads(result.stdout)
+            dns_name = status.get("Self", {}).get("DNSName", "")
+            if dns_name:
+                return dns_name.rstrip(".")
+    except Exception:
+        pass
+    return None
+
+
+@router.get("/info")
+async def server_info():
+    """Return server identity for multi-server dashboard."""
+    return {
+        "hostname": socket.gethostname(),
+        "port": PORT,
+        "tailscale_ip": _get_tailscale_ip(),
+        "tailscale_name": _get_tailscale_name(),
+    }
 
 
 @router.get("/config")

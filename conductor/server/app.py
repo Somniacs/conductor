@@ -3,6 +3,7 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
@@ -20,7 +21,17 @@ async def lifespan(app: FastAPI):
 
 
 def create_app() -> FastAPI:
-    app = FastAPI(title="Conductor", version="0.1.0", lifespan=lifespan)
+    app = FastAPI(title="Conductor", version="0.1.2", lifespan=lifespan)
+
+    # CORS: Allow any Conductor dashboard to connect cross-origin.
+    # Safe on private Tailscale networks where the network is the trust boundary.
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=["*"],
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
+
     app.include_router(router)
 
     # Serve dashboard

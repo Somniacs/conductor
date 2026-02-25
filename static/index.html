@@ -144,6 +144,26 @@
         }
         .session-actions button:hover { color: #ff6666; background: #331111; }
 
+        /* Server group headers in sidebar */
+        .server-group-header {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            padding: 8px 12px 4px;
+            font-size: 11px;
+            color: #606080;
+            letter-spacing: 0.3px;
+        }
+        .server-group-header:first-child { padding-top: 4px; }
+        .server-dot {
+            width: 7px;
+            height: 7px;
+            border-radius: 50%;
+            flex-shrink: 0;
+        }
+        .server-dot.connected { background: #44dd77; }
+        .server-dot.disconnected { background: #ff4444; }
+
         /* New session dialog */
         .new-session {
             padding: 12px;
@@ -497,7 +517,6 @@
             width: 5px;
             cursor: col-resize;
         }
-
         .split-handle.v-handle {
             height: 5px;
             cursor: row-resize;
@@ -722,6 +741,144 @@
                 border-radius: 0 6px 6px 0;
             }
         }
+
+        /* Server management dialog */
+        .servers-overlay {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,0.5);
+            z-index: 1000;
+            align-items: center;
+            justify-content: center;
+        }
+        .servers-overlay.open { display: flex; }
+        .servers-box {
+            background: #16163a;
+            border: 1px solid #2a2a5a;
+            border-radius: 8px;
+            padding: 24px 28px;
+            min-width: 340px;
+            max-width: 480px;
+            width: 90%;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+            position: relative;
+            max-height: 80vh;
+            overflow-y: auto;
+        }
+        .servers-box h2 {
+            font-size: 16px;
+            color: #8080ff;
+            margin: 0 0 16px;
+            font-weight: 600;
+        }
+        .server-list-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 10px;
+            border-radius: 5px;
+            margin-bottom: 4px;
+            background: #0e0e24;
+        }
+        .server-list-item .server-info {
+            flex: 1;
+            min-width: 0;
+        }
+        .server-list-item .server-label {
+            font-size: 13px;
+            color: #c0c0e0;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        .server-list-item .server-url-text {
+            font-size: 11px;
+            color: #606080;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        .server-list-item button {
+            background: none;
+            border: none;
+            color: #606080;
+            cursor: pointer;
+            font-size: 14px;
+            padding: 2px 6px;
+            flex-shrink: 0;
+        }
+        .server-list-item button:hover { color: #ff6666; }
+        .server-add-form {
+            display: flex;
+            gap: 6px;
+            margin-top: 12px;
+        }
+        .server-add-form input {
+            flex: 1;
+            padding: 7px 10px;
+            background: #0a0a1a;
+            border: 1px solid #2a2a5a;
+            color: #e0e0e0;
+            border-radius: 5px;
+            font-size: 13px;
+        }
+        .server-add-form button {
+            padding: 7px 14px;
+            background: #2a2a6a;
+            border: 1px solid #3a3aaa;
+            color: #e0e0e0;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 13px;
+            white-space: nowrap;
+        }
+        .server-add-form button:hover { background: #3a3a7a; }
+        .server-self-info {
+            margin-top: 14px;
+            padding: 10px;
+            background: #0e0e24;
+            border-radius: 5px;
+            font-size: 12px;
+            color: #808090;
+        }
+        .server-self-info .self-url {
+            color: #8080ff;
+            font-family: 'Consolas', monospace;
+            user-select: all;
+            cursor: text;
+        }
+
+        /* QR Scanner */
+        .qr-scanner-container {
+            position: relative;
+            margin-top: 12px;
+            border-radius: 8px;
+            overflow: hidden;
+            background: #000;
+        }
+        .qr-scanner-container video {
+            width: 100%;
+            display: block;
+        }
+        .qr-scanner-container canvas { display: none; }
+        .qr-scanner-actions {
+            display: flex;
+            gap: 6px;
+            margin-top: 8px;
+        }
+        .qr-scanner-actions button {
+            padding: 7px 14px;
+            background: #2a2a6a;
+            border: 1px solid #3a3aaa;
+            color: #e0e0e0;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 13px;
+        }
+        .qr-scanner-actions button:hover { background: #3a3a7a; }
+        .qr-scanner-actions button.stop-btn { background: #5a2a2a; border-color: #7a3a3a; }
+        .qr-scanner-actions button.stop-btn:hover { background: #6a3a3a; }
     </style>
 </head>
 <body>
@@ -734,6 +891,8 @@
                 <div class="menu-wrapper">
                     <button class="menu-btn" onclick="toggleMenu()" title="Menu">&#9776;</button>
                     <div class="menu-dropdown" id="hamburger-menu">
+                        <a onclick="toggleMenu();toggleServersDialog()">Servers</a>
+                        <div class="menu-sep"></div>
                         <a onclick="toggleMenu();toggleQR()">Link Device</a>
                         <div class="menu-sep"></div>
                         <a href="https://github.com/somniacs/conductor/blob/master/README.md" target="_blank" onclick="toggleMenu()">Help</a>
@@ -751,6 +910,10 @@
                 <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
                     <span style="font-size:12px;font-weight:500;color:#a0a0d0;">New Session</span>
                     <button onclick="toggleNewSession()" style="background:none;border:none;color:#606080;cursor:pointer;font-size:16px;padding:0 2px;line-height:1;" title="Cancel">&times;</button>
+                </div>
+                <div id="server-selector-row" style="display:none;">
+                    <label>Server</label>
+                    <select id="new-session-server" onchange="onNewSessionServerChange()"></select>
                 </div>
                 <label>Session name</label>
                 <input type="text" id="new-name" placeholder="e.g. research" autocomplete="off">
@@ -786,7 +949,7 @@
         <div class="about-box">
             <button class="about-close" onclick="toggleAbout()">&times;</button>
             <h2><span style="font-size:1.4em;vertical-align:middle">♭</span> conductor</h2>
-            <div class="about-version">v0.1.1</div>
+            <div class="about-version">v0.1.2</div>
             <p>Local orchestration layer for interactive terminal processes. Run sessions on your workstation, interact from anywhere.</p>
             <div class="about-section">Built with</div>
             <ul>
@@ -811,6 +974,22 @@
         </div>
     </div>
 
+    <div class="servers-overlay" id="servers-dialog" onclick="if(event.target===this)toggleServersDialog()">
+        <div class="servers-box">
+            <button class="about-close" onclick="toggleServersDialog()">&times;</button>
+            <h2>Servers</h2>
+            <div id="servers-list"></div>
+            <div class="server-add-form">
+                <input type="text" id="server-url-input" placeholder="http://100.x.x.x:7777" autocomplete="off"
+                    onkeydown="if(event.key==='Enter')addServerFromInput()">
+                <button onclick="addServerFromInput()">Add</button>
+                <button onclick="toggleQRScanner()" id="qr-scan-btn" title="Scan QR code">&#x1F4F7;</button>
+            </div>
+            <div id="qr-scanner-area"></div>
+            <div class="server-self-info" id="server-self-info"></div>
+        </div>
+    </div>
+
     <div class="confirm-overlay" id="confirm-dialog">
         <div class="confirm-box">
             <p id="confirm-msg"></p>
@@ -824,6 +1003,7 @@
     <script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/xterm@5.3.0/lib/xterm.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@xterm/addon-fit@0.10.0/lib/addon-fit.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
     <script>
         // --- State ---
         let sessions = [];
@@ -835,6 +1015,105 @@
         let selectedCwd = null;
         let focusedPanelId = null;
         const hasXterm = typeof Terminal !== 'undefined';
+
+        // --- Multi-Server Registry ---
+        let servers = [];
+        let serverConnected = {};   // serverKey -> boolean
+        let _serverConfigs = {};    // serverKey -> { allowed_commands, default_directories }
+        let _newSessionServer = 'local';
+
+        function loadServers() {
+            try {
+                const stored = localStorage.getItem('conductor-servers');
+                if (stored) {
+                    servers = JSON.parse(stored);
+                    // Ensure local server always exists
+                    if (!servers.find(s => s.key === 'local')) {
+                        servers.unshift({ key: 'local', label: 'This Machine', url: null, enabled: true });
+                    }
+                }
+            } catch (e) {}
+            if (!servers.length) {
+                servers = [{ key: 'local', label: 'This Machine', url: null, enabled: true }];
+            }
+        }
+
+        function saveServers() {
+            localStorage.setItem('conductor-servers', JSON.stringify(servers));
+        }
+
+        function addServer(url, label) {
+            url = url.replace(/\/+$/, '');
+            // Ensure protocol
+            if (!/^https?:\/\//.test(url)) url = 'http://' + url;
+            const key = url.replace(/^https?:\/\//, '');
+            if (servers.find(s => s.key === key)) return null;
+            const server = { key, label: label || key, url, enabled: true };
+            servers.push(server);
+            saveServers();
+            return server;
+        }
+
+        function removeServer(key) {
+            if (key === 'local') return;
+            servers = servers.filter(s => s.key !== key);
+            saveServers();
+            delete serverConnected[key];
+            delete _serverConfigs[key];
+            // Close panels for this server
+            const toClose = panels.filter(p => p.server === key).map(p => p.id);
+            toClose.forEach(id => closePanel(id));
+            // Remove sessions for this server
+            sessions = sessions.filter(s => s._server !== key);
+            renderSessionList();
+            updateServerSelectorVisibility();
+        }
+
+        function serverUrl(serverKey, path) {
+            if (serverKey === 'local') return path;
+            const server = servers.find(s => s.key === serverKey);
+            return server ? server.url + path : path;
+        }
+
+        function serverWsUrl(serverKey, path) {
+            if (serverKey === 'local') {
+                return `${location.protocol === 'https:' ? 'wss:' : 'ws:'}//${location.host}${path}`;
+            }
+            const server = servers.find(s => s.key === serverKey);
+            if (!server) return path;
+            return server.url.replace(/^http/, 'ws') + path;
+        }
+
+        function compoundId(serverKey, sessionId) {
+            if (!_isMultiServer()) return sessionId;
+            return serverKey + '::' + sessionId;
+        }
+
+        function parseCompoundId(id) {
+            const sep = id.indexOf('::');
+            if (sep < 0) return { server: 'local', sessionId: id };
+            return { server: id.substring(0, sep), sessionId: id.substring(sep + 2) };
+        }
+
+        function _isMultiServer() {
+            return servers.filter(s => s.enabled).length > 1;
+        }
+
+        function getServerLabel(serverKey) {
+            const server = servers.find(s => s.key === serverKey);
+            return server ? server.label : serverKey;
+        }
+
+        function setServerConnectedStatus(serverKey, connected) {
+            serverConnected[serverKey] = connected;
+            // Main status bar tracks local server
+            const el = document.getElementById('server-status');
+            if (serverConnected['local'] === false) {
+                el.classList.add('disconnected');
+            } else {
+                el.classList.remove('disconnected');
+            }
+        }
 
         // Terminal color scheme presets
         const THEMES = {
@@ -930,13 +1209,17 @@
         }
 
         // --- Config ---
-        async function fetchConfig() {
+        async function fetchConfig(serverKey) {
+            serverKey = serverKey || 'local';
             try {
-                const resp = await fetch('/config');
+                const resp = await fetch(serverUrl(serverKey, '/config'));
                 const cfg = await resp.json();
-                allowedCommands = cfg.allowed_commands || [];
-                populateCommandSelect();
-                browseTo('~');
+                _serverConfigs[serverKey] = cfg;
+                if (serverKey === _newSessionServer) {
+                    allowedCommands = cfg.allowed_commands || [];
+                    populateCommandSelect();
+                    browseTo('~', serverKey);
+                }
             } catch (e) {}
         }
 
@@ -948,22 +1231,23 @@
         }
 
         // --- Directory Browser ---
-        async function browseTo(path) {
+        async function browseTo(path, serverKey) {
+            serverKey = serverKey || _newSessionServer;
             try {
-                const resp = await fetch(`/browse?path=${encodeURIComponent(path)}`);
+                const resp = await fetch(serverUrl(serverKey, `/browse?path=${encodeURIComponent(path)}`));
                 const data = await resp.json();
                 selectedCwd = data.current;
-                renderDirPicker(data);
+                renderDirPicker(data, serverKey);
                 validateNewSession();
             } catch (e) {}
         }
 
-        function renderDirPicker(data) {
+        function renderDirPicker(data, serverKey) {
             const picker = document.getElementById('dir-picker');
-            const shortPath = data.current.replace(/^\/home\/[^/]+/, '~');
+            const shortPath = data.current.replace(/^\/home\/[^/]+/, '~').replace(/^C:\\Users\\[^\\]+/, '~');
             let html = `
                 <div class="dir-current">
-                    ${data.parent ? `<button onclick="browseTo('${data.parent}')" title="Go up">&#8592;</button>` : ''}
+                    ${data.parent ? `<button onclick="browseTo('${data.parent.replace(/'/g, "\\'")}', '${serverKey}')" title="Go up">&#8592;</button>` : ''}
                     <span>${shortPath}</span>
                 </div>
             `;
@@ -971,7 +1255,7 @@
                 html += '<div class="dir-empty">No subdirectories</div>';
             } else {
                 html += data.directories.map(d =>
-                    `<div class="dir-entry" onclick="browseTo('${d.path}')">
+                    `<div class="dir-entry" onclick="browseTo('${d.path.replace(/'/g, "\\'")}', '${serverKey}')">
                         <span class="dir-icon">&#128193;</span>
                         <span>${d.name}</span>
                     </div>`
@@ -980,27 +1264,41 @@
             picker.innerHTML = html;
         }
 
-        // --- Server Status ---
-        function setServerStatus(connected) {
-            const el = document.getElementById('server-status');
-            if (connected) {
-                el.classList.remove('disconnected');
-            } else {
-                el.classList.add('disconnected');
-            }
-        }
-
         // --- Session List ---
-        async function fetchSessions() {
-            try {
-                const resp = await fetch('/sessions');
-                sessions = await resp.json();
-                setServerStatus(true);
-                renderSessionList();
-                validateNewSession();
-            } catch (e) {
-                setServerStatus(false);
+        async function fetchAllSessions() {
+            const enabledServers = servers.filter(s => s.enabled);
+            const results = await Promise.allSettled(
+                enabledServers.map(async (srv) => {
+                    const url = serverUrl(srv.key, '/sessions');
+                    const resp = await fetch(url);
+                    const data = await resp.json();
+                    return { serverKey: srv.key, sessions: data };
+                })
+            );
+
+            const allSessions = [];
+            for (let i = 0; i < results.length; i++) {
+                const srv = enabledServers[i];
+                if (results[i].status === 'fulfilled') {
+                    setServerConnectedStatus(srv.key, true);
+                    const serverSessions = results[i].value.sessions;
+                    serverSessions.forEach(s => {
+                        s._server = srv.key;
+                        s._compoundId = compoundId(srv.key, s.id);
+                    });
+                    allSessions.push(...serverSessions);
+                } else {
+                    setServerConnectedStatus(srv.key, false);
+                    // Don't keep stale sessions — clear them so the UI stays honest.
+                    // Also close any open panels for this server.
+                    const stalePanels = panels.filter(p => p.server === srv.key).map(p => p.id);
+                    stalePanels.forEach(id => closePanel(id));
+                }
             }
+
+            sessions = allSessions;
+            renderSessionList();
+            validateNewSession();
         }
 
         function getCommandLabel(command) {
@@ -1014,25 +1312,64 @@
                 list.innerHTML = '<div style="padding:12px;color:#404060;font-size:13px;">No sessions</div>';
                 return;
             }
-            list.innerHTML = sessions.map(s => {
-                const isOpen = panels.some(p => p.id === s.id);
-                const isFocused = focusedPanelId === s.id;
-                const appLabel = getCommandLabel(s.command);
-                return `
-                    <div class="session-item ${isFocused ? 'focused' : isOpen ? 'open' : ''}" onclick="focusSession('${s.id}', '${s.name}', event)">
-                        <div class="session-name">
-                            <div>${s.name}</div>
-                            <div style="font-size:10px;color:#606080;font-weight:400;">${appLabel}</div>
-                        </div>
-                        <div style="display:flex;align-items:center;gap:4px;">
-                            <span class="session-status ${s.status}">${s.status}</span>
-                            <div class="session-actions">
-                                <button onclick="event.stopPropagation();killSession('${s.id}')" title="Stop">&times;</button>
-                            </div>
+
+            const multi = _isMultiServer();
+
+            if (!multi) {
+                // Single server mode — render flat list (identical to original)
+                list.innerHTML = sessions.map(s => renderSessionItem(s)).join('');
+                return;
+            }
+
+            // Multi-server mode — group by server
+            const groups = {};
+            const serverOrder = servers.filter(s => s.enabled).map(s => s.key);
+            serverOrder.forEach(k => { groups[k] = []; });
+            sessions.forEach(s => {
+                if (!groups[s._server]) groups[s._server] = [];
+                groups[s._server].push(s);
+            });
+
+            let html = '';
+            for (const key of serverOrder) {
+                const label = getServerLabel(key);
+                const connected = serverConnected[key] !== false;
+                const dotClass = connected ? 'connected' : 'disconnected';
+                html += `<div class="server-group-header">
+                    <span class="server-dot ${dotClass}"></span>
+                    <span>${label}</span>
+                </div>`;
+                if (groups[key] && groups[key].length > 0) {
+                    html += groups[key].map(s => renderSessionItem(s)).join('');
+                } else {
+                    html += '<div style="padding:4px 12px;color:#404060;font-size:11px;">No sessions</div>';
+                }
+            }
+            list.innerHTML = html;
+        }
+
+        function renderSessionItem(s) {
+            const cid = s._compoundId || s.id;
+            const isOpen = panels.some(p => p.id === cid);
+            const isFocused = focusedPanelId === cid;
+            const appLabel = getCommandLabel(s.command);
+            // Escape single quotes in compound ID for onclick
+            const cidEsc = cid.replace(/'/g, "\\'");
+            const nameEsc = s.name.replace(/'/g, "\\'");
+            return `
+                <div class="session-item ${isFocused ? 'focused' : isOpen ? 'open' : ''}" onclick="focusSession('${cidEsc}', '${nameEsc}', event)">
+                    <div class="session-name">
+                        <div>${s.name}</div>
+                        <div style="font-size:10px;color:#606080;font-weight:400;">${appLabel}</div>
+                    </div>
+                    <div style="display:flex;align-items:center;gap:4px;">
+                        <span class="session-status ${s.status}">${s.status}</span>
+                        <div class="session-actions">
+                            <button onclick="event.stopPropagation();killSession('${cidEsc}')" title="Stop">&times;</button>
                         </div>
                     </div>
-                `;
-            }).join('');
+                </div>
+            `;
         }
 
         // --- Panels ---
@@ -1129,7 +1466,12 @@
         function openSession(id, name, direction) {
             if (panels.find(p => p.id === id)) return;
 
-            const panel = { id, name, ws: null, terminal: null, fitAddon: null, element: null, _resizeObserver: null, _theme: 'default' };
+            const { server, sessionId } = parseCompoundId(id);
+            const panel = {
+                id, server, sessionId, name,
+                ws: null, terminal: null, fitAddon: null,
+                element: null, _resizeObserver: null, _theme: 'default'
+            };
             panels.push(panel);
             buildPanelElement(panel);
             insertIntoTree(id, direction || 'right');
@@ -1234,9 +1576,12 @@
             termWrapper.className = 'terminal-wrapper';
             termEl.appendChild(termWrapper);
 
+            // Show server name in panel header when multi-server
+            const serverLabel = _isMultiServer() ? ` <span style="font-size:10px;color:#606080;">(${getServerLabel(panel.server)})</span>` : '';
+
             div.innerHTML = `
                 <div class="panel-header">
-                    <span class="panel-title">${panel.name}</span>
+                    <span class="panel-title">${panel.name}${serverLabel}</span>
                     <div class="panel-header-actions" style="position:relative;">
                         <button class="theme-btn" id="theme-btn-${panel.id}" onclick="toggleThemeMenu('${panel.id}')" title="Color scheme"><span class="theme-ring" style="background:${THEMES['default'].dot};border-color:${contrastGrey(THEMES['default'].dot)}"></span></button>
                         <div class="theme-menu" id="theme-menu-${panel.id}">
@@ -1584,7 +1929,7 @@
             const cols = panel.terminal.cols;
             const rows = panel.terminal.rows;
             if (cols > 0 && rows > 0) {
-                fetch(`/sessions/${panel.id}/resize`, {
+                fetch(serverUrl(panel.server, `/sessions/${panel.sessionId}/resize`), {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ rows, cols }),
@@ -1595,12 +1940,12 @@
         // --- WebSocket ---
         function connectWebSocket(panel) {
             const isReconnect = !!panel.ws;
-            const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
-            const ws = new WebSocket(`${protocol}//${location.host}/sessions/${panel.id}/stream`);
+            const wsUrl = serverWsUrl(panel.server, `/sessions/${panel.sessionId}/stream`);
+            const ws = new WebSocket(wsUrl);
             ws.binaryType = 'arraybuffer';
 
             ws.onopen = () => {
-                setServerStatus(true);
+                setServerConnectedStatus(panel.server, true);
                 // On reconnect, clear terminal to prevent duplicate content from buffer replay
                 if (isReconnect && panel.terminal) {
                     panel.terminal.reset();
@@ -1640,7 +1985,7 @@
             };
 
             ws.onerror = () => {
-                setServerStatus(false);
+                setServerConnectedStatus(panel.server, false);
             };
 
             panel.ws = ws;
@@ -1781,6 +2126,248 @@
             }
         }
 
+        // --- Server Management Dialog ---
+        function toggleServersDialog() {
+            const dialog = document.getElementById('servers-dialog');
+            dialog.classList.toggle('open');
+            if (dialog.classList.contains('open')) {
+                renderServersDialog();
+                fetchSelfInfo();
+            } else {
+                stopQRScanner();
+            }
+        }
+
+        async function fetchSelfInfo() {
+            const el = document.getElementById('server-self-info');
+            try {
+                const resp = await fetch('/info');
+                const info = await resp.json();
+                let html = '<div style="margin-bottom:4px;font-weight:500;color:#a0a0d0;">This server</div>';
+                html += `<div>Hostname: ${info.hostname}</div>`;
+                if (info.tailscale_name) {
+                    html += `<div>MagicDNS: <span class="self-url">${info.tailscale_name}:${info.port}</span></div>`;
+                }
+                if (info.tailscale_ip) {
+                    html += `<div>Tailscale: <span class="self-url">${info.tailscale_ip}:${info.port}</span></div>`;
+                }
+                if (!info.tailscale_ip && !info.tailscale_name) {
+                    html += `<div>Port: ${info.port}</div>`;
+                }
+                el.innerHTML = html;
+            } catch (e) {
+                el.innerHTML = '<div style="color:#606080;">Could not fetch server info</div>';
+            }
+        }
+
+        function renderServersDialog() {
+            const list = document.getElementById('servers-list');
+            list.innerHTML = servers.map(s => {
+                const connected = serverConnected[s.key] !== false;
+                const dotClass = connected ? 'connected' : 'disconnected';
+                const removeBtn = s.key !== 'local' ?
+                    `<button onclick="removeServer('${s.key.replace(/'/g, "\\'")}');renderServersDialog()" title="Remove">&times;</button>` : '';
+                const urlText = s.url || '(local)';
+                return `<div class="server-list-item">
+                    <span class="server-dot ${dotClass}"></span>
+                    <div class="server-info">
+                        <div class="server-label">${s.label}</div>
+                        <div class="server-url-text">${urlText}</div>
+                    </div>
+                    ${removeBtn}
+                </div>`;
+            }).join('');
+        }
+
+        async function probeServer(url) {
+            url = url.replace(/\/+$/, '');
+            if (!/^https?:\/\//.test(url)) url = 'http://' + url;
+            try {
+                const resp = await fetch(url + '/info', { signal: AbortSignal.timeout(5000) });
+                if (!resp.ok) return null;
+                const info = await resp.json();
+                return { url, hostname: info.hostname, port: info.port, tailscale_name: info.tailscale_name };
+            } catch (e) {
+                return null;
+            }
+        }
+
+        async function addServerFromInput() {
+            const input = document.getElementById('server-url-input');
+            const url = input.value.trim();
+            if (!url) return;
+
+            // Probe the server first
+            const info = await probeServer(url);
+            if (!info) {
+                input.style.borderColor = '#ff6666';
+                setTimeout(() => { input.style.borderColor = '#2a2a5a'; }, 2000);
+                return;
+            }
+
+            const label = info.tailscale_name || info.hostname || url.replace(/^https?:\/\//, '');
+            const server = addServer(info.url, label);
+            if (!server) {
+                // Already exists
+                input.value = '';
+                return;
+            }
+
+            input.value = '';
+            renderServersDialog();
+            updateServerSelectorVisibility();
+            // Fetch config and sessions for the new server
+            fetchConfig(server.key);
+            fetchAllSessions();
+        }
+
+        // --- QR Scanner ---
+        let _qrScannerStream = null;
+        let _qrScannerAnimFrame = null;
+
+        function toggleQRScanner() {
+            if (_qrScannerStream) {
+                stopQRScanner();
+            } else {
+                startQRScanner();
+            }
+        }
+
+        async function startQRScanner() {
+            const area = document.getElementById('qr-scanner-area');
+            if (typeof jsQR === 'undefined') {
+                area.innerHTML = '<div style="padding:8px;font-size:12px;color:#ff6666;">QR scanner not available. Paste the URL manually.</div>';
+                return;
+            }
+
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({
+                    video: { facingMode: 'environment' }
+                });
+                _qrScannerStream = stream;
+
+                area.innerHTML = `
+                    <div class="qr-scanner-container">
+                        <video id="qr-video" autoplay playsinline></video>
+                        <canvas id="qr-scan-canvas"></canvas>
+                    </div>
+                    <div class="qr-scanner-actions">
+                        <button class="stop-btn" onclick="stopQRScanner()">Stop Scanner</button>
+                    </div>
+                    <div class="qr-scanner-status" id="qr-scan-status">Point camera at a Conductor QR code...</div>`;
+
+                const video = document.getElementById('qr-video');
+                video.srcObject = stream;
+                video.play();
+
+                video.addEventListener('loadedmetadata', () => {
+                    const canvas = document.getElementById('qr-scan-canvas');
+                    canvas.width = video.videoWidth;
+                    canvas.height = video.videoHeight;
+                    const ctx = canvas.getContext('2d', { willReadFrequently: true });
+                    scanQRFrame(video, canvas, ctx);
+                });
+            } catch (e) {
+                area.innerHTML = `<div style="padding:8px;font-size:12px;color:#ff9944;">
+                    Camera access denied or unavailable.<br>Paste the server URL manually above.
+                </div>`;
+            }
+        }
+
+        function scanQRFrame(video, canvas, ctx) {
+            if (!_qrScannerStream) return;
+
+            if (video.readyState === video.HAVE_ENOUGH_DATA) {
+                ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+                const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+                const code = jsQR(imageData.data, imageData.width, imageData.height, {
+                    inversionAttempts: 'dontInvert',
+                });
+
+                if (code && code.data) {
+                    const url = code.data.trim();
+                    // Validate it looks like a Conductor URL
+                    if (/^https?:\/\/.+:\d+/.test(url) || /^https?:\/\/[^/]+$/.test(url)) {
+                        const status = document.getElementById('qr-scan-status');
+                        if (status) status.textContent = 'Found: ' + url;
+                        stopQRScanner();
+                        // Auto-add the server
+                        handleScannedUrl(url);
+                        return;
+                    }
+                }
+            }
+
+            _qrScannerAnimFrame = requestAnimationFrame(() => scanQRFrame(video, canvas, ctx));
+        }
+
+        async function handleScannedUrl(url) {
+            const info = await probeServer(url);
+            if (!info) {
+                const area = document.getElementById('qr-scanner-area');
+                area.innerHTML = `<div style="padding:8px;font-size:12px;color:#ff9944;">
+                    Could not connect to ${url}. Make sure the server is running.
+                </div>`;
+                return;
+            }
+
+            const label = info.tailscale_name || info.hostname || url.replace(/^https?:\/\//, '');
+            const server = addServer(info.url, label);
+            if (server) {
+                renderServersDialog();
+                updateServerSelectorVisibility();
+                fetchConfig(server.key);
+                fetchAllSessions();
+            }
+            const area = document.getElementById('qr-scanner-area');
+            area.innerHTML = `<div style="padding:8px;font-size:12px;color:#44dd77;">
+                Added: ${label}
+            </div>`;
+        }
+
+        function stopQRScanner() {
+            if (_qrScannerAnimFrame) {
+                cancelAnimationFrame(_qrScannerAnimFrame);
+                _qrScannerAnimFrame = null;
+            }
+            if (_qrScannerStream) {
+                _qrScannerStream.getTracks().forEach(t => t.stop());
+                _qrScannerStream = null;
+            }
+            const area = document.getElementById('qr-scanner-area');
+            if (area) area.innerHTML = '';
+        }
+
+        // --- New Session Server Selector ---
+        function updateServerSelectorVisibility() {
+            const row = document.getElementById('server-selector-row');
+            const sel = document.getElementById('new-session-server');
+            if (_isMultiServer()) {
+                row.style.display = 'block';
+                sel.innerHTML = servers.filter(s => s.enabled).map(s =>
+                    `<option value="${s.key}">${s.label}</option>`
+                ).join('');
+                sel.value = _newSessionServer;
+            } else {
+                row.style.display = 'none';
+                _newSessionServer = 'local';
+            }
+        }
+
+        function onNewSessionServerChange() {
+            const sel = document.getElementById('new-session-server');
+            _newSessionServer = sel.value;
+            // Load config from selected server
+            const cached = _serverConfigs[_newSessionServer];
+            if (cached) {
+                allowedCommands = cached.allowed_commands || [];
+                populateCommandSelect();
+                browseTo('~', _newSessionServer);
+            } else {
+                fetchConfig(_newSessionServer);
+            }
+        }
+
         const _SAFE_NAME_RE = /^[a-zA-Z0-9][a-zA-Z0-9 _.~-]{0,63}$/;
 
         function validateNewSession() {
@@ -1788,7 +2375,9 @@
             const nameInput = document.getElementById('new-name');
             const nameError = document.getElementById('name-error');
             const btn = document.getElementById('run-btn');
-            const nameTaken = name && sessions.some(s => s.name === name);
+            // Check name against sessions on the target server
+            const serverSessions = sessions.filter(s => s._server === _newSessionServer);
+            const nameTaken = name && serverSessions.some(s => s.name === name);
             const nameInvalid = name && !_SAFE_NAME_RE.test(name);
             nameError.textContent = nameTaken ? 'Name already taken' : nameInvalid ? 'Only letters, numbers, hyphens, underscores' : '';
             nameError.style.display = (nameTaken || nameInvalid) ? 'block' : 'none';
@@ -1800,6 +2389,7 @@
             const dialog = document.getElementById('new-session-dialog');
             dialog.classList.toggle('open');
             if (dialog.classList.contains('open')) {
+                updateServerSelectorVisibility();
                 document.getElementById('new-name').focus();
                 validateNewSession();
             }
@@ -1812,7 +2402,7 @@
             if (!name || !command) return;
 
             try {
-                const resp = await fetch('/sessions/run', {
+                const resp = await fetch(serverUrl(_newSessionServer, '/sessions/run'), {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ name, command, cwd }),
@@ -1820,8 +2410,9 @@
                 if (resp.ok) {
                     document.getElementById('new-name').value = '';
                     document.getElementById('new-session-dialog').classList.remove('open');
-                    await fetchSessions();
-                    openSession(name, name);
+                    await fetchAllSessions();
+                    const cid = compoundId(_newSessionServer, name);
+                    openSession(cid, name);
                 } else {
                     const err = await resp.json();
                     alert(err.detail || 'Failed to create session');
@@ -1850,14 +2441,15 @@
             });
         }
 
-        async function killSession(id) {
-            const session = sessions.find(s => s.id === id);
+        async function killSession(cid) {
+            const { server, sessionId } = parseCompoundId(cid);
+            const session = sessions.find(s => s._compoundId === cid);
             const label = session ? session.name : 'this session';
             if (!await showConfirm(`Stop "${label}"? This will terminate the process.`)) return;
             try {
-                await fetch(`/sessions/${id}`, { method: 'DELETE' });
-                closePanel(id);
-                await fetchSessions();
+                await fetch(serverUrl(server, `/sessions/${sessionId}`), { method: 'DELETE' });
+                closePanel(cid);
+                await fetchAllSessions();
             } catch (e) {}
         }
 
@@ -1951,6 +2543,9 @@
         }
 
         // --- Init ---
+        // Load server registry from localStorage
+        loadServers();
+
         // On mobile, open the sidebar drawer on load
         if (window.innerWidth <= 700) {
             document.getElementById('sidebar').classList.add('open');
@@ -1964,9 +2559,12 @@
 
         document.getElementById('new-name').addEventListener('input', validateNewSession);
 
-        fetchConfig();
-        fetchSessions();
-        setInterval(fetchSessions, 3000);
+        // Fetch config for all enabled servers
+        servers.filter(s => s.enabled).forEach(s => fetchConfig(s.key));
+
+        // Start polling sessions from all servers
+        fetchAllSessions();
+        setInterval(fetchAllSessions, 3000);
     </script>
 </body>
 </html>
