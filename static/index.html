@@ -2345,6 +2345,17 @@
                 const resp = await fetch('/info');
                 const info = await resp.json();
                 if (info.port) PORT = info.port;
+
+                // Update local server label to real hostname
+                if (info.hostname) {
+                    const local = servers.find(s => s.key === 'local');
+                    if (local) {
+                        local.label = '\u2605 ' + info.hostname;
+                        saveServers();
+                        renderSessionList();
+                    }
+                }
+
                 let html = '<div style="margin-bottom:4px;font-weight:500;color:#a0a0d0;">This server</div>';
                 html += `<div>Hostname: ${escHtml(info.hostname)}</div>`;
                 if (info.tailscale_name) {
@@ -2869,7 +2880,8 @@
 
         document.getElementById('new-name').addEventListener('input', validateNewSession);
 
-        // Fetch config for all enabled servers
+        // Fetch local server info (hostname) and config for all enabled servers
+        fetchSelfInfo();
         servers.filter(s => s.enabled).forEach(s => fetchConfig(s.key));
 
         // Start polling sessions from all servers
