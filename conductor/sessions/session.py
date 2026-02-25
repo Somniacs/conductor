@@ -1,10 +1,14 @@
 import asyncio
 import os
+import sys
+import threading
 import time
 from typing import Set
 
 from conductor.proxy.pty_wrapper import PTYProcess
 from conductor.utils.config import BUFFER_MAX_BYTES
+
+_IS_WIN = sys.platform == "win32"
 
 
 class Session:
@@ -23,6 +27,7 @@ class Session:
         self.start_time: float | None = None
         self._monitor_task: asyncio.Task | None = None
         self._on_exit = on_exit
+        self._reader_thread: threading.Thread | None = None
 
     async def start(self):
         self.pty.spawn()
@@ -30,9 +35,22 @@ class Session:
         self.start_time = time.time()
         self.status = "running"
 
-        loop = asyncio.get_event_loop()
-        loop.add_reader(self.pty.master_fd, self._on_readable)
+        if _IS_WIN:
+            # Windows: ConPTY doesn't expose a file descriptor, so we
+            # read in a background thread and push data to the event loop.
+            self._loop = asyncio.get_event_loop()
+            self._reader_thread = threading.Thread(
+                target=self._win_read_loop, daemon=True
+            )
+            self._reader_thread.start()
+        else:
+            # Unix: register the PTY master fd with the event loop.
+            loop = asyncio.get_event_loop()
+            loop.add_reader(self.pty.master_fd, self._on_readable)
+
         self._monitor_task = asyncio.create_task(self._monitor_process())
+
+    # -- Unix reader (event-loop based) ------------------------------------
 
     def _on_readable(self):
         try:
@@ -42,6 +60,25 @@ class Session:
                 self._broadcast(data)
         except OSError:
             pass
+
+    # -- Windows reader (thread-based) -------------------------------------
+
+    def _win_read_loop(self):
+        """Background thread that reads from ConPTY and feeds the event loop."""
+        while not self.pty.closed:
+            try:
+                data = self.pty.read()
+                if data:
+                    self._loop.call_soon_threadsafe(self._append_buffer, data)
+                    self._loop.call_soon_threadsafe(self._broadcast, data)
+                else:
+                    time.sleep(0.01)
+            except OSError:
+                break
+            except Exception:
+                break
+
+    # -- Buffer & broadcast ------------------------------------------------
 
     def _append_buffer(self, data: bytes):
         self.buffer.extend(data)
@@ -88,10 +125,13 @@ class Session:
         while self.pty.poll() is None:
             await asyncio.sleep(0.5)
         self.status = "exited"
-        try:
-            asyncio.get_event_loop().remove_reader(self.pty.master_fd)
-        except Exception:
-            pass
+
+        if not _IS_WIN:
+            try:
+                asyncio.get_event_loop().remove_reader(self.pty.master_fd)
+            except Exception:
+                pass
+
         self._broadcast(b"\r\n[Process exited]\r\n")
         self._broadcast_close()
         self.pty.close()
@@ -101,11 +141,13 @@ class Session:
     async def kill(self):
         self.pty.kill()
         self.status = "killed"
-        try:
-            asyncio.get_event_loop().remove_reader(self.pty.master_fd)
-        except Exception:
-            pass
-        # Signal all subscribers to disconnect
+
+        if not _IS_WIN:
+            try:
+                asyncio.get_event_loop().remove_reader(self.pty.master_fd)
+            except Exception:
+                pass
+
         self._broadcast_close()
 
     async def cleanup(self):

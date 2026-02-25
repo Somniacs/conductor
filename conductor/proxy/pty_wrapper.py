@@ -1,85 +1,222 @@
-import fcntl
+"""Platform-aware PTY wrapper.
+
+Unix: uses pty.openpty() + subprocess.Popen
+Windows: uses pywinpty (ConPTY) — requires Windows 10 Build 1809+
+"""
+
 import os
-import pty
 import shlex
-import signal
-import struct
 import subprocess
-import termios
+import sys
 
 
-class PTYProcess:
-    """Wraps a subprocess in a pseudo-terminal."""
+_IS_WIN = sys.platform == "win32"
+
+
+class BasePTYProcess:
+    """Common interface for PTY wrappers on all platforms."""
 
     def __init__(self, command: str, cwd: str | None = None):
         self.command = command
         self.cwd = cwd
-        self.master_fd: int = -1
-        self.process: subprocess.Popen | None = None
         self.closed = False
 
-    def spawn(self, rows: int = 24, cols: int = 80) -> int:
-        master_fd, slave_fd = pty.openpty()
+    def spawn(self, rows: int = 24, cols: int = 80) -> None:
+        raise NotImplementedError
 
-        # Set terminal size
-        winsize = struct.pack("HHHH", rows, cols, 0, 0)
-        fcntl.ioctl(slave_fd, termios.TIOCSWINSZ, winsize)
+    def read(self) -> bytes:
+        raise NotImplementedError
 
-        args = shlex.split(self.command)
-        env = os.environ.copy()
-        env["TERM"] = "xterm-256color"
+    def write(self, data: bytes) -> None:
+        raise NotImplementedError
 
-        # Clean env so spawned processes don't think they're nested
-        for key in list(env):
-            if key.startswith("CLAUDE"):
-                del env[key]
+    def resize(self, rows: int, cols: int) -> None:
+        raise NotImplementedError
 
-        self.process = subprocess.Popen(
-            args,
-            stdin=slave_fd,
-            stdout=slave_fd,
-            stderr=slave_fd,
-            cwd=self.cwd,
-            preexec_fn=os.setsid,
-            env=env,
-        )
-
-        os.close(slave_fd)
-        self.master_fd = master_fd
-        os.set_blocking(self.master_fd, False)
-
-        return self.master_fd
-
-    def write(self, data: bytes):
-        if self.master_fd >= 0 and not self.closed:
-            os.write(self.master_fd, data)
-
-    def resize(self, rows: int, cols: int):
-        if self.master_fd >= 0 and not self.closed:
-            winsize = struct.pack("HHHH", rows, cols, 0, 0)
-            fcntl.ioctl(self.master_fd, termios.TIOCSWINSZ, winsize)
-
-    def kill(self):
-        if self.process and self.process.poll() is None:
-            try:
-                os.killpg(os.getpgid(self.process.pid), signal.SIGTERM)
-            except ProcessLookupError:
-                pass
+    def kill(self) -> None:
+        raise NotImplementedError
 
     def poll(self) -> int | None:
-        if self.process:
-            return self.process.poll()
-        return None
+        raise NotImplementedError
 
-    def close(self):
-        if not self.closed:
-            self.closed = True
-            try:
-                os.close(self.master_fd)
-            except OSError:
-                pass
-            self.kill()
+    def close(self) -> None:
+        raise NotImplementedError
 
     @property
     def pid(self) -> int | None:
-        return self.process.pid if self.process else None
+        raise NotImplementedError
+
+    # Unix PTY exposes a file descriptor for async I/O; Windows uses a
+    # different mechanism (thread-based read loop).  This attribute is
+    # only valid on Unix.
+    master_fd: int = -1
+
+
+# ---------------------------------------------------------------------------
+# Unix implementation
+# ---------------------------------------------------------------------------
+
+if not _IS_WIN:
+    import fcntl
+    import pty
+    import signal
+    import struct
+    import termios
+
+    class UnixPTYProcess(BasePTYProcess):
+        """Wraps a subprocess in a Unix pseudo-terminal."""
+
+        def __init__(self, command: str, cwd: str | None = None):
+            super().__init__(command, cwd)
+            self.master_fd: int = -1
+            self.process: subprocess.Popen | None = None
+
+        def spawn(self, rows: int = 24, cols: int = 80) -> None:
+            master_fd, slave_fd = pty.openpty()
+
+            winsize = struct.pack("HHHH", rows, cols, 0, 0)
+            fcntl.ioctl(slave_fd, termios.TIOCSWINSZ, winsize)
+
+            args = shlex.split(self.command)
+            env = os.environ.copy()
+            env["TERM"] = "xterm-256color"
+            for key in list(env):
+                if key.startswith("CLAUDE"):
+                    del env[key]
+
+            self.process = subprocess.Popen(
+                args,
+                stdin=slave_fd,
+                stdout=slave_fd,
+                stderr=slave_fd,
+                cwd=self.cwd,
+                preexec_fn=os.setsid,
+                env=env,
+            )
+
+            os.close(slave_fd)
+            self.master_fd = master_fd
+            os.set_blocking(self.master_fd, False)
+
+        def read(self) -> bytes:
+            return os.read(self.master_fd, 65536)
+
+        def write(self, data: bytes) -> None:
+            if self.master_fd >= 0 and not self.closed:
+                os.write(self.master_fd, data)
+
+        def resize(self, rows: int, cols: int) -> None:
+            if self.master_fd >= 0 and not self.closed:
+                winsize = struct.pack("HHHH", rows, cols, 0, 0)
+                fcntl.ioctl(self.master_fd, termios.TIOCSWINSZ, winsize)
+
+        def kill(self) -> None:
+            if self.process and self.process.poll() is None:
+                try:
+                    os.killpg(os.getpgid(self.process.pid), signal.SIGTERM)
+                except ProcessLookupError:
+                    pass
+
+        def poll(self) -> int | None:
+            if self.process:
+                return self.process.poll()
+            return None
+
+        def close(self) -> None:
+            if not self.closed:
+                self.closed = True
+                try:
+                    os.close(self.master_fd)
+                except OSError:
+                    pass
+                self.kill()
+
+        @property
+        def pid(self) -> int | None:
+            return self.process.pid if self.process else None
+
+
+# ---------------------------------------------------------------------------
+# Windows implementation (ConPTY via pywinpty)
+# ---------------------------------------------------------------------------
+
+else:
+    from winpty import PTY as WinPTY  # type: ignore[import-not-found]
+
+    class WindowsPTYProcess(BasePTYProcess):
+        """Wraps a subprocess in a Windows ConPTY pseudo-terminal."""
+
+        def __init__(self, command: str, cwd: str | None = None):
+            super().__init__(command, cwd)
+            self._pty: WinPTY | None = None
+            self._pid: int | None = None
+
+        def spawn(self, rows: int = 24, cols: int = 80) -> None:
+            self._pty = WinPTY(cols, rows)
+
+            env = os.environ.copy()
+            env["TERM"] = "xterm-256color"
+            for key in list(env):
+                if key.startswith("CLAUDE"):
+                    del env[key]
+
+            # pywinpty expects the full command line as bytes or str
+            cmd = self.command
+            cwd = self.cwd or os.getcwd()
+            self._pty.spawn(cmd.encode() if isinstance(cmd, str) else cmd, cwd=cwd.encode() if isinstance(cwd, str) else cwd, env=env)
+
+            # pywinpty doesn't directly expose PID in all versions;
+            # we store it if available
+            self._pid = getattr(self._pty, "pid", None)
+
+        def read(self) -> bytes:
+            if self._pty and not self.closed:
+                data = self._pty.read()
+                if isinstance(data, str):
+                    return data.encode("utf-8", errors="replace")
+                return data or b""
+            return b""
+
+        def write(self, data: bytes) -> None:
+            if self._pty and not self.closed:
+                self._pty.write(data)
+
+        def resize(self, rows: int, cols: int) -> None:
+            if self._pty and not self.closed:
+                self._pty.set_size(cols, rows)
+
+        def kill(self) -> None:
+            if self._pid:
+                try:
+                    subprocess.run(
+                        ["taskkill", "/F", "/T", "/PID", str(self._pid)],
+                        capture_output=True,
+                    )
+                except Exception:
+                    pass
+
+        def poll(self) -> int | None:
+            if self._pty:
+                return None if self._pty.isalive() else 0
+            return None
+
+        def close(self) -> None:
+            if not self.closed:
+                self.closed = True
+                self.kill()
+                self._pty = None
+
+        @property
+        def pid(self) -> int | None:
+            return self._pid
+
+
+# ---------------------------------------------------------------------------
+# Factory — returns the right class for the current platform
+# ---------------------------------------------------------------------------
+
+def PTYProcess(command: str, cwd: str | None = None) -> BasePTYProcess:
+    """Create a platform-appropriate PTY wrapper."""
+    if _IS_WIN:
+        return WindowsPTYProcess(command, cwd=cwd)
+    return UnixPTYProcess(command, cwd=cwd)

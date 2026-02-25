@@ -10,7 +10,7 @@ You start a few Claude Code sessions on your workstation. You walk away. On the 
 You at your desk                          You on the couch
 ─────────────────                         ──────────────────
 conductor run claude research             Open phone browser
-conductor run claude coding               → http://my-machine:7777
+conductor run claude coding               → http://100.x.x.x:7777
 
 Leave your desk.                          Select "research"
                                           Send a prompt
@@ -20,26 +20,25 @@ Everything still running.                 Close phone. Reconnect anytime.
 
 ## Prerequisites
 
-- **Python 3.10+** — check with `python3 --version`
+- **Python 3.10+** — check with `python3 --version` (or `py --version` on Windows)
 - **Git** — to clone the repository
 - **Tailscale** (optional, for remote access) — install on your workstation and your phone/tablet, sign in with the same account on both. See [tailscale.com](https://tailscale.com/)
 
 ## Install
 
-### Option A — From release (recommended)
+### Linux / [macOS](docs/MACOS.md)
 
-Download the latest release from GitHub, extract, and run the install script:
+#### Option A — From release (recommended)
 
 ```bash
-# Download and extract
 curl -sL https://github.com/somniacs/conductor/releases/latest/download/conductor.tar.gz | tar xz
 cd conductor
 ./install.sh
 ```
 
-Or download manually from the [Releases](https://github.com/somniacs/conductor/releases) page, extract the archive, and run `./install.sh` inside.
+Or download from the [Releases](https://github.com/somniacs/conductor/releases) page and run `./install.sh`.
 
-### Option B — From source
+#### Option B — From source
 
 ```bash
 git clone https://github.com/somniacs/conductor.git
@@ -47,13 +46,36 @@ cd conductor
 ./install.sh
 ```
 
-The install script checks for Python 3.10+, installs [pipx](https://pipx.pypa.io/) if needed, and installs Conductor system-wide. After it finishes, the `conductor` command is available globally from any terminal.
-
 If the command is not found after install, restart your terminal or run `source ~/.bashrc` (or `~/.zshrc`).
+
+### [Windows](docs/WINDOWS.md)
+
+Requires Windows 10 Build 1809+ or Windows 11 (for ConPTY support).
+
+#### Option A — From release (recommended)
+
+Download `conductor.zip` from the [Releases](https://github.com/somniacs/conductor/releases) page, extract, and run the installer:
+
+```powershell
+Expand-Archive conductor.zip -DestinationPath .
+cd conductor
+powershell -ExecutionPolicy Bypass -File install.ps1
+```
+
+#### Option B — From source
+
+```powershell
+git clone https://github.com/somniacs/conductor.git
+cd conductor
+powershell -ExecutionPolicy Bypass -File install.ps1
+```
+
+The install script checks for Python 3.10+, installs [pipx](https://pipx.pypa.io/) if needed, and installs Conductor system-wide. After it finishes, the `conductor` command is available from any terminal.
 
 <details>
 <summary>Manual install (without install script)</summary>
 
+**Linux / macOS:**
 ```bash
 git clone https://github.com/somniacs/conductor.git
 cd conductor
@@ -62,11 +84,13 @@ source .venv/bin/activate
 pip install -e .
 ```
 
-This puts `conductor` inside `.venv/bin/`. You need to activate the venv each time, or add it to your PATH:
-
-```bash
-# Add to ~/.bashrc or ~/.zshrc:
-export PATH="$HOME/path/to/conductor/.venv/bin:$PATH"
+**Windows:**
+```powershell
+git clone https://github.com/somniacs/conductor.git
+cd conductor
+python -m venv .venv
+.venv\Scripts\activate
+pip install -e .
 ```
 
 </details>
@@ -84,11 +108,11 @@ conductor run claude coding
 conductor run claude review
 ```
 
-Open `http://127.0.0.1:7777` in your browser. That's it for local use.
+Open the dashboard in your browser — locally at `http://127.0.0.1:7777`, or from any device on your Tailscale network at `http://100.x.x.x:7777` (your Tailscale IP).
 
 ### Remote access from phone/tablet
 
-This requires Tailscale on both your workstation and your phone/tablet (see Prerequisites).
+This requires [Tailscale](https://tailscale.com/) on both your workstation and your phone/tablet.
 
 **1. Start Conductor on your workstation** (if not already running):
 
@@ -106,14 +130,14 @@ conductor qr
 
 Option B — use the dashboard's **Link Device** feature (hamburger menu → Link Device).
 
-Option C — find your Tailscale hostname and type the URL:
+Option C — find your Tailscale IP and type the URL:
 
 ```bash
-tailscale status
-# 100.64.0.1    my-machine    linux   -
+tailscale ip -4
+# 100.x.x.x
 ```
 
-Then open `http://my-machine:7777` on your phone.
+Then open `http://100.x.x.x:7777` on your phone.
 
 Done. Full terminal access to all sessions from your phone — type prompts, view output, create or kill sessions.
 
@@ -137,7 +161,7 @@ If you're running Conductor on a shared network without Tailscale, anyone on tha
 
 ## Dashboard
 
-The web dashboard at `http://127.0.0.1:7777` provides:
+The web dashboard provides:
 
 - **Session sidebar** — all sessions with live status, focus tracking
 - **Terminal panels** — full xterm.js rendering with colors, cursor, scrollback
@@ -173,7 +197,7 @@ The web dashboard at `http://127.0.0.1:7777` provides:
 
 ## API
 
-All endpoints on `127.0.0.1:7777`.
+Default port `7777`. All endpoints relative to your host.
 
 | Method | Endpoint | Description |
 |---|---|---|
@@ -194,7 +218,7 @@ Terminal Process
  Conductor Session     ← captures output, accepts input, survives disconnects
       │
 ┌──────────────────┐
-│ Conductor Server │   ← 127.0.0.1:7777
+│ Conductor Server │   ← 0.0.0.0:7777
 └──────────────────┘
       │
   WebSocket API        ← bidirectional: output streams out, keystrokes stream in
@@ -219,7 +243,8 @@ conductor/
 ├── cli/main.py               # Click CLI
 ├── static/index.html          # Dashboard (single-file HTML/JS/CSS)
 ├── main.py                    # Entry point
-├── install.sh                 # One-step installer (pipx)
+├── install.sh                 # One-step installer (Linux/macOS)
+├── install.ps1                # One-step installer (Windows)
 ├── pyproject.toml
 └── LICENSE                    # MIT
 ```
@@ -230,10 +255,10 @@ conductor/
 |---|---|
 | Linux | Supported |
 | macOS | Supported — [setup guide](docs/MACOS.md) |
-| Windows | Not yet — [roadmap & WSL workaround](docs/WINDOWS.md) |
+| Windows | Supported (10 Build 1809+) — [setup guide](docs/WINDOWS.md) |
 
 ## Requirements
 
 - Python 3.10+
-- Linux or macOS (PTY required)
-- Dependencies: FastAPI, uvicorn, click, httpx, websockets, qrcode
+- Linux, macOS, or Windows 10+ (PTY / ConPTY required)
+- Dependencies: FastAPI, uvicorn, click, httpx, websockets, qrcode, pywinpty (Windows only)

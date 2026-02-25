@@ -140,6 +140,14 @@ def attach(name):
 
 def _attach_session(session_name: str):
     """Attach terminal to a session via WebSocket."""
+    if sys.platform == "win32":
+        _attach_session_win(session_name)
+    else:
+        _attach_session_unix(session_name)
+
+
+def _attach_session_unix(session_name: str):
+    """Unix attach — raw terminal with select-based I/O."""
     import select
     import termios
     import threading
@@ -152,11 +160,9 @@ def _attach_session(session_name: str):
     old_settings = termios.tcgetattr(stdin_fd)
     stop = threading.Event()
 
-    # Pipe to wake up the stdin select when WebSocket closes
     wake_r, wake_w = os.pipe()
 
     def ws_reader(ws):
-        """Read from WebSocket, write to stdout."""
         try:
             for message in ws:
                 if isinstance(message, bytes) and message:
@@ -169,7 +175,7 @@ def _attach_session(session_name: str):
             pass
         finally:
             stop.set()
-            os.write(wake_w, b"\x00")  # wake up select
+            os.write(wake_w, b"\x00")
 
     try:
         tty.setraw(stdin_fd)
@@ -206,6 +212,57 @@ def _attach_session(session_name: str):
         pass
     finally:
         termios.tcsetattr(stdin_fd, termios.TCSADRAIN, old_settings)
+        click.echo("\nDetached.")
+
+
+def _attach_session_win(session_name: str):
+    """Windows attach — msvcrt-based console I/O with threading."""
+    import msvcrt
+    import threading
+    import websockets.sync.client as ws_sync
+
+    ws_url = BASE_URL.replace("http://", "ws://") + f"/sessions/{session_name}/stream"
+    stop = threading.Event()
+
+    def ws_reader(ws):
+        try:
+            for message in ws:
+                if isinstance(message, bytes) and message:
+                    sys.stdout.buffer.write(message)
+                    sys.stdout.buffer.flush()
+                elif isinstance(message, str) and message:
+                    sys.stdout.write(message)
+                    sys.stdout.flush()
+        except Exception:
+            pass
+        finally:
+            stop.set()
+
+    try:
+        ws = ws_sync.connect(ws_url)
+        reader_thread = threading.Thread(target=ws_reader, args=(ws,), daemon=True)
+        reader_thread.start()
+
+        try:
+            while not stop.is_set():
+                if msvcrt.kbhit():
+                    ch = msvcrt.getwch()
+                    if ch == "\x1d":  # Ctrl+]
+                        break
+                    try:
+                        ws.send(ch.encode("utf-8"))
+                    except Exception:
+                        break
+                else:
+                    stop.wait(timeout=0.05)
+        finally:
+            try:
+                ws.close()
+            except Exception:
+                pass
+    except KeyboardInterrupt:
+        pass
+    finally:
         click.echo("\nDetached.")
 
 
