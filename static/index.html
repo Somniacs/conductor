@@ -31,7 +31,6 @@
             top: 0; left: 0; right: 0; bottom: 0;
             overflow: hidden;
             overscroll-behavior: none;
-            touch-action: none;
         }
         body {
             font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
@@ -707,7 +706,6 @@
         .terminal-wrapper {
             width: 100%;
             height: 100%;
-            touch-action: none;
             /* min-width is set dynamically from JS after measuring char width */
         }
 
@@ -2029,19 +2027,30 @@
         // With `interactive-widget=resizes-visual`, window.innerHeight stays
         // constant while visualViewport.height shrinks when the keyboard opens.
         // Detection uses (innerHeight - vv.height) only — stable across scroll.
+        // Hide is debounced so switching panels doesn't flash the bar away.
+        let _ekHideTimer = null;
         function _updateExtraKeysPosition() {
             const bar = document.getElementById('extra-keys-bar');
             if (!bar || !window.visualViewport) return;
             const vv = window.visualViewport;
-            // Detect keyboard: ignore offsetTop so scroll doesn't affect detection
             const keyboardOpen = (window.innerHeight - vv.height) > 100;
             const bottomOffset = Math.max(0, Math.round(window.innerHeight - vv.height - vv.offsetTop));
             if (keyboardOpen) {
+                if (_ekHideTimer) { clearTimeout(_ekHideTimer); _ekHideTimer = null; }
                 bar.classList.add('visible');
                 bar.style.bottom = bottomOffset + 'px';
                 _applyEkState();
-            } else {
-                bar.classList.remove('visible');
+            } else if (bar.classList.contains('visible')) {
+                // Delay hide — keyboard may reopen immediately on panel switch
+                if (!_ekHideTimer) {
+                    _ekHideTimer = setTimeout(() => {
+                        _ekHideTimer = null;
+                        // Re-check: keyboard might have reopened during the delay
+                        const vv2 = window.visualViewport;
+                        if (vv2 && (window.innerHeight - vv2.height) > 100) return;
+                        bar.classList.remove('visible');
+                    }, 400);
+                }
             }
         }
         if (window.visualViewport) {
