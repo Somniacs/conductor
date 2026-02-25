@@ -1818,30 +1818,67 @@
             // xterm.js reserves one-finger for selection, but on phones
             // users expect one-finger scroll.  We intercept touch on the
             // xterm-screen and translate vertical movement into scrollTop
-            // changes on the xterm-viewport.
+            // changes on the xterm-viewport.  Updates are RAF-throttled
+            // and momentum is applied on release for native feel.
             const screen = target.querySelector('.xterm-screen');
             const viewport = target.querySelector('.xterm-viewport');
             if (screen && viewport && 'ontouchstart' in window) {
                 let touchY = null;
                 let scrolling = false;
+                let pendingDy = 0;
+                let raf = null;
+                let velocity = 0;
+                let lastTime = 0;
+                let momentumRaf = null;
+
+                function applyScroll() {
+                    raf = null;
+                    if (pendingDy) {
+                        viewport.scrollTop += pendingDy;
+                        pendingDy = 0;
+                    }
+                }
+
+                function momentumStep() {
+                    velocity *= 0.92;
+                    if (Math.abs(velocity) < 0.5) { momentumRaf = null; return; }
+                    viewport.scrollTop += velocity;
+                    momentumRaf = requestAnimationFrame(momentumStep);
+                }
+
                 screen.addEventListener('touchstart', (e) => {
+                    if (momentumRaf) { cancelAnimationFrame(momentumRaf); momentumRaf = null; }
                     if (e.touches.length === 1) {
                         touchY = e.touches[0].clientY;
+                        lastTime = e.timeStamp;
+                        velocity = 0;
                         scrolling = false;
                     }
                 }, { passive: true });
+
                 screen.addEventListener('touchmove', (e) => {
                     if (e.touches.length === 1 && touchY !== null) {
                         const dy = touchY - e.touches[0].clientY;
                         if (!scrolling && Math.abs(dy) > 5) scrolling = true;
                         if (scrolling) {
                             e.preventDefault();
-                            viewport.scrollTop += dy;
+                            const dt = e.timeStamp - lastTime;
+                            if (dt > 0) velocity = dy / dt * 16; // px per frame
+                            lastTime = e.timeStamp;
                             touchY = e.touches[0].clientY;
+                            pendingDy += dy;
+                            if (!raf) raf = requestAnimationFrame(applyScroll);
                         }
                     }
                 }, { passive: false });
-                screen.addEventListener('touchend', () => { touchY = null; scrolling = false; }, { passive: true });
+
+                screen.addEventListener('touchend', () => {
+                    touchY = null;
+                    scrolling = false;
+                    if (Math.abs(velocity) > 1 && !momentumRaf) {
+                        momentumRaf = requestAnimationFrame(momentumStep);
+                    }
+                }, { passive: true });
             }
 
             if (panel.fitAddon) {
