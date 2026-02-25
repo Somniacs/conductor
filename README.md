@@ -17,7 +17,7 @@ conductor run myagent api    Sit on the couch.          Type a response. Done.
                                                       Agent keeps going.
 ```
 
-Sessions survive disconnects. Close the browser, reopen it later — everything is still there.
+Sessions survive disconnects. Close the browser, reopen it later — everything is still there. When an agent session exits with a resume token (e.g. Claude Code's `--resume`), Conductor captures it and lets you resume the conversation later — even after a reboot.
 
 ## How It Works
 
@@ -187,6 +187,14 @@ The dashboard detects the disconnect within seconds. Sessions from that machine 
 
 Added machines are saved in your browser's localStorage. Refresh the page or close and reopen — your server list is preserved. Each browser/device maintains its own list independently.
 
+### Session resume
+
+When an agent exits and prints a resume token — like Claude Code's `--resume <session-id>` — Conductor captures it from the terminal output automatically. The session stays in the sidebar as **resumable** with a play button. Click it and Conductor starts a new session with the original command plus the `--resume` flag, picking up where you left off.
+
+Resume tokens are persisted to disk (`~/.conductor/sessions/`), so they survive server restarts and machine reboots. Power-cycle your laptop, start Conductor again, and the resumable session is still there.
+
+If you don't need a resumable session, dismiss it with the **×** button — a confirmation dialog prevents accidental deletion.
+
 **Creating sessions on remote machines:**
 
 Click **+ New** in the sidebar. When multiple machines are connected, a **Machine** dropdown appears at the top of the form. Select the target machine, pick a command and directory (fetched from that machine's config), and click Run. The session starts on the remote machine and opens in a terminal panel.
@@ -272,6 +280,7 @@ The web dashboard provides:
 - **Split view** — place panels Left, Right, Top, or Bottom with arbitrary nesting and draggable dividers
 - **Keyboard input** — type directly into the terminal
 - **New session** — create sessions on any connected machine with directory picker
+- **Session resume** — exited sessions with a resume token show a play button; resume with one click
 - **Kill confirmation** — stop sessions with a confirmation dialog
 - **Color themes** — 6 presets per panel: Default, Dark, Mid, Bright, Bernstein, Green (retro CRT)
 - **Font size controls** — per-panel `+` / `−` buttons, adaptive defaults for desktop and mobile
@@ -311,7 +320,8 @@ Default port `7777`. All endpoints relative to your host.
 | `POST` | `/sessions/run` | Create session (`{"name": "...", "command": "..."}`) |
 | `POST` | `/sessions/{id}/input` | Send input (`{"text": "..."}`) |
 | `POST` | `/sessions/{id}/resize` | Resize PTY (`{"rows": 24, "cols": 80}`) |
-| `DELETE` | `/sessions/{id}` | Kill session |
+| `POST` | `/sessions/{id}/resume` | Resume an exited session with a stored resume token |
+| `DELETE` | `/sessions/{id}` | Kill session (or dismiss a resumable session) |
 | `WS` | `/sessions/{id}/stream` | Bidirectional WebSocket — output out, keystrokes in |
 | `GET` | `/info` | Server identity (hostname, port, Tailscale IP/name) |
 | `GET` | `/tailscale/peers` | Online Tailscale peers for device picker |

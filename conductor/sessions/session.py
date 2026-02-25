@@ -15,10 +15,27 @@
 
 import asyncio
 import os
+import re
 import sys
 import threading
 import time
 from typing import Set
+
+# Regex to strip ANSI escape sequences from terminal output.
+_ANSI_RE = re.compile(
+    r'\x1b'           # ESC
+    r'(?:'
+    r'\[[0-9;]*[a-zA-Z]'   # CSI sequences  (e.g. \e[31m)
+    r'|\][^\x07]*\x07'     # OSC sequences  (e.g. \e]0;title\a)
+    r'|[()][AB012]'        # charset select
+    r'|[>=<]'              # keypad modes
+    r'|#[0-9]'             # line attrs
+    r'|.'                  # two-char sequences
+    r')'
+)
+
+# Pattern to find `--resume <id>` in Claude Code exit output.
+_RESUME_RE = re.compile(r'--resume\s+(\S+)')
 
 from conductor.proxy.pty_wrapper import PTYProcess
 from conductor.utils.config import BUFFER_MAX_BYTES
@@ -40,6 +57,7 @@ class Session:
         self.status = "starting"
         self.pid: int | None = None
         self.start_time: float | None = None
+        self.resume_id: str | None = None
         self._monitor_task: asyncio.Task | None = None
         self._on_exit = on_exit
         self._reader_thread: threading.Thread | None = None
@@ -136,6 +154,18 @@ class Session:
     def resize(self, rows: int, cols: int):
         self.pty.resize(rows, cols)
 
+    def _extract_resume_id(self):
+        """Scan the tail of the terminal buffer for a --resume <id> token."""
+        try:
+            # Only inspect the last 4 KB — the resume line is near the end.
+            tail = bytes(self.buffer[-4096:]).decode("utf-8", errors="replace")
+            clean = _ANSI_RE.sub("", tail)
+            match = _RESUME_RE.search(clean)
+            if match:
+                self.resume_id = match.group(1)
+        except Exception:
+            pass
+
     async def _monitor_process(self):
         while self.pty.poll() is None:
             await asyncio.sleep(0.5)
@@ -147,6 +177,7 @@ class Session:
             except Exception:
                 pass
 
+        self._extract_resume_id()
         self._broadcast(b"\r\n[Process exited]\r\n")
         self._broadcast_close()
         self.pty.close()
@@ -175,7 +206,7 @@ class Session:
         self.pty.close()
 
     def to_dict(self) -> dict:
-        return {
+        d = {
             "id": self.id,
             "name": self.name,
             "command": self.command,
@@ -184,3 +215,6 @@ class Session:
             "start_time": self.start_time,
             "cwd": self.cwd,
         }
+        if self.resume_id:
+            d["resume_id"] = self.resume_id
+        return d

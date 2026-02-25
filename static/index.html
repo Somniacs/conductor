@@ -968,7 +968,7 @@
         <div class="about-box">
             <button class="about-close" onclick="toggleAbout()">&times;</button>
             <h2><span style="font-size:1.4em;vertical-align:middle">♭</span> conductor</h2>
-            <div class="about-version">v0.1.2</div>
+            <div class="about-version">v0.1.3</div>
             <p>Local orchestration layer for interactive terminal processes. Run sessions on your workstation, interact from anywhere.</p>
             <div class="about-section">Built with</div>
             <ul>
@@ -1393,17 +1393,33 @@
             const isOpen = panels.some(p => p.id === cid);
             const isFocused = focusedPanelId === cid;
             const appLabel = getCommandLabel(s.command);
+            const isResumable = s.status === 'exited' && s.resume_id;
             // Escape single quotes in compound ID for onclick
             const cidEsc = cid.replace(/'/g, "\\'");
             const nameEsc = s.name.replace(/'/g, "\\'");
+
+            let actions;
+            if (isResumable) {
+                actions = `
+                    <button onclick="event.stopPropagation();resumeSession('${cidEsc}')" title="Resume session" style="color:#44dd77;">&#9654;</button>
+                    <button onclick="event.stopPropagation();dismissSession('${cidEsc}')" title="Dismiss">&times;</button>
+                `;
+            } else {
+                actions = `<button onclick="event.stopPropagation();killSession('${cidEsc}')" title="Stop">&times;</button>`;
+            }
+
+            const statusBadge = isResumable
+                ? '<span class="session-status exited" style="font-size:9px;margin-left:4px;">resumable</span>'
+                : '';
+
             return `
-                <div class="session-item ${isFocused ? 'focused' : isOpen ? 'open' : ''}" onclick="focusSession('${cidEsc}', '${nameEsc}', event)">
+                <div class="session-item ${isFocused ? 'focused' : isOpen ? 'open' : ''}" ${isResumable ? '' : `onclick="focusSession('${cidEsc}', '${nameEsc}', event)"`}>
                     <div class="session-name">
-                        <div>${escHtml(s.name)}</div>
+                        <div>${escHtml(s.name)}${statusBadge}</div>
                         <div style="font-size:10px;color:#606080;font-weight:400;">${escHtml(appLabel)}</div>
                     </div>
                     <div class="session-actions">
-                        <button onclick="event.stopPropagation();killSession('${cidEsc}')" title="Stop">&times;</button>
+                        ${actions}
                     </div>
                 </div>
             `;
@@ -2587,6 +2603,33 @@
             try {
                 await fetch(serverUrl(server, `/sessions/${sessionId}`), { method: 'DELETE' });
                 closePanel(cid);
+                await fetchAllSessions();
+            } catch (e) {}
+        }
+
+        async function resumeSession(cid) {
+            const { server, sessionId } = parseCompoundId(cid);
+            try {
+                const resp = await fetch(serverUrl(server, `/sessions/${sessionId}/resume`), { method: 'POST' });
+                if (resp.ok) {
+                    await fetchAllSessions();
+                    openSession(cid, sessionId);
+                } else {
+                    const err = await resp.json();
+                    alert(err.detail || 'Failed to resume session');
+                }
+            } catch (e) {
+                alert('Server unreachable');
+            }
+        }
+
+        async function dismissSession(cid) {
+            const { server, sessionId } = parseCompoundId(cid);
+            const session = sessions.find(s => s._compoundId === cid);
+            const label = session ? session.name : 'this session';
+            if (!await showConfirm(`Dismiss "${label}"? The resume token will be lost.`)) return;
+            try {
+                await fetch(serverUrl(server, `/sessions/${sessionId}`), { method: 'DELETE' });
                 await fetchAllSessions();
             } catch (e) {}
         }

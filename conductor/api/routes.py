@@ -227,13 +227,33 @@ async def resize_session(session_id: str, req: ResizeRequest):
     return {"status": "ok"}
 
 
+@router.post("/sessions/{session_id}/resume")
+async def resume_session(session_id: str):
+    """Resume an exited session that has a stored --resume id."""
+    try:
+        session = await registry.resume(session_id)
+        return session.to_dict()
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except FileNotFoundError as e:
+        raise HTTPException(status_code=400, detail=f"Command not found: {e}")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @router.delete("/sessions/{session_id}")
 async def kill_session(session_id: str):
     session = registry.get(session_id)
-    if not session:
-        raise HTTPException(status_code=404, detail="Session not found")
-    await registry.remove(session_id)
-    return {"status": "killed"}
+    if session:
+        await registry.remove(session_id)
+        return {"status": "killed"}
+
+    # Maybe it's a resumable entry — dismiss it.
+    if session_id in registry.resumable:
+        registry.dismiss_resumable(session_id)
+        return {"status": "dismissed"}
+
+    raise HTTPException(status_code=404, detail="Session not found")
 
 
 @router.websocket("/sessions/{session_id}/stream")
