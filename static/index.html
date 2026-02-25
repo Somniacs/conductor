@@ -1814,6 +1814,36 @@
             panel.terminal.open(target);
             panel._termOpened = true;
 
+            // Mobile: one-finger vertical swipe scrolls the terminal.
+            // xterm.js reserves one-finger for selection, but on phones
+            // users expect one-finger scroll.  We intercept touch on the
+            // xterm-screen and translate vertical movement into scrollTop
+            // changes on the xterm-viewport.
+            const screen = target.querySelector('.xterm-screen');
+            const viewport = target.querySelector('.xterm-viewport');
+            if (screen && viewport && 'ontouchstart' in window) {
+                let touchY = null;
+                let scrolling = false;
+                screen.addEventListener('touchstart', (e) => {
+                    if (e.touches.length === 1) {
+                        touchY = e.touches[0].clientY;
+                        scrolling = false;
+                    }
+                }, { passive: true });
+                screen.addEventListener('touchmove', (e) => {
+                    if (e.touches.length === 1 && touchY !== null) {
+                        const dy = touchY - e.touches[0].clientY;
+                        if (!scrolling && Math.abs(dy) > 5) scrolling = true;
+                        if (scrolling) {
+                            e.preventDefault();
+                            viewport.scrollTop += dy;
+                            touchY = e.touches[0].clientY;
+                        }
+                    }
+                }, { passive: false });
+                screen.addEventListener('touchend', () => { touchY = null; scrolling = false; }, { passive: true });
+            }
+
             if (panel.fitAddon) {
                 panel.fitAddon.fit();
 
