@@ -10,6 +10,10 @@ Conductor keeps them moving. It wraps terminal sessions in a lightweight server 
 
 ## What It Looks Like
 
+| Desktop | Mobile | Mobile (keyboard) |
+|---------|--------|--------------------|
+| <a href="data/desktop-split.png"><img src="data/desktop-split.png" alt="Desktop — split view" width="420"></a> | <a href="data/mobile-split.jpg"><img src="data/mobile-split.jpg" alt="Mobile — split view" width="150"></a> | <a href="data/mobile-keyboard.jpg"><img src="data/mobile-keyboard.jpg" alt="Mobile — keyboard" width="150"></a> |
+
 `<agent>` is the command to run. Some examples:
 
 | Agent | Command |
