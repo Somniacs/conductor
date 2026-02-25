@@ -1055,8 +1055,8 @@
                 if (existing.terminal) existing.terminal.focus();
                 return;
             }
-            // If no panels open or on mobile, open directly
-            if (panels.length === 0 || window.innerWidth <= 700) {
+            // If no panels open, open directly
+            if (panels.length === 0) {
                 openSession(id, name, 'right');
                 return;
             }
