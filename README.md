@@ -11,9 +11,9 @@ Conductor keeps them moving. It wraps terminal sessions in a lightweight server 
 ```
 Start agents               Leave your desk            Answer from anywhere
 ─────────────              ───────────────            ────────────────────
-conductor run claude dev   Go to a meeting.           Open dashboard on phone.
-conductor run claude test  Grab coffee.               See all sessions.
-conductor run aider api    Sit on the couch.          Type a response. Done.
+conductor run myagent dev    Go to a meeting.           Open dashboard on phone.
+conductor run myagent test   Grab coffee.               See all sessions.
+conductor run myagent api    Sit on the couch.          Type a response. Done.
                                                       Agent keeps going.
 ```
 
@@ -133,11 +133,11 @@ pip install -e .
 
 ```bash
 # Start one session (server auto-starts in background)
-conductor run claude research
+conductor run myagent research
 
 # Start more
-conductor run claude coding
-conductor run claude review
+conductor run myagent coding
+conductor run myagent review
 ```
 
 Open the dashboard in your browser — locally at `http://127.0.0.1:7777`, or from any device on your Tailscale network at `http://100.x.x.x:7777` (your Tailscale IP).
@@ -150,11 +150,11 @@ Conductor supports connecting to multiple machines from a single dashboard. Each
 
 ```bash
 # On workstation
-conductor run claude research
-conductor run claude coding
+conductor run myagent research
+conductor run myagent coding
 
 # On GPU box (install Conductor there too)
-conductor run claude train
+conductor run myagent train
 ```
 
 **2. Add machines to the dashboard:**
@@ -202,7 +202,7 @@ This requires [Tailscale](https://tailscale.com/) on both your workstation and y
 **1. Start Conductor on your workstation** (if not already running):
 
 ```bash
-conductor run claude research
+conductor run myagent research
 ```
 
 **2. Open on your other device:**
