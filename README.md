@@ -121,13 +121,27 @@ Done. Full terminal access to all sessions from your phone — type prompts, vie
 
 Tailscale creates a private network between your devices using WireGuard. Only your devices can reach the server. No ports exposed to the internet, no passwords, no setup beyond installing Tailscale. Conductor binds to `0.0.0.0` so it's reachable on your Tailscale network without any extra configuration.
 
+## Is It Safe?
+
+Yes. Conductor runs entirely on your machine and does not phone home, create accounts, or expose anything to the public internet.
+
+- **Local only** — the server binds to your machine. Without Tailscale (or another VPN), it is not reachable from outside your local network.
+- **No authentication layer needed** — when using Tailscale, only devices signed into *your* Tailscale account can reach the server. The network itself is the firewall.
+- **No data leaves your machine** — session output stays in an in-memory buffer on localhost. Nothing is logged to external services.
+- **Restricted dashboard commands** — the web dashboard can only launch commands from a predefined allowlist (`config.py`). The CLI is unrestricted, but the browser cannot start arbitrary processes.
+- **No shell injection** — session input is sent through the PTY as keystrokes, not evaluated as shell commands by Conductor itself.
+- **Sanitized session names** — names are validated against a strict allowlist (alphanumeric, hyphens, underscores, max 64 chars) on both the frontend and backend to prevent path traversal or injection via crafted names.
+- **Open source (MIT)** — the entire codebase is a single Python package and a single HTML file. Read it, audit it, fork it.
+
+If you're running Conductor on a shared network without Tailscale, anyone on that network can reach port 7777. In that case, use a firewall rule or bind to `127.0.0.1` instead of `0.0.0.0`.
+
 ## Dashboard
 
 The web dashboard at `http://127.0.0.1:7777` provides:
 
 - **Session sidebar** — all sessions with live status, focus tracking
 - **Terminal panels** — full xterm.js rendering with colors, cursor, scrollback
-- **Split view** — horizontal or vertical, with draggable divider
+- **Split view** — place panels Left, Right, Top, or Bottom with arbitrary nesting and draggable dividers
 - **Keyboard input** — type directly into the terminal
 - **New session** — create sessions from the browser with directory picker
 - **Kill confirmation** — stop sessions with a confirmation dialog
