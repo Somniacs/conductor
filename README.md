@@ -191,6 +191,7 @@ The web dashboard provides:
 | `conductor attach NAME` | Attach to a running session |
 | `conductor list` | List active sessions |
 | `conductor stop NAME` | Stop a session |
+| `conductor shutdown` | Stop the server and all sessions |
 | `conductor restart` | Restart the server (picks up config changes) |
 | `conductor open` | Open the dashboard in the default browser |
 | `conductor qr` | Show QR code (terminal + opens SVG in browser) |

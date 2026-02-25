@@ -326,6 +326,24 @@ def stop_server() -> bool:
 
 
 @cli.command()
+def shutdown():
+    """Stop the Conductor server and all sessions."""
+    if not server_running():
+        click.echo("Server not running.")
+        return
+
+    click.echo("Shutting down server...")
+    stop_server()
+    for _ in range(20):
+        time.sleep(0.25)
+        if not server_running():
+            click.echo("Server stopped.")
+            return
+    click.echo("Server may still be running. Check manually.", err=True)
+    sys.exit(1)
+
+
+@cli.command()
 def restart():
     """Restart the Conductor server (keeps sessions)."""
     if not server_running():

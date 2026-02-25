@@ -2,7 +2,7 @@ from pathlib import Path
 
 HOST = "0.0.0.0"
 PORT = 7777
-BASE_URL = f"http://{HOST}:{PORT}"
+BASE_URL = f"http://127.0.0.1:{PORT}"
 
 CONDUCTOR_DIR = Path.home() / ".conductor"
 SESSIONS_DIR = CONDUCTOR_DIR / "sessions"
