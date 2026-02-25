@@ -11,3 +11,4 @@ venv/
 .env
 *.log
 CLAUDE.md
+.claude/
