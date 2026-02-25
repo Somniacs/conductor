@@ -1781,15 +1781,19 @@
             }
         }
 
+        const _SAFE_NAME_RE = /^[a-zA-Z0-9][a-zA-Z0-9 _.~-]{0,63}$/;
+
         function validateNewSession() {
             const name = document.getElementById('new-name').value.trim();
             const nameInput = document.getElementById('new-name');
             const nameError = document.getElementById('name-error');
             const btn = document.getElementById('run-btn');
             const nameTaken = name && sessions.some(s => s.name === name);
-            nameError.style.display = nameTaken ? 'block' : 'none';
-            nameInput.style.borderColor = nameTaken ? '#ff6666' : '#2a2a5a';
-            btn.disabled = !name || nameTaken || !selectedCwd;
+            const nameInvalid = name && !_SAFE_NAME_RE.test(name);
+            nameError.textContent = nameTaken ? 'Name already taken' : nameInvalid ? 'Only letters, numbers, hyphens, underscores' : '';
+            nameError.style.display = (nameTaken || nameInvalid) ? 'block' : 'none';
+            nameInput.style.borderColor = (nameTaken || nameInvalid) ? '#ff6666' : '#2a2a5a';
+            btn.disabled = !name || nameTaken || nameInvalid || !selectedCwd;
         }
 
         function toggleNewSession() {

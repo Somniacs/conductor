@@ -1,10 +1,14 @@
 import asyncio
 import os
+import re
 import shlex
 from pathlib import Path
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect, HTTPException
 from pydantic import BaseModel
+
+# Session names: alphanumeric, hyphens, underscores, spaces, dots. Max 64 chars.
+_SAFE_NAME = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9 _.~-]{0,63}$")
 
 from conductor.sessions.registry import SessionRegistry
 from conductor.utils.config import ALLOWED_COMMANDS, DEFAULT_DIRECTORIES
@@ -75,6 +79,14 @@ async def list_sessions():
 
 @router.post("/sessions/run")
 async def create_session(req: RunRequest):
+    # Validate session name — no path traversal, shell metacharacters, etc.
+    req.name = req.name.strip()
+    if not _SAFE_NAME.match(req.name):
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid session name. Use letters, numbers, hyphens, underscores, or spaces (max 64 chars).",
+        )
+
     # Validate command against whitelist (CLI is unrestricted, dashboard is restricted)
     if req.source != "cli":
         try:
