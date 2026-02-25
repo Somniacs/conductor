@@ -632,24 +632,43 @@
             outline-offset: 1px;
         }
 
-        .extra-keys {
-            display: none;  /* hidden by default, shown via JS toggle */
+        .extra-keys-bar {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            z-index: 600;
             background: #0e0e24;
-            border-bottom: 1px solid #1e1e3e;
+            border-top: 1px solid #2a2a5a;
+            user-select: none;
+            -webkit-user-select: none;
+            transition: transform 0.2s ease;
+        }
+        .extra-keys-bar.collapsed .extra-keys-rows { display: none; }
+        .extra-keys-chevron {
+            display: flex;
+            justify-content: center;
+            padding: 2px 0;
+            cursor: pointer;
+            color: #606080;
+            font-size: 12px;
+            line-height: 1;
+            -webkit-tap-highlight-color: transparent;
+        }
+        .extra-keys-chevron:hover { color: #a0a0d0; }
+        .extra-keys-rows {
+            display: flex;
             padding: 3px 4px;
             gap: 2px;
             flex-wrap: wrap;
-            user-select: none;
-            -webkit-user-select: none;
         }
-        .extra-keys.visible { display: flex; }
-        .extra-keys button {
+        .extra-keys-rows button {
             background: #1a1a3a;
             border: 1px solid #2a2a5a;
             color: #b0b0d0;
             font-size: 11px;
             font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
-            padding: 5px 0;
+            padding: 6px 0;
             border-radius: 4px;
             cursor: pointer;
             flex: 1;
@@ -658,8 +677,8 @@
             line-height: 1.2;
             -webkit-tap-highlight-color: transparent;
         }
-        .extra-keys button:active { background: #2a2a5a; color: #e0e0ff; }
-        .extra-keys button.modifier-active {
+        .extra-keys-rows button:active { background: #2a2a5a; color: #e0e0ff; }
+        .extra-keys-rows button.modifier-active {
             background: #3a3a7a;
             color: #ffffff;
             border-color: #5050aa;
@@ -792,7 +811,6 @@
                 width: 20px;
                 border-radius: 0 6px 6px 0;
             }
-            .extra-keys { display: flex; }  /* visible by default on mobile */
         }
 
         /* Server management dialog */
@@ -1065,6 +1083,24 @@
                 <button class="confirm-cancel" id="confirm-no">Cancel</button>
                 <button class="confirm-ok" id="confirm-yes">Stop</button>
             </div>
+        </div>
+    </div>
+
+    <div class="extra-keys-bar collapsed" id="extra-keys-bar">
+        <div class="extra-keys-chevron" onclick="toggleExtraKeysBar()" id="ek-chevron">&#9650;</div>
+        <div class="extra-keys-rows">
+            <button onpointerdown="sendKey('Escape')">ESC</button>
+            <button onpointerdown="sendKey('Tab')">TAB</button>
+            <button onpointerdown="toggleModifier('ctrl')" id="ek-ctrl">CTRL</button>
+            <button onpointerdown="toggleModifier('alt')" id="ek-alt">ALT</button>
+            <button onpointerdown="sendKey('ArrowUp')">&uarr;</button>
+            <button onpointerdown="sendKey('ArrowDown')">&darr;</button>
+            <button onpointerdown="sendKey('ArrowLeft')">&larr;</button>
+            <button onpointerdown="sendKey('ArrowRight')">&rarr;</button>
+            <button onpointerdown="sendKey('Home')">HOME</button>
+            <button onpointerdown="sendKey('End')">END</button>
+            <button onpointerdown="sendKey('PageUp')">PGUP</button>
+            <button onpointerdown="sendKey('PageDown')">PGDN</button>
         </div>
     </div>
 
@@ -1679,23 +1715,8 @@
                         </div>
                         <button class="font-btn" onclick="changeFontSize('${pid}', -1)" title="Smaller">&#8722;</button>
                         <button class="font-btn" onclick="changeFontSize('${pid}', 1)" title="Bigger">+</button>
-                        <button class="font-btn" onclick="toggleExtraKeys('${pid}')" title="Extra keys">&#9000;</button>
                         <button class="close-btn" onclick="closePanel('${pid}')">&times;</button>
                     </div>
-                </div>
-                <div class="extra-keys" id="extra-keys-${escHtml(panel.id)}">
-                    <button onpointerdown="sendKey('${pid}','Escape')">ESC</button>
-                    <button onpointerdown="sendKey('${pid}','Tab')">TAB</button>
-                    <button onpointerdown="toggleModifier('${pid}','ctrl')" id="mod-ctrl-${escHtml(panel.id)}">CTRL</button>
-                    <button onpointerdown="toggleModifier('${pid}','alt')" id="mod-alt-${escHtml(panel.id)}">ALT</button>
-                    <button onpointerdown="sendKey('${pid}','ArrowUp')">&uarr;</button>
-                    <button onpointerdown="sendKey('${pid}','ArrowDown')">&darr;</button>
-                    <button onpointerdown="sendKey('${pid}','ArrowLeft')">&larr;</button>
-                    <button onpointerdown="sendKey('${pid}','ArrowRight')">&rarr;</button>
-                    <button onpointerdown="sendKey('${pid}','Home')">HOME</button>
-                    <button onpointerdown="sendKey('${pid}','End')">END</button>
-                    <button onpointerdown="sendKey('${pid}','PageUp')">PGUP</button>
-                    <button onpointerdown="sendKey('${pid}','PageDown')">PGDN</button>
                 </div>
             `;
             div.appendChild(termEl);
@@ -1891,68 +1912,59 @@
             PageDown: '\x1b[6~',
         };
 
-        // Per-panel modifier state: { ctrl: false, alt: false }
-        const _modifiers = {};
+        // Global modifier state for the extra-keys bar.
+        const _ekMods = { ctrl: false, alt: false };
 
-        function _getMods(id) {
-            if (!_modifiers[id]) _modifiers[id] = { ctrl: false, alt: false };
-            return _modifiers[id];
+        function _getFocusedPanel() {
+            return panels.find(p => p.id === focusedPanelId);
         }
 
-        function toggleExtraKeys(id) {
-            const bar = document.getElementById(`extra-keys-${id}`);
-            if (bar) {
-                bar.classList.toggle('visible');
-                // Refit the terminal after toggling
-                const panel = panels.find(p => p.id === id);
-                if (panel) setTimeout(() => fitPanel(panel), 50);
-            }
+        function toggleExtraKeysBar() {
+            const bar = document.getElementById('extra-keys-bar');
+            if (!bar) return;
+            bar.classList.toggle('collapsed');
+            const chevron = document.getElementById('ek-chevron');
+            if (chevron) chevron.innerHTML = bar.classList.contains('collapsed') ? '&#9650;' : '&#9660;';
         }
 
-        function toggleModifier(id, mod) {
-            const mods = _getMods(id);
-            mods[mod] = !mods[mod];
-            const btn = document.getElementById(`mod-${mod}-${id}`);
-            if (btn) btn.classList.toggle('modifier-active', mods[mod]);
+        function toggleModifier(mod) {
+            _ekMods[mod] = !_ekMods[mod];
+            const btn = document.getElementById('ek-' + mod);
+            if (btn) btn.classList.toggle('modifier-active', _ekMods[mod]);
         }
 
-        function _clearModifiers(id) {
-            const mods = _getMods(id);
-            mods.ctrl = false;
-            mods.alt = false;
-            const ctrlBtn = document.getElementById(`mod-ctrl-${id}`);
-            const altBtn = document.getElementById(`mod-alt-${id}`);
+        function _clearModifiers() {
+            _ekMods.ctrl = false;
+            _ekMods.alt = false;
+            const ctrlBtn = document.getElementById('ek-ctrl');
+            const altBtn = document.getElementById('ek-alt');
             if (ctrlBtn) ctrlBtn.classList.remove('modifier-active');
             if (altBtn) altBtn.classList.remove('modifier-active');
         }
 
-        function sendKey(id, key) {
-            const panel = panels.find(p => p.id === id);
+        function sendKey(key) {
+            const panel = _getFocusedPanel();
             if (!panel || !panel.ws || panel.ws.readyState !== WebSocket.OPEN) return;
 
-            const mods = _getMods(id);
             let seq = _KEY_SEQS[key] || '';
 
-            if (mods.ctrl && seq.length === 0) {
-                // For regular keys with ctrl — not applicable for special keys
-            } else if (mods.ctrl && key === 'ArrowUp') {
-                seq = '\x1b[1;5A';
-            } else if (mods.ctrl && key === 'ArrowDown') {
-                seq = '\x1b[1;5B';
-            } else if (mods.ctrl && key === 'ArrowRight') {
-                seq = '\x1b[1;5C';
-            } else if (mods.ctrl && key === 'ArrowLeft') {
-                seq = '\x1b[1;5D';
+            // Ctrl + arrow produces CSI 1;5 <dir> sequences
+            if (_ekMods.ctrl) {
+                const ctrlArrows = {
+                    ArrowUp: '\x1b[1;5A', ArrowDown: '\x1b[1;5B',
+                    ArrowRight: '\x1b[1;5C', ArrowLeft: '\x1b[1;5D',
+                };
+                if (ctrlArrows[key]) seq = ctrlArrows[key];
             }
 
-            if (mods.alt && _KEY_SEQS[key]) {
-                // Alt + key: prepend ESC
+            // Alt + key: prepend ESC
+            if (_ekMods.alt && _KEY_SEQS[key]) {
                 seq = '\x1b' + _KEY_SEQS[key];
             }
 
             if (seq) {
                 panel.ws.send(seq);
-                _clearModifiers(id);
+                _clearModifiers();
             }
         }
 
