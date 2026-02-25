@@ -32,17 +32,17 @@ Download the latest release from GitHub, extract, and run the install script:
 
 ```bash
 # Download and extract
-curl -sL https://github.com/xohm/conductor/releases/latest/download/conductor.tar.gz | tar xz
+curl -sL https://github.com/somniacs/conductor/releases/latest/download/conductor.tar.gz | tar xz
 cd conductor
 ./install.sh
 ```
 
-Or download manually from the [Releases](https://github.com/xohm/conductor/releases) page, extract the archive, and run `./install.sh` inside.
+Or download manually from the [Releases](https://github.com/somniacs/conductor/releases) page, extract the archive, and run `./install.sh` inside.
 
 ### Option B — From source
 
 ```bash
-git clone https://github.com/xohm/conductor.git
+git clone https://github.com/somniacs/conductor.git
 cd conductor
 ./install.sh
 ```
@@ -55,7 +55,7 @@ If the command is not found after install, restart your terminal or run `source 
 <summary>Manual install (without install script)</summary>
 
 ```bash
-git clone https://github.com/xohm/conductor.git
+git clone https://github.com/somniacs/conductor.git
 cd conductor
 python3 -m venv .venv
 source .venv/bin/activate

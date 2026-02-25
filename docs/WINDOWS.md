@@ -51,7 +51,7 @@ If you're on Windows and want to use Conductor now, run it inside **WSL** (Windo
 
 ```bash
 # Inside WSL
-git clone https://github.com/xohm/conductor.git
+git clone https://github.com/somniacs/conductor.git
 cd conductor
 ./install.sh
 conductor run claude research

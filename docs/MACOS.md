@@ -12,7 +12,7 @@ Conductor runs natively on macOS. No extra dependencies beyond Python.
 ### From release
 
 ```bash
-curl -sL https://github.com/xohm/conductor/releases/latest/download/conductor.tar.gz | tar xz
+curl -sL https://github.com/somniacs/conductor/releases/latest/download/conductor.tar.gz | tar xz
 cd conductor
 ./install.sh
 ```
@@ -20,7 +20,7 @@ cd conductor
 ### From source
 
 ```bash
-git clone https://github.com/xohm/conductor.git
+git clone https://github.com/somniacs/conductor.git
 cd conductor
 ./install.sh
 ```
