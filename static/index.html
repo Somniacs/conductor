@@ -645,10 +645,14 @@
             transition: transform 0.2s ease;
         }
         .extra-keys-bar.collapsed .extra-keys-rows { display: none; }
-        .extra-keys-chevron {
+        .extra-keys-handle {
             display: flex;
             justify-content: flex-end;
-            padding: 2px 8px;
+            padding: 0 4px;
+        }
+        .extra-keys-chevron {
+            display: inline-block;
+            padding: 3px 10px;
             cursor: pointer;
             color: #606080;
             font-size: 10px;
@@ -1092,7 +1096,7 @@
     </div>
 
     <div class="extra-keys-bar collapsed" id="extra-keys-bar" onpointerdown="event.preventDefault()">
-        <div class="extra-keys-chevron" onpointerdown="toggleExtraKeysBar()" id="ek-chevron">&#9650;</div>
+        <div class="extra-keys-handle"><span class="extra-keys-chevron" onpointerdown="toggleExtraKeysBar()" id="ek-chevron">&#9650;</span></div>
         <div class="extra-keys-rows">
             <div class="extra-keys-row">
                 <button onpointerdown="sendKey('Escape')">ESC</button>
