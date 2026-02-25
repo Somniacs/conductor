@@ -1965,6 +1965,18 @@
 
             let seq = _KEY_SEQS[key] || '';
 
+            // When the terminal is in application cursor keys mode (DECCKM),
+            // arrows and Home/End use SS3 (ESC O) instead of CSI (ESC [).
+            const appMode = panel.terminal?.modes?.applicationCursorKeysMode;
+            if (appMode) {
+                const appSeqs = {
+                    ArrowUp: '\x1bOA', ArrowDown: '\x1bOB',
+                    ArrowRight: '\x1bOC', ArrowLeft: '\x1bOD',
+                    Home: '\x1bOH', End: '\x1bOF',
+                };
+                if (appSeqs[key]) seq = appSeqs[key];
+            }
+
             // Ctrl + arrow produces CSI 1;5 <dir> sequences
             if (_ekMods.ctrl) {
                 const ctrlArrows = {
