@@ -13,8 +13,11 @@
 
 """CLI commands for starting, stopping, attaching to, and managing sessions."""
 
+import json
 import os
+import shutil
 import signal
+import socket
 import subprocess
 import sys
 import time
@@ -23,12 +26,19 @@ from pathlib import Path
 import click
 import httpx
 
-from conductor.utils.config import BASE_URL, HOST, PORT, PID_FILE, ensure_dirs
+from conductor.utils.config import BASE_URL, CONDUCTOR_TOKEN, HOST, PORT, PID_FILE, ensure_dirs
+
+
+def _auth_headers() -> dict[str, str]:
+    """Return Authorization header if CONDUCTOR_TOKEN is set."""
+    if CONDUCTOR_TOKEN:
+        return {"Authorization": f"Bearer {CONDUCTOR_TOKEN}"}
+    return {}
 
 
 def server_running() -> bool:
     try:
-        r = httpx.get(f"{BASE_URL}/sessions", timeout=2)
+        r = httpx.get(f"{BASE_URL}/health", timeout=2)
         return r.status_code == 200
     except Exception:
         return False
@@ -117,7 +127,8 @@ def serve(host, port):
 @click.argument("command")
 @click.argument("name", required=False)
 @click.option("-d", "--detach", is_flag=True, help="Run in background (don't attach to terminal)")
-def run(command, name, detach):
+@click.option("--json", "use_json", is_flag=True, help="Output JSON (implies --detach)")
+def run(command, name, detach, use_json):
     """Run a command in a new Conductor session.
 
     By default, attaches to the session so you see output in your terminal.
@@ -130,35 +141,53 @@ def run(command, name, detach):
         conductor run -d claude coding
         conductor run "python train.py" training
     """
+    if use_json:
+        detach = True
+
     if name is None:
         name = command.split()[0]
 
     if not server_running():
-        click.echo("Server not running. Starting daemon...")
+        if not use_json:
+            click.echo("Server not running. Starting daemon...")
         if not start_server_daemon():
-            click.echo("Failed to start server. Try: conductor serve", err=True)
+            if use_json:
+                click.echo(json.dumps({"error": "Failed to start server"}))
+            else:
+                click.echo("Failed to start server. Try: conductor serve", err=True)
             sys.exit(1)
-        click.echo(f"Server started on {BASE_URL}")
+        if not use_json:
+            click.echo(f"Server started on {BASE_URL}")
 
     r = httpx.post(
         f"{BASE_URL}/sessions/run",
         json={"name": name, "command": command, "source": "cli"},
+        headers=_auth_headers(),
         timeout=10,
     )
 
     if r.status_code == 200:
         data = r.json()
-        if detach:
+        if use_json:
+            click.echo(json.dumps(data, indent=2))
+        elif detach:
             click.echo(f"Session '{data['name']}' started (pid: {data['pid']})")
             click.echo(f"Dashboard: {BASE_URL}")
         else:
             click.echo(f"Session '{data['name']}' started. Attaching... (Ctrl+] to detach)")
+            _resize_session(data["name"])
             _attach_session(data["name"])
     elif r.status_code == 409:
-        click.echo(f"Session '{name}' already exists.", err=True)
+        if use_json:
+            click.echo(json.dumps({"error": f"Session '{name}' already exists"}))
+        else:
+            click.echo(f"Session '{name}' already exists.", err=True)
         sys.exit(1)
     else:
-        click.echo(f"Error: {r.text}", err=True)
+        if use_json:
+            click.echo(json.dumps({"error": r.text}))
+        else:
+            click.echo(f"Error: {r.text}", err=True)
         sys.exit(1)
 
 
@@ -175,7 +204,7 @@ def attach(name):
         sys.exit(1)
 
     # Verify session exists
-    r = httpx.get(f"{BASE_URL}/sessions", timeout=5)
+    r = httpx.get(f"{BASE_URL}/sessions", headers=_auth_headers(), timeout=5)
     sessions = {s["name"]: s for s in r.json()}
     if name not in sessions:
         click.echo(f"Session '{name}' not found.", err=True)
@@ -193,15 +222,38 @@ def _attach_session(session_name: str):
         _attach_session_unix(session_name)
 
 
+def _ws_url(session_name: str) -> str:
+    """Build the WebSocket URL, appending token if auth is configured."""
+    url = BASE_URL.replace("http://", "ws://") + f"/sessions/{session_name}/stream"
+    if CONDUCTOR_TOKEN:
+        url += f"?token={CONDUCTOR_TOKEN}"
+    return url
+
+
+def _resize_session(session_name: str):
+    """Send the current host terminal size to the remote PTY session."""
+    try:
+        size = shutil.get_terminal_size()
+        httpx.post(
+            f"{BASE_URL}/sessions/{session_name}/resize",
+            json={"rows": size.lines, "cols": size.columns},
+            headers=_auth_headers(),
+            timeout=3,
+        )
+    except Exception:
+        pass
+
+
 def _attach_session_unix(session_name: str):
     """Unix attach — raw terminal with select-based I/O."""
     import select
+    import signal
     import termios
     import threading
     import tty
     import websockets.sync.client as ws_sync
 
-    ws_url = BASE_URL.replace("http://", "ws://") + f"/sessions/{session_name}/stream"
+    ws_url = _ws_url(session_name)
 
     stdin_fd = sys.stdin.fileno()
     old_settings = termios.tcgetattr(stdin_fd)
@@ -223,6 +275,16 @@ def _attach_session_unix(session_name: str):
         finally:
             stop.set()
             os.write(wake_w, b"\x00")
+
+    # Sync terminal size on attach and on SIGWINCH (terminal resize)
+    _resize_session(session_name)
+
+    old_sigwinch = signal.getsignal(signal.SIGWINCH)
+
+    def on_winch(signum, frame):
+        _resize_session(session_name)
+
+    signal.signal(signal.SIGWINCH, on_winch)
 
     try:
         tty.setraw(stdin_fd)
@@ -258,6 +320,7 @@ def _attach_session_unix(session_name: str):
     except KeyboardInterrupt:
         pass
     finally:
+        signal.signal(signal.SIGWINCH, old_sigwinch)
         termios.tcsetattr(stdin_fd, termios.TCSADRAIN, old_settings)
         click.echo("\nDetached.")
 
@@ -268,7 +331,7 @@ def _attach_session_win(session_name: str):
     import threading
     import websockets.sync.client as ws_sync
 
-    ws_url = BASE_URL.replace("http://", "ws://") + f"/sessions/{session_name}/stream"
+    ws_url = _ws_url(session_name)
     stop = threading.Event()
 
     def ws_reader(ws):
@@ -314,14 +377,22 @@ def _attach_session_win(session_name: str):
 
 
 @cli.command("list")
-def list_sessions():
+@click.option("--json", "use_json", is_flag=True, help="Output raw JSON")
+def list_sessions(use_json):
     """List all active sessions."""
     if not server_running():
-        click.echo("Server not running.", err=True)
+        if use_json:
+            click.echo("[]")
+        else:
+            click.echo("Server not running.", err=True)
         sys.exit(1)
 
-    r = httpx.get(f"{BASE_URL}/sessions", timeout=5)
+    r = httpx.get(f"{BASE_URL}/sessions", headers=_auth_headers(), timeout=5)
     sessions = r.json()
+
+    if use_json:
+        click.echo(json.dumps(sessions, indent=2))
+        return
 
     if not sessions:
         click.echo("No sessions.")
@@ -343,7 +414,7 @@ def stop(name):
         click.echo("Server not running.", err=True)
         sys.exit(1)
 
-    r = httpx.delete(f"{BASE_URL}/sessions/{name}", timeout=5)
+    r = httpx.delete(f"{BASE_URL}/sessions/{name}", headers=_auth_headers(), timeout=5)
     if r.status_code == 200:
         click.echo(f"Session '{name}' stopped.")
     elif r.status_code == 404:
@@ -352,6 +423,62 @@ def stop(name):
     else:
         click.echo(f"Error: {r.text}", err=True)
         sys.exit(1)
+
+
+@cli.command()
+@click.option("--json", "use_json", is_flag=True, help="Output JSON for agent consumption")
+def status(use_json):
+    """Show server status and connection info."""
+    running = server_running()
+
+    if use_json:
+        info = {
+            "ok": running,
+            "version": None,
+            "base_url": BASE_URL,
+            "ws_base_url": BASE_URL.replace("http://", "ws://"),
+            "auth": {"mode": "bearer" if CONDUCTOR_TOKEN else "none"},
+            "hostname": socket.gethostname(),
+            "pid": None,
+        }
+        if running:
+            try:
+                r = httpx.get(f"{BASE_URL}/health", timeout=2)
+                health = r.json()
+                info["version"] = health.get("version")
+            except Exception:
+                pass
+            try:
+                pid_text = PID_FILE.read_text().strip()
+                info["pid"] = int(pid_text)
+            except Exception:
+                pass
+        click.echo(json.dumps(info, indent=2))
+        return
+
+    if not running:
+        click.echo("Server not running.")
+        return
+
+    try:
+        r = httpx.get(f"{BASE_URL}/health", timeout=2)
+        health = r.json()
+        version = health.get("version", "?")
+    except Exception:
+        version = "?"
+
+    pid = None
+    try:
+        pid = int(PID_FILE.read_text().strip())
+    except Exception:
+        pass
+
+    click.echo(f"Conductor v{version}")
+    click.echo(f"  URL:  {BASE_URL}")
+    click.echo(f"  Host: {socket.gethostname()}")
+    if pid:
+        click.echo(f"  PID:  {pid}")
+    click.echo(f"  Auth: {'bearer token' if CONDUCTOR_TOKEN else 'none'}")
 
 
 def stop_server() -> bool:
