@@ -1,10 +1,10 @@
 # ♭ conductor
 
-Orchestrate your AI coding agents from anywhere.
+Orchestrate your AI coding agents across your own machines — local-first, cloud-optional.
 
-AI agents run for minutes, sometimes hours — then stall on a single question, waiting for your input. If you're not at that terminal, the session idles until you get back. Running agents in a cloud VM doesn't always help either — your dev environment, build tools, and hardware are on your local machine.
+Your best ideas don't always happen at your desk. With Conductor, you can start an agent session from your phone and let it run on your workstation, GPU box, or dev machine. AI agents run for minutes — sometimes hours — and then stall on a single question. If you're not at that terminal, the session idles until you return.
 
-Conductor keeps them moving. It wraps terminal sessions in a lightweight server and exposes them through a web dashboard you can open from your phone, tablet, or laptop. Pair it with [Tailscale](https://tailscale.com/) and you get secure remote access to all your machines — no port forwarding, no VPN setup, just works.
+Conductor keeps them moving. It runs entirely on your machines. No remote backend. No vendor dependency. It wraps terminal sessions in a lightweight server and exposes them through a web dashboard you can open from your phone, tablet, or laptop. Pair it with [Tailscale](https://tailscale.com/) and you get secure access to all your machines — no port forwarding, no VPN setup, just works.
 
 **New here?** Check out the [Quick Start Guide](docs/intro.md) — install, run an agent, and set up phone access in 5 minutes.
 
@@ -23,7 +23,7 @@ Conductor keeps them moving. It wraps terminal sessions in a lightweight server 
 | Aider | `conductor run aider refactor` |
 | Goose | `conductor run goose api` |
 | GitHub Copilot | `conductor run "gh copilot" chat` |
-| Any command | `conductor run python3 train` |
+| Custom (allowlisted) | `conductor run python3 train` |
 
 ```
 Start agents                Leave your desk         Answer from anywhere
@@ -276,8 +276,9 @@ Tailscale creates a private network between your devices using WireGuard. Only y
 
 ## Is It Safe?
 
-Yes. Conductor runs entirely on your machine and does not phone home, create accounts, or expose anything to the public internet.
+Yes. Conductor runs entirely on your machines — no cloud backend, no vendor account, no external service required. Output stays local; commands run locally; nothing is logged, queued, or controlled through any third-party service.
 
+- **No cloud dependency** — runs on your workstation, GPU box, or air-gapped network. No API keys, no SaaS backend, zero cloud costs.
 - **Local only** — the server binds to your machine. Without Tailscale (or another VPN), it is not reachable from outside your local network.
 - **No authentication layer needed** — when using Tailscale, only devices signed into *your* Tailscale account can reach the server. The network itself is the firewall.
 - **No data leaves your machine** — session output stays in an in-memory buffer on localhost. Nothing is logged to external services.
