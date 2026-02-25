@@ -709,8 +709,6 @@
             /* min-width is set dynamically from JS after measuring char width */
         }
 
-        /* xterm.js handles its own touch scrolling — don't interfere */
-        .xterm-screen { touch-action: none; }
 
         .panel-terminal pre {
             padding: 8px 12px;
@@ -1777,7 +1775,7 @@
                         brightBlue: defT.brightBlue, brightMagenta: defT.brightMagenta,
                         brightCyan: defT.brightCyan, brightWhite: defT.brightWhite,
                     },
-                    scrollback: 5000,
+                    scrollback: window.innerWidth <= 700 ? 1000 : 5000,
                     convertEol: false,
                 });
 
@@ -2248,13 +2246,32 @@
                 }, 1500);
             };
 
+            // Batch incoming WebSocket data and flush once per animation frame
+            // to avoid overwhelming xterm.js with per-chunk renders.
+            let writeBuf = [];
+            let writeRaf = null;
+            function flushWrites() {
+                writeRaf = null;
+                if (!writeBuf.length || !panel.terminal) return;
+                // Concatenate all pending chunks into one write
+                let total = 0;
+                for (const c of writeBuf) total += c.length;
+                const merged = new Uint8Array(total);
+                let off = 0;
+                for (const c of writeBuf) { merged.set(c, off); off += c.length; }
+                writeBuf = [];
+                panel.terminal.write(merged);
+            }
+
             ws.onmessage = (event) => {
                 if (event.data instanceof ArrayBuffer && event.data.byteLength === 0) return;
                 if (!panel._bufferReplay) trackActivity(panel);
                 if (panel.terminal) {
                     const data = event.data instanceof ArrayBuffer
-                        ? new Uint8Array(event.data) : event.data;
-                    panel.terminal.write(data);
+                        ? new Uint8Array(event.data)
+                        : new TextEncoder().encode(event.data);
+                    writeBuf.push(data);
+                    if (!writeRaf) writeRaf = requestAnimationFrame(flushWrites);
                 } else {
                     const termDiv = document.getElementById(`term-${panel.id}`);
                     const pre = termDiv && termDiv.querySelector('pre');
