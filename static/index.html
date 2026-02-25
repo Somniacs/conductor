@@ -551,6 +551,7 @@
             overflow: hidden;
             width: 100%;
             height: 100%;
+            position: relative;
         }
 
         .panel-header {
@@ -964,6 +965,43 @@
         .qr-scanner-actions button:hover { background: #3a3a7a; }
         .qr-scanner-actions button.stop-btn { background: #5a2a2a; border-color: #7a3a3a; }
         .qr-scanner-actions button.stop-btn:hover { background: #6a3a3a; }
+
+        .panel-drop-overlay {
+            display: none;
+            position: absolute;
+            inset: 0;
+            background: rgba(80, 80, 255, 0.12);
+            border: 2px dashed #6060ff;
+            border-radius: 6px;
+            z-index: 20;
+            pointer-events: none;
+            align-items: center;
+            justify-content: center;
+            font-size: 14px;
+            color: #a0a0ff;
+        }
+        .panel-drop-overlay.visible {
+            display: flex;
+        }
+
+        .upload-toast {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            padding: 10px 16px;
+            border-radius: 6px;
+            font-size: 13px;
+            color: #e0e0e0;
+            background: #1a1a3e;
+            border: 1px solid #2a2a5a;
+            z-index: 9999;
+            opacity: 0;
+            transition: opacity 0.2s;
+            pointer-events: none;
+        }
+        .upload-toast.visible { opacity: 1; }
+        .upload-toast.success { border-color: #2a6a2a; background: #1a2e1a; }
+        .upload-toast.error { border-color: #6a2a2a; background: #2e1a1a; }
     </style>
 </head>
 <body>
@@ -1794,6 +1832,39 @@
                 });
             }
 
+            // Drag-and-drop image upload
+            const dropOverlay = document.createElement('div');
+            dropOverlay.className = 'panel-drop-overlay';
+            dropOverlay.textContent = 'Drop image here';
+            div.appendChild(dropOverlay);
+            let dragCounter = 0;
+
+            div.addEventListener('dragenter', (e) => {
+                e.preventDefault();
+                dragCounter++;
+                dropOverlay.classList.add('visible');
+            });
+            div.addEventListener('dragover', (e) => {
+                e.preventDefault();
+            });
+            div.addEventListener('dragleave', (e) => {
+                e.preventDefault();
+                dragCounter--;
+                if (dragCounter <= 0) {
+                    dragCounter = 0;
+                    dropOverlay.classList.remove('visible');
+                }
+            });
+            div.addEventListener('drop', (e) => {
+                e.preventDefault();
+                dragCounter = 0;
+                dropOverlay.classList.remove('visible');
+                const files = e.dataTransfer && e.dataTransfer.files;
+                if (files && files.length > 0 && files[0].type.startsWith('image/')) {
+                    uploadImageToSession(panel, files[0]);
+                }
+            });
+
             // Clicking anywhere on the panel sets focus
             div.addEventListener('mousedown', () => setFocus(panel.id));
             div.addEventListener('touchstart', () => setFocus(panel.id), { passive: true });
@@ -1814,71 +1885,65 @@
             panel.terminal.open(target);
             panel._termOpened = true;
 
-            // Mobile: one-finger vertical swipe scrolls the terminal.
-            // xterm.js reserves one-finger for selection, but on phones
-            // users expect one-finger scroll.  We intercept touch on the
-            // xterm-screen and translate vertical movement into scrollTop
-            // changes on the xterm-viewport.  Updates are RAF-throttled
-            // and momentum is applied on release for native feel.
-            const screen = target.querySelector('.xterm-screen');
-            const viewport = target.querySelector('.xterm-viewport');
-            if (screen && viewport && 'ontouchstart' in window) {
-                let touchY = null;
-                let scrolling = false;
-                let pendingDy = 0;
-                let raf = null;
-                let velocity = 0;
-                let lastTime = 0;
-                let momentumRaf = null;
+            // Mobile one-finger scroll: capture touch events on the wrapper
+            // (before xterm gets them) and use terminal.scrollLines() — xterm's
+            // own API — for reliable line-based scrolling with momentum.
+            // touchstart must be non-passive so Chrome doesn't pre-commit to
+            // native scroll behavior before our touchmove preventDefault fires.
+            if ('ontouchstart' in window) {
+                const t = panel.terminal;
+                let tY = null, tScroll = false, tVel = 0, tTime = 0;
+                let tAccum = 0, tMom = null, lineH = 18;
 
-                function applyScroll() {
-                    raf = null;
-                    if (pendingDy) {
-                        viewport.scrollTop += pendingDy;
-                        pendingDy = 0;
-                    }
+                const calcLineH = () => {
+                    const vp = target.querySelector('.xterm-viewport');
+                    return (vp && t.buffer.active.length > 0)
+                        ? vp.scrollHeight / t.buffer.active.length : 18;
+                };
+
+                function momTick() {
+                    tVel *= 0.93;
+                    if (Math.abs(tVel) < 0.5) { tMom = null; return; }
+                    tAccum += tVel;
+                    const n = Math.trunc(tAccum / lineH);
+                    if (n) { t.scrollLines(n); tAccum -= n * lineH; }
+                    tMom = requestAnimationFrame(momTick);
                 }
 
-                function momentumStep() {
-                    velocity *= 0.92;
-                    if (Math.abs(velocity) < 0.5) { momentumRaf = null; return; }
-                    viewport.scrollTop += velocity;
-                    momentumRaf = requestAnimationFrame(momentumStep);
-                }
-
-                screen.addEventListener('touchstart', (e) => {
-                    if (momentumRaf) { cancelAnimationFrame(momentumRaf); momentumRaf = null; }
+                target.addEventListener('touchstart', (e) => {
+                    if (tMom) { cancelAnimationFrame(tMom); tMom = null; }
                     if (e.touches.length === 1) {
-                        touchY = e.touches[0].clientY;
-                        lastTime = e.timeStamp;
-                        velocity = 0;
-                        scrolling = false;
+                        tY = e.touches[0].clientY;
+                        tTime = e.timeStamp;
+                        tVel = 0; tScroll = false; tAccum = 0;
+                        lineH = calcLineH();
                     }
-                }, { passive: true });
+                }, { passive: false, capture: true });
 
-                screen.addEventListener('touchmove', (e) => {
-                    if (e.touches.length === 1 && touchY !== null) {
-                        const dy = touchY - e.touches[0].clientY;
-                        if (!scrolling && Math.abs(dy) > 5) scrolling = true;
-                        if (scrolling) {
-                            e.preventDefault();
-                            const dt = e.timeStamp - lastTime;
-                            if (dt > 0) velocity = dy / dt * 16; // px per frame
-                            lastTime = e.timeStamp;
-                            touchY = e.touches[0].clientY;
-                            pendingDy += dy;
-                            if (!raf) raf = requestAnimationFrame(applyScroll);
-                        }
+                target.addEventListener('touchmove', (e) => {
+                    if (e.touches.length !== 1 || tY === null) return;
+                    const dy = tY - e.touches[0].clientY;
+                    if (!tScroll && Math.abs(dy) > 8) tScroll = true;
+                    if (tScroll) {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        const dt = e.timeStamp - tTime;
+                        if (dt > 0) tVel = dy / dt * 16;
+                        tTime = e.timeStamp;
+                        tY = e.touches[0].clientY;
+                        tAccum += dy;
+                        const n = Math.trunc(tAccum / lineH);
+                        if (n) { t.scrollLines(n); tAccum -= n * lineH; }
                     }
-                }, { passive: false });
+                }, { passive: false, capture: true });
 
-                screen.addEventListener('touchend', () => {
-                    touchY = null;
-                    scrolling = false;
-                    if (Math.abs(velocity) > 1 && !momentumRaf) {
-                        momentumRaf = requestAnimationFrame(momentumStep);
+                target.addEventListener('touchend', () => {
+                    tY = null;
+                    if (tScroll && Math.abs(tVel) > 1.5) {
+                        tMom = requestAnimationFrame(momTick);
                     }
-                }, { passive: true });
+                    tScroll = false;
+                }, { passive: true, capture: true });
             }
 
             if (panel.fitAddon) {
@@ -2291,6 +2356,74 @@
                 });
             }
         }
+
+        // --- Image Upload ---
+        const _ALLOWED_IMAGE_TYPES = new Set(['image/png', 'image/jpeg', 'image/gif', 'image/webp', 'image/bmp']);
+        const _MAX_UPLOAD_SIZE = 10 * 1024 * 1024;
+
+        let _uploadToast = null;
+        let _uploadToastTimer = null;
+
+        function showUploadToast(message, type, duration) {
+            duration = duration || 3000;
+            if (_uploadToast) { _uploadToast.remove(); clearTimeout(_uploadToastTimer); }
+            const el = document.createElement('div');
+            el.className = 'upload-toast ' + (type || '');
+            el.textContent = message;
+            document.body.appendChild(el);
+            _uploadToast = el;
+            requestAnimationFrame(() => el.classList.add('visible'));
+            _uploadToastTimer = setTimeout(() => {
+                el.classList.remove('visible');
+                setTimeout(() => { el.remove(); if (_uploadToast === el) _uploadToast = null; }, 200);
+            }, duration);
+        }
+
+        async function uploadImageToSession(panel, blob) {
+            if (!_ALLOWED_IMAGE_TYPES.has(blob.type)) {
+                showUploadToast('Unsupported image type: ' + blob.type, 'error');
+                return;
+            }
+            if (blob.size > _MAX_UPLOAD_SIZE) {
+                showUploadToast('Image too large (max 10 MB)', 'error');
+                return;
+            }
+            try {
+                const resp = await fetch(serverUrl(panel.server, `/sessions/${panel.sessionId}/upload`), {
+                    method: 'POST',
+                    headers: { 'Content-Type': blob.type },
+                    body: blob,
+                });
+                if (!resp.ok) {
+                    const err = await resp.json().catch(() => ({ detail: resp.statusText }));
+                    showUploadToast(err.detail || 'Upload failed', 'error');
+                    return;
+                }
+                const data = await resp.json();
+                if (panel.ws && panel.ws.readyState === WebSocket.OPEN) {
+                    panel.ws.send(data.path);
+                }
+                showUploadToast('Image path inserted', 'success', 2000);
+            } catch (e) {
+                showUploadToast('Upload failed: ' + e.message, 'error');
+            }
+        }
+
+        // Paste handler — intercept image paste, let text paste through
+        document.addEventListener('paste', (e) => {
+            const items = e.clipboardData && e.clipboardData.items;
+            if (!items) return;
+            for (let i = 0; i < items.length; i++) {
+                if (items[i].kind === 'file' && items[i].type.startsWith('image/')) {
+                    const panel = _getFocusedPanel();
+                    if (!panel) return;
+                    e.preventDefault();
+                    const blob = items[i].getAsFile();
+                    if (blob) uploadImageToSession(panel, blob);
+                    return;
+                }
+            }
+        });
 
         // --- WebSocket ---
         function connectWebSocket(panel) {
