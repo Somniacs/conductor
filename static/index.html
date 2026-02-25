@@ -71,6 +71,17 @@
 
         .sidebar-actions button:hover { background: #242450; }
 
+        .server-status {
+            display: none;
+            padding: 8px 12px;
+            background: #3a1a1a;
+            border-bottom: 1px solid #5a2a2a;
+            color: #ff6060;
+            font-size: 11px;
+            text-align: center;
+        }
+        .server-status.disconnected { display: block; }
+
         #session-list {
             flex: 1;
             overflow-y: auto;
@@ -717,6 +728,7 @@
             <div class="sidebar-actions">
                 <button onclick="toggleNewSession()">+ New</button>
             </div>
+            <div class="server-status" id="server-status">Server disconnected — retrying...</div>
             <div id="session-list"></div>
             <div class="new-session" id="new-session-dialog">
                 <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
@@ -942,13 +954,26 @@
             picker.innerHTML = html;
         }
 
+        // --- Server Status ---
+        function setServerStatus(connected) {
+            const el = document.getElementById('server-status');
+            if (connected) {
+                el.classList.remove('disconnected');
+            } else {
+                el.classList.add('disconnected');
+            }
+        }
+
         // --- Session List ---
         async function fetchSessions() {
             try {
                 const resp = await fetch('/sessions');
                 sessions = await resp.json();
+                setServerStatus(true);
                 renderSessionList();
-            } catch (e) {}
+            } catch (e) {
+                setServerStatus(false);
+            }
         }
 
         function getCommandLabel(command) {
@@ -1376,13 +1401,17 @@
 
         // --- WebSocket ---
         function connectWebSocket(panel) {
+            const isReconnect = !!panel.ws;
             const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
             const ws = new WebSocket(`${protocol}//${location.host}/sessions/${panel.id}/stream`);
             ws.binaryType = 'arraybuffer';
 
             ws.onopen = () => {
-                // Buffer replays immediately after connect; give it time to arrive,
-                // then re-sync size so the app gets SIGWINCH and redraws correctly.
+                setServerStatus(true);
+                // On reconnect, clear terminal to prevent duplicate content from buffer replay
+                if (isReconnect && panel.terminal) {
+                    panel.terminal.reset();
+                }
                 panel._bufferReplay = true;
                 setTimeout(() => {
                     syncResizeToPTY(panel);
@@ -1392,7 +1421,6 @@
 
             ws.onmessage = (event) => {
                 if (event.data instanceof ArrayBuffer && event.data.byteLength === 0) return;
-                // Track activity for idle notifications (skip initial buffer replay)
                 if (!panel._bufferReplay) trackActivity(panel);
                 if (panel.terminal) {
                     const data = event.data instanceof ArrayBuffer
@@ -1416,6 +1444,10 @@
                         connectWebSocket(panel);
                     }
                 }, 2000);
+            };
+
+            ws.onerror = () => {
+                setServerStatus(false);
             };
 
             panel.ws = ws;
