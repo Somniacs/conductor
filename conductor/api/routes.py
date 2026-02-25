@@ -86,6 +86,39 @@ async def server_info():
     }
 
 
+@router.get("/tailscale/peers")
+async def tailscale_peers():
+    """Return online Tailscale peers for the server picker."""
+    if not shutil.which("tailscale"):
+        return []
+    try:
+        result = subprocess.run(
+            ["tailscale", "status", "--json"],
+            capture_output=True, text=True, timeout=5,
+        )
+        if result.returncode != 0:
+            return []
+        import json
+        status = json.loads(result.stdout)
+        peers = []
+        for peer in (status.get("Peer") or {}).values():
+            if not peer.get("Online"):
+                continue
+            ips = peer.get("TailscaleIPs", [])
+            ipv4 = next((ip for ip in ips if "." in ip), None)
+            if not ipv4:
+                continue
+            dns_name = (peer.get("DNSName") or "").rstrip(".")
+            peers.append({
+                "hostname": peer.get("HostName", ""),
+                "dns_name": dns_name,
+                "ip": ipv4,
+            })
+        return sorted(peers, key=lambda p: p["hostname"].lower())
+    except Exception:
+        return []
+
+
 @router.get("/config")
 async def get_config():
     """Return allowed commands and directories for the dashboard."""

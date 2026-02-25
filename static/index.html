@@ -979,6 +979,14 @@
             <button class="about-close" onclick="toggleServersDialog()">&times;</button>
             <h2>Servers</h2>
             <div id="servers-list"></div>
+            <div id="tailscale-picker" style="display:none;margin-top:12px;">
+                <label style="display:block;font-size:11px;color:#808090;margin-bottom:4px;">Tailscale devices</label>
+                <div style="display:flex;gap:6px;">
+                    <select id="tailscale-select" style="flex:1;padding:7px 10px;background:#0a0a1a;border:1px solid #2a2a5a;color:#e0e0e0;border-radius:5px;font-size:13px;">
+                    </select>
+                    <button onclick="addTailscaleDevice()" style="padding:7px 14px;background:#2a2a6a;border:1px solid #3a3aaa;color:#e0e0e0;border-radius:5px;cursor:pointer;font-size:13px;white-space:nowrap;">Add</button>
+                </div>
+            </div>
             <div class="server-add-form">
                 <input type="text" id="server-url-input" placeholder="http://100.x.x.x:7777" autocomplete="off"
                     onkeydown="if(event.key==='Enter')addServerFromInput()">
@@ -2133,6 +2141,7 @@
             if (dialog.classList.contains('open')) {
                 renderServersDialog();
                 fetchSelfInfo();
+                fetchTailscalePeers();
             } else {
                 stopQRScanner();
             }
@@ -2143,6 +2152,7 @@
             try {
                 const resp = await fetch('/info');
                 const info = await resp.json();
+                if (info.port) PORT = info.port;
                 let html = '<div style="margin-bottom:4px;font-weight:500;color:#a0a0d0;">This server</div>';
                 html += `<div>Hostname: ${info.hostname}</div>`;
                 if (info.tailscale_name) {
@@ -2158,6 +2168,68 @@
             } catch (e) {
                 el.innerHTML = '<div style="color:#606080;">Could not fetch server info</div>';
             }
+        }
+
+        async function fetchTailscalePeers() {
+            const picker = document.getElementById('tailscale-picker');
+            const sel = document.getElementById('tailscale-select');
+            try {
+                const resp = await fetch('/tailscale/peers');
+                const peers = await resp.json();
+                if (!peers || peers.length === 0) {
+                    picker.style.display = 'none';
+                    return;
+                }
+                // Filter out peers already added as servers
+                const existingKeys = new Set(servers.map(s => s.key));
+                const available = peers.filter(p => {
+                    const key = p.ip + ':' + PORT;
+                    const dnsKey = p.dns_name ? p.dns_name + ':' + PORT : null;
+                    return !existingKeys.has(key) && (!dnsKey || !existingKeys.has(dnsKey));
+                });
+                if (available.length === 0) {
+                    picker.style.display = 'none';
+                    return;
+                }
+                picker.style.display = 'block';
+                sel.innerHTML = available.map(p => {
+                    const label = p.dns_name || p.hostname || p.ip;
+                    const url = 'http://' + p.ip + ':' + PORT;
+                    return `<option value="${url}" data-label="${label}">${p.hostname} (${p.ip})</option>`;
+                }).join('');
+            } catch (e) {
+                picker.style.display = 'none';
+            }
+        }
+
+        // Port used when constructing URLs for Tailscale peers (updated from /info)
+        let PORT = 7777;
+
+        async function addTailscaleDevice() {
+            const sel = document.getElementById('tailscale-select');
+            const url = sel.value;
+            if (!url) return;
+            const label = sel.options[sel.selectedIndex].dataset.label || url;
+
+            const info = await probeServer(url);
+            if (info) {
+                const finalLabel = info.tailscale_name || info.hostname || label;
+                const server = addServer(info.url, finalLabel);
+                if (server) {
+                    renderServersDialog();
+                    updateServerSelectorVisibility();
+                    fetchConfig(server.key);
+                    fetchAllSessions();
+                }
+            } else {
+                // Server not reachable but add anyway — user can see red dot
+                addServer(url, label);
+                renderServersDialog();
+                updateServerSelectorVisibility();
+                fetchAllSessions();
+            }
+            // Refresh the dropdown to remove the added device
+            fetchTailscalePeers();
         }
 
         function renderServersDialog() {
