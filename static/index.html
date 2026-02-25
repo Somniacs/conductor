@@ -26,19 +26,22 @@
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
 
+        html, body {
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            overflow: hidden;
+            overscroll-behavior: none;
+            touch-action: none;
+        }
         body {
             font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
             background: #0a0a1a;
             color: #e0e0e0;
-            height: 100vh;
-            height: 100dvh;
-            overflow: hidden;
         }
 
         .layout {
             display: flex;
-            height: 100vh;
-            height: 100dvh;
+            height: 100%;
         }
 
         /* Sidebar */
@@ -704,6 +707,7 @@
         .terminal-wrapper {
             width: 100%;
             height: 100%;
+            touch-action: none;
             /* min-width is set dynamically from JS after measuring char width */
         }
 
@@ -1031,7 +1035,7 @@
         <div class="about-box">
             <button class="about-close" onclick="toggleAbout()">&times;</button>
             <h2><span style="font-size:1.4em;vertical-align:middle">♭</span> conductor</h2>
-            <div class="about-version">v0.1.3</div>
+            <div class="about-version">v0.2.0</div>
             <p>Local orchestration layer for interactive terminal processes. Run sessions on your workstation, interact from anywhere.</p>
             <div class="about-section">Built with</div>
             <ul>
@@ -1128,6 +1132,18 @@
     <script src="https://cdn.jsdelivr.net/npm/@xterm/addon-fit@0.10.0/lib/addon-fit.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
     <script>
+        // --- Auth ---
+        const _conductorToken = (document.querySelector('meta[name="conductor-token"]') || {}).content || null;
+        if (_conductorToken) {
+            const _origFetch = window.fetch;
+            window.fetch = function(input, init) {
+                init = init || {};
+                init.headers = new Headers(init.headers || {});
+                init.headers.set('Authorization', 'Bearer ' + _conductorToken);
+                return _origFetch.call(this, input, init);
+            };
+        }
+
         // --- State ---
         let sessions = [];
         let panels = [];
@@ -2012,18 +2028,20 @@
         // Show/hide the extra-keys bar based on virtual keyboard visibility.
         // With `interactive-widget=resizes-visual`, window.innerHeight stays
         // constant while visualViewport.height shrinks when the keyboard opens.
+        // Detection uses (innerHeight - vv.height) only — stable across scroll.
         function _updateExtraKeysPosition() {
             const bar = document.getElementById('extra-keys-bar');
             if (!bar || !window.visualViewport) return;
             const vv = window.visualViewport;
-            const kbHeight = Math.round(window.innerHeight - vv.height - vv.offsetTop);
-            if (kbHeight > 50) {
+            // Detect keyboard: ignore offsetTop so scroll doesn't affect detection
+            const keyboardOpen = (window.innerHeight - vv.height) > 100;
+            const bottomOffset = Math.max(0, Math.round(window.innerHeight - vv.height - vv.offsetTop));
+            if (keyboardOpen) {
                 bar.classList.add('visible');
-                bar.style.bottom = kbHeight + 'px';
+                bar.style.bottom = bottomOffset + 'px';
                 _applyEkState();
             } else {
                 bar.classList.remove('visible');
-                bar.style.bottom = '0';
             }
         }
         if (window.visualViewport) {
@@ -2200,7 +2218,8 @@
         // --- WebSocket ---
         function connectWebSocket(panel) {
             const isReconnect = !!panel.ws;
-            const wsUrl = serverWsUrl(panel.server, `/sessions/${panel.sessionId}/stream`);
+            let wsUrl = serverWsUrl(panel.server, `/sessions/${panel.sessionId}/stream`);
+            if (_conductorToken) wsUrl += (wsUrl.includes('?') ? '&' : '?') + 'token=' + encodeURIComponent(_conductorToken);
             const ws = new WebSocket(wsUrl);
             ws.binaryType = 'arraybuffer';
 
