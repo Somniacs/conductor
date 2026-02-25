@@ -160,10 +160,14 @@ else:
                 if key.startswith("CLAUDE"):
                     del env[key]
 
-            # pywinpty expects the full command line as bytes or str
-            cmd = self.command
+            # pywinpty spawn() expects: appname (str), cmdline (str|None),
+            # cwd (str|None), env (null-separated str|None)
+            parts = self.command.split(None, 1)
+            appname = parts[0]
+            cmdline = parts[1] if len(parts) > 1 else None
             cwd = self.cwd or os.getcwd()
-            self._pty.spawn(cmd.encode() if isinstance(cmd, str) else cmd, cwd=cwd.encode() if isinstance(cwd, str) else cwd, env=env)
+            env_str = "\0".join(f"{k}={v}" for k, v in env.items()) + "\0"
+            self._pty.spawn(appname, cmdline=cmdline, cwd=cwd, env=env_str)
 
             # pywinpty doesn't directly expose PID in all versions;
             # we store it if available

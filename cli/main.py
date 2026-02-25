@@ -93,7 +93,7 @@ def serve(host, port):
     """Start the Conductor server."""
     from conductor.server.app import run_server
 
-    click.echo(f"☉ Conductor server on {host}:{port}")
+    click.echo(f"Conductor server on {host}:{port}")
     click.echo(f"  Dashboard: http://{host}:{port}")
     run_server(host=host, port=port)
 
