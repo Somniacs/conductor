@@ -18,13 +18,15 @@ To check Python: open PowerShell and run `python --version` or `py --version`.
 
 ### Option A — From release (recommended)
 
-Download `conductor.zip` from the [latest release](https://github.com/somniacs/conductor/releases/latest), extract it, and run the installer:
-
 ```powershell
+# Download and extract
+Invoke-WebRequest https://github.com/somniacs/conductor/releases/latest/download/conductor.zip -OutFile conductor.zip
 Expand-Archive conductor.zip -DestinationPath .
 cd conductor
 powershell -ExecutionPolicy Bypass -File install.ps1
 ```
+
+Or download manually from the [latest release](https://github.com/somniacs/conductor/releases/latest).
 
 ### Option B — From source
 

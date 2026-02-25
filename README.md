@@ -54,13 +54,15 @@ Requires Windows 10 Build 1809+ or Windows 11 (for ConPTY support).
 
 #### Option A — From release (recommended)
 
-Download `conductor.zip` from the [Releases](https://github.com/somniacs/conductor/releases) page, extract, and run the installer:
-
 ```powershell
+# Download and extract
+Invoke-WebRequest https://github.com/somniacs/conductor/releases/latest/download/conductor.zip -OutFile conductor.zip
 Expand-Archive conductor.zip -DestinationPath .
 cd conductor
 powershell -ExecutionPolicy Bypass -File install.ps1
 ```
+
+Or download manually from the [Releases](https://github.com/somniacs/conductor/releases) page.
 
 #### Option B — From source
 
