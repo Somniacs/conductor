@@ -17,14 +17,54 @@ import os
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
+from starlette.middleware.base import BaseHTTPMiddleware
 
 from conductor.api.routes import router, registry
-from conductor.utils.config import HOST, PORT, PID_FILE, ensure_dirs
+from conductor.utils.config import CONDUCTOR_TOKEN, HOST, PORT, PID_FILE, VERSION, ensure_dirs
 
+
+# ---------------------------------------------------------------------------
+# Bearer token auth middleware (only active when CONDUCTOR_TOKEN is set)
+# ---------------------------------------------------------------------------
+
+# Paths that never require auth
+_PUBLIC_PATHS = {"/health", "/openapi.json", "/docs", "/redoc", "/"}
+_PUBLIC_PREFIXES = ("/static/",)
+
+
+class BearerAuthMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request: Request, call_next):
+        path = request.url.path
+
+        # Skip auth for public paths
+        if path in _PUBLIC_PATHS or any(path.startswith(p) for p in _PUBLIC_PREFIXES):
+            return await call_next(request)
+
+        # Skip WebSocket upgrades — auth is handled in the WS handler via
+        # _check_ws_auth() which supports query-param tokens (browsers can't
+        # set Authorization headers on WebSocket connections).
+        if request.headers.get("upgrade", "").lower() == "websocket":
+            return await call_next(request)
+
+        # Check Bearer token
+        auth = request.headers.get("authorization", "")
+        if auth == f"Bearer {CONDUCTOR_TOKEN}":
+            return await call_next(request)
+
+        return JSONResponse(
+            status_code=401,
+            content={"detail": "Unauthorized"},
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+
+# ---------------------------------------------------------------------------
+# App lifecycle
+# ---------------------------------------------------------------------------
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -36,7 +76,7 @@ async def lifespan(app: FastAPI):
 
 
 def create_app() -> FastAPI:
-    app = FastAPI(title="Conductor", version="0.1.2", lifespan=lifespan)
+    app = FastAPI(title="Conductor", version=VERSION, lifespan=lifespan)
 
     # CORS: Allow any Conductor dashboard to connect cross-origin.
     # Safe on private Tailscale networks where the network is the trust boundary.
@@ -47,6 +87,10 @@ def create_app() -> FastAPI:
         allow_headers=["*"],
     )
 
+    # Auth middleware — only when CONDUCTOR_TOKEN is set
+    if CONDUCTOR_TOKEN:
+        app.add_middleware(BearerAuthMiddleware)
+
     app.include_router(router)
 
     # Serve dashboard
@@ -55,6 +99,15 @@ def create_app() -> FastAPI:
 
         @app.get("/")
         async def dashboard():
+            if CONDUCTOR_TOKEN:
+                # Inject auth token meta tag so the dashboard can authenticate
+                html = (static_dir / "index.html").read_text()
+                html = html.replace(
+                    "<head>",
+                    f'<head>\n    <meta name="conductor-token" content="{CONDUCTOR_TOKEN}">',
+                    1,
+                )
+                return HTMLResponse(html)
             return FileResponse(static_dir / "index.html")
 
         app.mount(
