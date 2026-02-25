@@ -13,20 +13,24 @@
 
 """In-memory session registry with metadata persisted to disk."""
 
+import asyncio
 import json
+import shlex
 from typing import Dict, Optional
 
 from conductor.sessions.session import Session
-from conductor.utils.config import SESSIONS_DIR, ensure_dirs
+from conductor.utils.config import ALLOWED_COMMANDS, SESSIONS_DIR, ensure_dirs
 
 
 class SessionRegistry:
     """In-memory registry of all sessions, with metadata persisted to disk.
 
     Running sessions live in ``self.sessions``.  When a session exits and
-    its terminal output contains a ``--resume <id>`` token (e.g. from
-    Claude Code), its metadata is kept in ``self.resumable`` so the user
-    can resume the conversation later — even after a server restart.
+    its terminal output matches a configured resume pattern (e.g. Claude
+    Code's ``--resume <id>``), its metadata is kept in ``self.resumable``
+    so the user can resume the conversation later — even after a server
+    restart.  Resume patterns are configured per command in
+    ``ALLOWED_COMMANDS`` (see config.py).
     """
 
     def __init__(self):
@@ -34,6 +38,30 @@ class SessionRegistry:
         self.resumable: Dict[str, dict] = {}
         ensure_dirs()
         self._load_resumable()
+
+    @staticmethod
+    def _agent_config_for(command: str) -> dict:
+        """Return per-command config fields for a command.
+
+        Matches the command's base executable against ALLOWED_COMMANDS entries
+        and returns resume_pattern, resume_flag, and stop_sequence (if any).
+        """
+        try:
+            base = shlex.split(command)[0]
+        except ValueError:
+            return {}
+        for entry in ALLOWED_COMMANDS:
+            try:
+                entry_base = shlex.split(entry["command"])[0]
+            except ValueError:
+                continue
+            if base == entry_base:
+                return {
+                    k: entry[k]
+                    for k in ("resume_pattern", "resume_flag", "stop_sequence")
+                    if k in entry
+                }
+        return {}
 
     def _load_resumable(self):
         """Load persisted resumable-session metadata from disk on startup."""
@@ -59,7 +87,9 @@ class SessionRegistry:
         else:
             self._delete_metadata(session_id)
 
-    async def create(self, name: str, command: str, cwd: str | None = None, env: dict | None = None) -> Session:
+    async def create(self, name: str, command: str, cwd: str | None = None,
+                     env: dict | None = None, rows: int | None = None,
+                     cols: int | None = None, source: str | None = None) -> Session:
         if name in self.sessions:
             existing = self.sessions[name]
             if existing.status == "running":
@@ -70,6 +100,8 @@ class SessionRegistry:
         # If resuming over an old resumable entry with the same name, clear it.
         self.resumable.pop(name, None)
 
+        cfg = self._agent_config_for(command)
+
         session = Session(
             name=name,
             command=command,
@@ -77,20 +109,54 @@ class SessionRegistry:
             cwd=cwd,
             on_exit=self._on_session_exit,
             env=env,
+            resume_pattern=cfg.get("resume_pattern"),
+            resume_flag=cfg.get("resume_flag"),
+            stop_sequence=cfg.get("stop_sequence"),
         )
-        await session.start()
+        await session.start(rows=rows or 24, cols=cols or 80)
+        # Record initial size so the web client knows the PTY dimensions.
+        if rows and cols and source == "cli":
+            session.resize(rows, cols, source="cli")
         self.sessions[name] = session
         self._save_metadata(session)
         return session
 
     async def resume(self, session_id: str) -> Session:
-        """Resume a previously exited session using its stored resume_id."""
+        """Resume a previously exited session using its stored resume ID.
+
+        Uses the per-command ``resume_flag`` (persisted in session metadata)
+        to build the correct CLI invocation, e.g.
+        ``claude ... --resume <id>`` or ``aider --continue <id>``.
+        Falls back to ``--resume`` for backward compatibility.
+        """
         meta = self.resumable.pop(session_id, None)
+
+        # Edge case: session just exited but _on_session_exit hasn't moved
+        # it to self.resumable yet — check self.sessions as a fallback.
+        if not meta:
+            live = self.sessions.get(session_id)
+            if live and live.status == "exited" and live.resume_id:
+                meta = live.to_dict()
+                self.sessions.pop(session_id, None)
+                if live._monitor_task:
+                    live._monitor_task.cancel()
+                    try:
+                        await live._monitor_task
+                    except asyncio.CancelledError:
+                        pass
+                live.pty.close()
+
         if not meta or not meta.get("resume_id"):
             raise ValueError(f"No resumable session '{session_id}'")
 
-        # Build the command: original command + --resume <id>
-        command = meta["command"] + f" --resume {meta['resume_id']}"
+        flag = meta.get("resume_flag", "--resume")
+        # Strip any previous resume flag+id from the command to avoid
+        # accumulation across multiple resumes.
+        import re as _re
+        command = _re.sub(
+            rf'\s*{_re.escape(flag)}\s+\S+', '', meta["command"]
+        ).rstrip()
+        command += f" {flag} {meta['resume_id']}"
         cwd = meta.get("cwd")
         self._delete_metadata(session_id)
 
@@ -110,6 +176,18 @@ class SessionRegistry:
             await session.kill()
             await session.cleanup()
             self._delete_metadata(session_id)
+
+    def graceful_stop(self, session_id: str):
+        """Send SIGINT to the session for a graceful shutdown.
+
+        The session stays in ``self.sessions`` — its ``_monitor_process``
+        task will detect the exit, extract any resume token from the
+        terminal buffer, and call ``_on_session_exit`` which moves the
+        session to ``self.resumable`` if a resume ID was found.
+        """
+        session = self.sessions.get(session_id)
+        if session and session.status in ("running", "starting"):
+            session.interrupt()
 
     def dismiss_resumable(self, session_id: str):
         """Remove a resumable entry without resuming it."""

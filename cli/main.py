@@ -159,9 +159,14 @@ def run(command, name, detach, use_json):
         if not use_json:
             click.echo(f"Server started on {BASE_URL}")
 
+    # Include terminal size so the PTY spawns at the correct dimensions
+    # from the start — avoids a resize race where the agent renders its
+    # startup screen at 80 cols before the CLI sends a resize.
+    size = shutil.get_terminal_size()
     r = httpx.post(
         f"{BASE_URL}/sessions/run",
-        json={"name": name, "command": command, "source": "cli"},
+        json={"name": name, "command": command, "source": "cli",
+              "rows": size.lines, "cols": size.columns},
         headers=_auth_headers(),
         timeout=10,
     )
@@ -236,7 +241,7 @@ def _resize_session(session_name: str):
         size = shutil.get_terminal_size()
         httpx.post(
             f"{BASE_URL}/sessions/{session_name}/resize",
-            json={"rows": size.lines, "cols": size.columns},
+            json={"rows": size.lines, "cols": size.columns, "source": "cli"},
             headers=_auth_headers(),
             timeout=3,
         )

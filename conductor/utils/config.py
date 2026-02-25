@@ -16,7 +16,7 @@
 import os
 from pathlib import Path
 
-VERSION = "0.2.1"
+VERSION = "0.3.0"
 CONDUCTOR_TOKEN = os.environ.get("CONDUCTOR_TOKEN")
 
 HOST = "0.0.0.0"
@@ -36,8 +36,24 @@ ALLOWED_IMAGE_TYPES = {"image/png", "image/jpeg", "image/gif", "image/webp", "im
 # Allowed commands for the web dashboard "New Session" form.
 # Only the base command name is checked (first token before args).
 # The CLI is unrestricted — this only limits what the dashboard can launch.
+#
+# Resume support (optional per command):
+#   resume_pattern  — regex applied to terminal output to extract a resume ID.
+#                     Must contain exactly one capture group for the ID.
+#   resume_flag     — CLI flag prepended to the resume ID when restarting,
+#                     e.g. "--resume" → "claude ... --resume <id>".
+#
+# Commands without resume_pattern/resume_flag simply won't offer resume.
 ALLOWED_COMMANDS = [
-    {"command": "claude --dangerously-skip-permissions", "label": "Claude Code"},
+    {
+        "command": "claude --dangerously-skip-permissions",
+        "label": "Claude Code",
+        "resume_pattern": r"--resume\s+(\S+)",
+        "resume_flag": "--resume",
+        # Graceful stop: Ctrl-C to cancel any running task, then /exit to
+        # trigger Claude's own shutdown which prints the resume token.
+        "stop_sequence": ["\x03", "/exit", "\r"],
+    },
     {"command": "codex", "label": "OpenAI Codex CLI"},
     {"command": "gh copilot", "label": "GitHub Copilot CLI"},
     {"command": "aider", "label": "Aider"},

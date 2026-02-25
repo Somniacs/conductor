@@ -35,8 +35,9 @@ _ANSI_RE = re.compile(
     r')'
 )
 
-# Pattern to find `--resume <id>` in Claude Code exit output.
-_RESUME_RE = re.compile(r'--resume\s+(\S+)')
+# Default pattern to find `--resume <id>` in Claude Code exit output.
+# Used as fallback when no per-command resume_pattern is configured.
+_DEFAULT_RESUME_RE = re.compile(r'--resume\s+(\S+)')
 
 import shutil
 
@@ -49,7 +50,11 @@ _IS_WIN = sys.platform == "win32"
 class Session:
     """A single managed terminal session backed by a PTY."""
 
-    def __init__(self, name: str, command: str, session_id: str | None = None, cwd: str | None = None, on_exit=None, env: dict | None = None):
+    def __init__(self, name: str, command: str, session_id: str | None = None,
+                 cwd: str | None = None, on_exit=None, env: dict | None = None,
+                 resume_pattern: str | None = None,
+                 resume_flag: str | None = None,
+                 stop_sequence: list[str] | None = None):
         self.id = session_id or name
         self.name = name
         self.command = command
@@ -63,12 +68,18 @@ class Session:
         self.created_at: str | None = None
         self.exit_code: int | None = None
         self.resume_id: str | None = None
+        self.resume_flag: str | None = resume_flag
+        self._resume_re = re.compile(resume_pattern) if resume_pattern else None
+        self._stop_sequence: list[str] | None = stop_sequence
+        self.rows: int = 24
+        self.cols: int = 80
+        self.resize_source: str | None = None
         self._monitor_task: asyncio.Task | None = None
         self._on_exit = on_exit
         self._reader_thread: threading.Thread | None = None
 
-    async def start(self):
-        self.pty.spawn()
+    async def start(self, rows: int = 24, cols: int = 80):
+        self.pty.spawn(rows=rows, cols=cols)
         self.pid = self.pty.pid
         self.start_time = time.time()
         self.created_at = datetime.fromtimestamp(self.start_time, tz=timezone.utc).isoformat()
@@ -98,7 +109,12 @@ class Session:
                 self._append_buffer(data)
                 self._broadcast(data)
         except OSError:
-            pass
+            # EIO means the slave side closed (process exited).
+            # Unregister immediately to avoid a tight spin in the event loop.
+            try:
+                asyncio.get_event_loop().remove_reader(self.pty.master_fd)
+            except Exception:
+                pass
 
     # -- Windows reader (thread-based) -------------------------------------
 
@@ -157,7 +173,11 @@ class Session:
     def send_input_bytes(self, data: bytes):
         self.pty.write(data)
 
-    def resize(self, rows: int, cols: int):
+    def resize(self, rows: int, cols: int, source: str | None = None):
+        self.rows = rows
+        self.cols = cols
+        if source:
+            self.resize_source = source
         self.pty.resize(rows, cols)
 
     def _cleanup_uploads(self):
@@ -167,12 +187,18 @@ class Session:
             shutil.rmtree(upload_dir, ignore_errors=True)
 
     def _extract_resume_id(self):
-        """Scan the tail of the terminal buffer for a --resume <id> token."""
+        """Scan the tail of the terminal buffer for a resume token.
+
+        Uses the per-command ``resume_pattern`` if configured, otherwise
+        falls back to the default ``--resume <id>`` pattern so existing
+        Claude Code sessions keep working.
+        """
+        pattern = self._resume_re or _DEFAULT_RESUME_RE
         try:
             # Only inspect the last 4 KB — the resume line is near the end.
             tail = bytes(self.buffer[-4096:]).decode("utf-8", errors="replace")
             clean = _ANSI_RE.sub("", tail)
-            match = _RESUME_RE.search(clean)
+            match = pattern.search(clean)
             if match:
                 self.resume_id = match.group(1)
         except Exception:
@@ -182,21 +208,95 @@ class Session:
         while self.pty.poll() is None:
             await asyncio.sleep(0.5)
         self.exit_code = self.pty.poll()
-        self.status = "exited"
+
+        # Don't set status to "exited" yet — first drain remaining PTY
+        # data and extract any resume token.  During this brief window
+        # the session keeps its current status ("running" or "stopping")
+        # so the frontend never sees "exited" with resume_id=None.
+
+        # Let the event loop process any pending readable callbacks so
+        # late output (e.g. a resume token printed during shutdown) lands
+        # in the buffer before we look for it.
+        await asyncio.sleep(0.1)
 
         if not _IS_WIN:
+            # Drain any remaining data from the PTY fd — the resume token
+            # is often the very last thing an agent prints.
+            try:
+                while True:
+                    data = os.read(self.pty.master_fd, 65536)
+                    if not data:
+                        break
+                    self._append_buffer(data)
+                    self._broadcast(data)
+            except OSError:
+                pass
             try:
                 asyncio.get_event_loop().remove_reader(self.pty.master_fd)
             except Exception:
                 pass
 
         self._extract_resume_id()
+
+        # Now mark as exited — resume_id is already set (if found).
+        self.status = "exited"
+
         self._broadcast(b"\r\n[Process exited]\r\n")
         self._broadcast_close()
         self.pty.close()
         self._cleanup_uploads()
         if self._on_exit:
             await self._on_exit(self.id)
+
+    def interrupt(self, timeout: float = 30.0):
+        """Gracefully stop the session.
+
+        If a ``stop_sequence`` is configured (e.g. ``["\\x03", "/exit\\n"]``
+        for Claude Code), each string is written to the PTY with a short
+        delay so the agent can process its own shutdown command and print
+        a resume token.  Otherwise falls back to SIGINT.
+
+        If the process hasn't exited after *timeout* seconds, it is killed.
+        """
+        self.status = "stopping"
+        if self._stop_sequence:
+            asyncio.ensure_future(self._send_stop_sequence())
+        elif _IS_WIN:
+            self.pty.write(b'\x03')
+        else:
+            import signal as _signal
+            try:
+                pgid = os.getpgid(self.pty.process.pid)
+                os.killpg(pgid, _signal.SIGINT)
+            except (ProcessLookupError, OSError):
+                pass
+        # Escalate to SIGTERM if the process doesn't exit in time.
+        asyncio.ensure_future(self._escalate_kill(timeout))
+
+    async def _send_stop_sequence(self):
+        """Write each item in the stop sequence to the PTY with delays.
+
+        Uses a longer delay after the first item (e.g. Ctrl-C → wait for
+        the agent to return to its prompt) and short delays between
+        subsequent items (e.g. command text → Enter key).
+        """
+        for i, item in enumerate(self._stop_sequence):
+            if self.pty.closed or self.status == "exited":
+                break
+            try:
+                self.pty.write(item.encode())
+            except OSError:
+                break
+            if i < len(self._stop_sequence) - 1:
+                # Longer pause after first item (interrupt → wait for prompt).
+                # Shorter pause between command text and Enter key.
+                await asyncio.sleep(2.0 if i == 0 else 0.2)
+
+    async def _escalate_kill(self, timeout: float):
+        """Wait for *timeout* seconds, then SIGTERM if still running."""
+        await asyncio.sleep(timeout)
+        if self.status == "stopping" and self.pty.poll() is None:
+            self.pty.kill()
 
     async def kill(self):
         self.pty.kill()
@@ -231,7 +331,12 @@ class Session:
             "created_at": self.created_at,
             "exit_code": self.exit_code,
             "cwd": self.cwd,
+            "rows": self.rows,
+            "cols": self.cols,
+            "resize_source": self.resize_source,
         }
         if self.resume_id:
             d["resume_id"] = self.resume_id
+        if self.resume_flag:
+            d["resume_flag"] = self.resume_flag
         return d

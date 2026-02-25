@@ -32,8 +32,8 @@ If the command is not found, restart your terminal or run `source ~/.zshrc`.
 ## Start sessions
 
 ```bash
-conductor run myagent research
-conductor run myagent coding
+conductor run <agent> research
+conductor run <agent> coding
 ```
 
 Open `http://127.0.0.1:7777` in Safari or any browser.

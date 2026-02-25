@@ -55,8 +55,8 @@ pip install -e .
 Works the same as Linux/macOS:
 
 ```powershell
-conductor run myagent research
-conductor run myagent coding
+conductor run <agent> research
+conductor run <agent> coding
 conductor list
 conductor open
 ```
@@ -65,10 +65,10 @@ Open `http://127.0.0.1:7777` in your browser for the dashboard.
 
 ### Attach / Detach
 
-- `conductor run myagent research` — starts and attaches (you see output in your terminal)
+- `conductor run <agent> research` — starts and attaches (you see output in your terminal)
 - Press `Ctrl+]` to detach without stopping the session
 - `conductor attach research` — reattach later
-- `conductor run -d myagent coding` — start detached (background)
+- `conductor run -d <agent> coding` — start detached (background)
 
 ## Remote access from another device
 
@@ -126,7 +126,7 @@ If you prefer, you can also run Conductor inside WSL (Windows Subsystem for Linu
 git clone https://github.com/somniacs/conductor.git
 cd conductor
 ./install.sh
-conductor run myagent research
+conductor run <agent> research
 ```
 
 Then open `http://localhost:7777` in your Windows browser. WSL provides full Unix PTY support.

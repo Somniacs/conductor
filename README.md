@@ -6,16 +6,31 @@ AI agents run for minutes, sometimes hours — then stall on a single question, 
 
 Conductor keeps them moving. It wraps terminal sessions in a lightweight server and exposes them through a web dashboard you can open from your phone, tablet, or laptop. Pair it with [Tailscale](https://tailscale.com/) and you get secure remote access to all your machines — no port forwarding, no VPN setup, just works.
 
+**New here?** Check out the [Quick Start Guide](docs/intro.md) — install, run an agent, and set up phone access in 5 minutes.
+
 ## What It Looks Like
 
+`<agent>` is the command to run. Some examples:
+
+| Agent | Command |
+|---|---|
+| Claude Code | `conductor run claude research` |
+| Codex CLI | `conductor run codex backend` |
+| Aider | `conductor run aider refactor` |
+| Goose | `conductor run goose api` |
+| GitHub Copilot | `conductor run "gh copilot" chat` |
+| Any command | `conductor run python3 train` |
+
 ```
-Start agents               Leave your desk            Answer from anywhere
-─────────────              ───────────────            ────────────────────
-conductor run myagent dev    Go to a meeting.           Open dashboard on phone.
-conductor run myagent test   Grab coffee.               See all sessions.
-conductor run myagent api    Sit on the couch.          Type a response. Done.
-                                                      Agent keeps going.
+Start agents                Leave your desk         Answer from anywhere
+──────────────              ───────────────         ────────────────────
+conductor run <agent> dev   Go to a meeting.        Open dashboard on phone.
+conductor run <agent> test  Grab coffee.            See all sessions.
+conductor run <agent> api   Sit on the couch.       Type a response. Done.
+                                                    Agent keeps going.
 ```
+
+You can also start new sessions directly from the web dashboard — pick an agent, name the session, and hit Run. No terminal needed. When you're back at your computer, attach to any running session from the terminal with `conductor attach <name>`.
 
 Sessions survive disconnects. Close the browser, reopen it later — everything is still there. When an agent session exits with a resume token (e.g. Claude Code's `--resume`), Conductor captures it and lets you resume the conversation later — even after a reboot.
 
@@ -133,11 +148,11 @@ pip install -e .
 
 ```bash
 # Start one session (server auto-starts in background)
-conductor run myagent research
+conductor run <agent> research
 
 # Start more
-conductor run myagent coding
-conductor run myagent review
+conductor run <agent> coding
+conductor run <agent> review
 ```
 
 Open the dashboard in your browser — locally at `http://127.0.0.1:7777`, or from any device on your Tailscale network at `http://100.x.x.x:7777` (your Tailscale IP).
@@ -150,11 +165,11 @@ Conductor supports connecting to multiple machines from a single dashboard. Each
 
 ```bash
 # On workstation
-conductor run myagent research
-conductor run myagent coding
+conductor run <agent> research
+conductor run <agent> coding
 
 # On GPU box (install Conductor there too)
-conductor run myagent train
+conductor run <agent> train
 ```
 
 **2. Add machines to the dashboard:**
@@ -210,7 +225,7 @@ This requires [Tailscale](https://tailscale.com/) on both your workstation and y
 **1. Start Conductor on your workstation** (if not already running):
 
 ```bash
-conductor run myagent research
+conductor run <agent> research
 ```
 
 **2. Open on your other device:**
@@ -287,7 +302,7 @@ The web dashboard provides:
 - **Idle notifications** — browser notification when a session is waiting for input (when tab not visible)
 - **Link Device** — QR code in the hamburger menu for opening the dashboard on another device
 - **Server management** — add/remove servers, Tailscale device picker, QR scanner, connection status
-- **Image upload** — paste (Ctrl+V), drag-and-drop, or use the attachment button to upload an image; shows an upload dialog with progress, then lets you insert the file path into the terminal or copy it to clipboard. Uploaded files are auto-cleaned when the session ends
+- **File upload** — paste (Ctrl+V), drag-and-drop, or use the attachment button to upload any file (images, PDFs, code, text, etc.); shows an upload dialog with progress, then lets you insert the file path into the terminal or copy it to clipboard. Uploaded files are auto-cleaned when the session ends
 - **Mobile extra keys** — on-screen toolbar with ESC, TAB, arrows, CTRL, ALT, Page Up/Down, Home/End, and attachment button; appears above the virtual keyboard on touch devices, with collapsible drawer (state persisted)
 - **Mobile touch scroll** — one-finger scroll with momentum in terminal panels
 - **Collapsible sidebar** — chevron toggle, auto-reopens when all panels close
@@ -329,7 +344,7 @@ Default port `7777`. All endpoints relative to your host. OpenAPI spec at `/open
 | `POST` | `/sessions/run` | Create session (`{"name": "...", "command": "..."}`) |
 | `POST` | `/sessions/{id}/input` | Send input (`{"text": "..."}` and/or `{"keys": ["CTRL+C"]}`) |
 | `POST` | `/sessions/{id}/resize` | Resize PTY (`{"rows": 24, "cols": 80}`) |
-| `POST` | `/sessions/{id}/upload` | Upload an image (raw body, `Content-Type: image/*`) → `{"path": "...", "filename": "..."}` |
+| `POST` | `/sessions/{id}/upload` | Upload a file (raw body, any content type, optional `X-Filename` header) → `{"path": "...", "filename": "..."}` |
 | `POST` | `/sessions/{id}/resume` | Resume an exited session with a stored resume token |
 | `POST` | `/sessions/{id}/stop` | Stop a session (alias for DELETE) |
 | `DELETE` | `/sessions/{id}` | Kill session (or dismiss a resumable session) |
@@ -351,11 +366,11 @@ Check if the server is running and get connection details:
 ```bash
 # CLI
 conductor status --json
-# → {"ok": true, "version": "0.2.1", "base_url": "http://127.0.0.1:7777", ...}
+# → {"ok": true, "version": "0.3.0", "base_url": "http://127.0.0.1:7777", ...}
 
 # HTTP
 curl http://127.0.0.1:7777/health
-# → {"ok": true, "version": "0.2.1"}
+# → {"ok": true, "version": "0.3.0"}
 ```
 
 The full OpenAPI spec is at `http://127.0.0.1:7777/openapi.json`.

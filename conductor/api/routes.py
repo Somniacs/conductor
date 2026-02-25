@@ -34,7 +34,7 @@ _SAFE_NAME = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9 _.~-]{0,63}$")
 
 from conductor.sessions.registry import SessionRegistry
 from conductor.utils.config import (
-    ALLOWED_COMMANDS, ALLOWED_IMAGE_TYPES, CONDUCTOR_TOKEN,
+    ALLOWED_COMMANDS, CONDUCTOR_TOKEN,
     DEFAULT_DIRECTORIES, MAX_UPLOAD_SIZE, PORT, UPLOADS_DIR, VERSION,
 )
 
@@ -44,13 +44,14 @@ registry = SessionRegistry()
 # Build set of allowed base commands for fast lookup
 _allowed_commands = {shlex.split(c["command"])[0] for c in ALLOWED_COMMANDS}
 
-# Content-type to file extension mapping for image uploads
-_IMAGE_EXTENSIONS: dict[str, str] = {
-    "image/png": "png",
-    "image/jpeg": "jpg",
-    "image/gif": "gif",
-    "image/webp": "webp",
-    "image/bmp": "bmp",
+# Content-type to file extension fallback mapping
+_MIME_EXTENSIONS: dict[str, str] = {
+    "image/png": "png", "image/jpeg": "jpg", "image/gif": "gif",
+    "image/webp": "webp", "image/bmp": "bmp", "image/svg+xml": "svg",
+    "application/pdf": "pdf", "text/plain": "txt", "text/csv": "csv",
+    "text/html": "html", "text/markdown": "md",
+    "application/json": "json", "application/xml": "xml",
+    "application/zip": "zip", "application/gzip": "gz",
 }
 
 
@@ -91,6 +92,8 @@ class RunRequest(BaseModel):
     cwd: str | None = None
     source: str | None = None  # "cli" bypasses whitelist; dashboard is restricted
     env: dict[str, str] | None = None
+    rows: int | None = None  # initial PTY size (avoids resize race on startup)
+    cols: int | None = None
 
 
 class InputRequest(BaseModel):
@@ -98,9 +101,14 @@ class InputRequest(BaseModel):
     keys: list[str] | None = None
 
 
+class StopRequest(BaseModel):
+    mode: str = "kill"  # "kill" = hard stop, "graceful" = SIGINT (allows resume)
+
+
 class ResizeRequest(BaseModel):
     rows: int
     cols: int
+    source: str | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -122,7 +130,11 @@ class SessionResponse(BaseModel):
     created_at: str | None = None
     exit_code: int | None = None
     cwd: str | None = None
+    rows: int | None = None
+    cols: int | None = None
+    resize_source: str | None = None
     resume_id: str | None = None
+    resume_flag: str | None = None
     ws_url: str | None = None
 
 
@@ -209,17 +221,28 @@ async def health():
 @router.get("/info")
 async def server_info():
     """Return server identity for multi-server dashboard."""
+    loop = asyncio.get_event_loop()
+    ts_ip, ts_name = await asyncio.gather(
+        loop.run_in_executor(None, _get_tailscale_ip),
+        loop.run_in_executor(None, _get_tailscale_name),
+    )
     return {
         "hostname": socket.gethostname(),
         "port": PORT,
-        "tailscale_ip": _get_tailscale_ip(),
-        "tailscale_name": _get_tailscale_name(),
+        "tailscale_ip": ts_ip,
+        "tailscale_name": ts_name,
     }
 
 
 @router.get("/tailscale/peers")
 async def tailscale_peers():
     """Return online Tailscale peers for the server picker."""
+    loop = asyncio.get_event_loop()
+    return await loop.run_in_executor(None, _get_tailscale_peers)
+
+
+def _get_tailscale_peers():
+    """Blocking helper — runs in thread pool."""
     if not shutil.which("tailscale"):
         return []
     try:
@@ -252,8 +275,13 @@ async def tailscale_peers():
 @router.get("/config")
 async def get_config():
     """Return allowed commands and directories for the dashboard."""
+    # Only expose frontend-safe fields (not stop_sequence with raw escapes).
+    safe = [
+        {k: v for k, v in c.items() if k != "stop_sequence"}
+        for c in ALLOWED_COMMANDS
+    ]
     return {
-        "allowed_commands": ALLOWED_COMMANDS,
+        "allowed_commands": safe,
         "default_directories": DEFAULT_DIRECTORIES,
     }
 
@@ -325,7 +353,8 @@ async def create_session(req: RunRequest, request: Request):
             )
 
     try:
-        session = await registry.create(req.name, req.command, cwd=req.cwd, env=req.env)
+        session = await registry.create(req.name, req.command, cwd=req.cwd, env=req.env,
+                                        rows=req.rows, cols=req.cols, source=req.source)
         d = session.to_dict()
         d["ws_url"] = _ws_url_for(request, session.id)
         return d
@@ -367,20 +396,16 @@ async def resize_session(session_id: str, req: ResizeRequest):
     session = registry.get(session_id)
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
-    session.resize(req.rows, req.cols)
+    session.resize(req.rows, req.cols, source=req.source)
     return {"status": "ok"}
 
 
 @router.post("/sessions/{session_id}/upload", response_model=UploadResponse)
-async def upload_image(session_id: str, request: Request):
-    """Upload an image and return its file path for use in the terminal."""
+async def upload_file(session_id: str, request: Request):
+    """Upload a file and return its path for use in the terminal."""
     session = registry.get(session_id)
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
-
-    content_type = (request.headers.get("content-type") or "").split(";")[0].strip()
-    if content_type not in ALLOWED_IMAGE_TYPES:
-        raise HTTPException(status_code=400, detail=f"Unsupported image type: {content_type}")
 
     body = await request.body()
     if not body:
@@ -388,9 +413,22 @@ async def upload_image(session_id: str, request: Request):
     if len(body) > MAX_UPLOAD_SIZE:
         raise HTTPException(status_code=413, detail="File too large (max 10 MB)")
 
-    ext = _IMAGE_EXTENSIONS.get(content_type, "bin")
-    hash8 = hashlib.sha256(body).hexdigest()[:8]
-    filename = f"image-{int(time.time())}-{hash8}.{ext}"
+    content_type = (request.headers.get("content-type") or "").split(";")[0].strip()
+
+    # Try to get a meaningful filename from Content-Disposition or X-Filename header,
+    # otherwise generate one from content type and hash.
+    original_name = request.headers.get("x-filename")
+    if original_name:
+        # Sanitize: keep only the basename, strip path separators
+        original_name = original_name.replace("\\", "/").rsplit("/", 1)[-1]
+        # Remove any non-safe characters
+        safe_name = re.sub(r'[^\w.\-]', '_', original_name)
+        hash4 = hashlib.sha256(body).hexdigest()[:4]
+        filename = f"{int(time.time())}-{hash4}-{safe_name}"
+    else:
+        ext = _MIME_EXTENSIONS.get(content_type, "bin")
+        hash8 = hashlib.sha256(body).hexdigest()[:8]
+        filename = f"upload-{int(time.time())}-{hash8}.{ext}"
 
     upload_dir = UPLOADS_DIR / session_id
     upload_dir.mkdir(parents=True, exist_ok=True)
@@ -415,10 +453,20 @@ async def resume_session(session_id: str):
 
 
 @router.post("/sessions/{session_id}/stop", response_model=StatusResponse)
-async def stop_session(session_id: str):
-    """Stop a session (alias for DELETE)."""
+async def stop_session(session_id: str, req: StopRequest | None = None):
+    """Stop a session.
+
+    Body (optional JSON):
+      mode: "kill"     — hard stop, session is removed (default)
+      mode: "graceful" — send SIGINT so the agent can print a resume token
+    """
+    mode = (req.mode if req else None) or "kill"
+
     session = registry.get(session_id)
     if session:
+        if mode == "graceful":
+            registry.graceful_stop(session_id)
+            return {"status": "stopping"}
         await registry.remove(session_id)
         return {"status": "stopped"}
 
