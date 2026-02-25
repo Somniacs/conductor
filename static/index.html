@@ -709,6 +709,9 @@
             /* min-width is set dynamically from JS after measuring char width */
         }
 
+        /* xterm.js handles its own touch scrolling — don't interfere */
+        .xterm-screen { touch-action: none; }
+
         .panel-terminal pre {
             padding: 8px 12px;
             font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
