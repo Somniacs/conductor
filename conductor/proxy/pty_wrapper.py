@@ -141,7 +141,15 @@ if not _IS_WIN:
 # ---------------------------------------------------------------------------
 
 else:
+    import re as _re
     from winpty import PTY as WinPTY  # type: ignore[import-not-found]
+
+    # ConPTY leaks terminal query responses into the output stream.
+    # Strip them so they don't show up as visible garbage.
+    _CONPTY_LEAK_RE = _re.compile(
+        rb"\x1b\[\??[\d;]*[cRn]"  # DA1, DA2, DSR, CPR responses
+        rb"|\x1b\[>\d[\d;]*c"     # DA2 response (alternate form)
+    )
 
     class WindowsPTYProcess(BasePTYProcess):
         """Wraps a subprocess in a Windows ConPTY pseudo-terminal."""
@@ -177,12 +185,16 @@ else:
             if self._pty and not self.closed:
                 data = self._pty.read()
                 if isinstance(data, str):
-                    return data.encode("utf-8", errors="replace")
+                    data = data.encode("utf-8", errors="replace")
+                if data:
+                    data = _CONPTY_LEAK_RE.sub(b"", data)
                 return data or b""
             return b""
 
         def write(self, data: bytes) -> None:
             if self._pty and not self.closed:
+                if isinstance(data, bytes):
+                    data = data.decode("utf-8", errors="replace")
                 self._pty.write(data)
 
         def resize(self, rows: int, cols: int) -> None:
