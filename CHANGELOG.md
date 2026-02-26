@@ -2,6 +2,13 @@
 
 All notable changes to Conductor are documented here.
 
+## v0.3.1
+
+- **CLI `--version` flag** — `conductor --version` prints the current version
+- **Auto-start docs** — setup guide for systemd (Linux), launchd (macOS), and Task Scheduler (Windows)
+- **CHANGELOG.md** — added changelog with history from v0.1.0
+- **README** — table of contents, refined intro and cloud-independence positioning, autostart reference
+
 ## v0.3.0
 
 First public release.
