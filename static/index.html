@@ -102,6 +102,18 @@
         }
         .server-status.disconnected { display: block; }
 
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .server-status .spinner {
+            display: inline-block;
+            width: 9px; height: 9px;
+            border: 1.5px solid #ff606040;
+            border-top-color: #ff6060;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+            vertical-align: middle;
+            margin-right: 6px;
+        }
+
         .update-status {
             display: none;
             padding: 8px 12px;
@@ -1484,7 +1496,7 @@
             <div class="sidebar-actions">
                 <button onclick="toggleNewSession()">+ New</button>
             </div>
-            <div class="server-status" id="server-status">Server disconnected — retrying...</div>
+            <div class="server-status" id="server-status"><span class="spinner"></span>Server disconnected — retrying...</div>
             <div id="session-list"></div>
             <a class="update-status" id="update-status" target="_blank"></a>
             <div class="new-session" id="new-session-dialog">
@@ -4419,28 +4431,43 @@
         }
 
         function checkForUpdate() {
-            if (sessionStorage.getItem('_updateChecked')) return;
-            sessionStorage.setItem('_updateChecked', '1');
-
             const cur = document.querySelector('.about-version')
                 ?.textContent?.trim()?.replace(/^v/, '');
             if (!cur) return;
+
+            // Use cached result if available (avoids GitHub rate limits)
+            const cached = sessionStorage.getItem('_updateRelease');
+            if (cached) {
+                try {
+                    const c = JSON.parse(cached);
+                    if (c.version && c.url && _semverNewer(c.version, cur)) {
+                        _showUpdateBanner(c.version, c.url);
+                    }
+                } catch (e) {}
+                return;
+            }
 
             fetch('https://api.github.com/repos/somniacs/conductor/releases/latest')
                 .then(r => r.ok ? r.json() : null)
                 .then(data => {
                     if (!data || !data.tag_name) return;
                     const latest = data.tag_name.replace(/^v/, '');
+                    sessionStorage.setItem('_updateRelease',
+                        JSON.stringify({ version: latest, url: data.html_url }));
                     if (_semverNewer(latest, cur)) {
-                        const el = document.getElementById('update-status');
-                        if (el) {
-                            el.textContent = '\u2191 v' + latest + ' available';
-                            el.href = data.html_url;
-                            el.style.display = 'block';
-                        }
+                        _showUpdateBanner(latest, data.html_url);
                     }
                 })
                 .catch(() => {});
+        }
+
+        function _showUpdateBanner(version, url) {
+            const el = document.getElementById('update-status');
+            if (el) {
+                el.textContent = '\u2191 v' + version + ' available';
+                el.href = url;
+                el.style.display = 'block';
+            }
         }
 
         setTimeout(checkForUpdate, 5000);
