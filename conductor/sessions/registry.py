@@ -19,7 +19,8 @@ import shlex
 from typing import Dict, Optional
 
 from conductor.sessions.session import Session
-from conductor.utils.config import ALLOWED_COMMANDS, SESSIONS_DIR, ensure_dirs
+from conductor.utils import config as cfg
+from conductor.utils.config import SESSIONS_DIR, ensure_dirs
 
 
 class SessionRegistry:
@@ -50,7 +51,7 @@ class SessionRegistry:
             base = shlex.split(command)[0]
         except ValueError:
             return {}
-        for entry in ALLOWED_COMMANDS:
+        for entry in cfg.ALLOWED_COMMANDS:
             try:
                 entry_base = shlex.split(entry["command"])[0]
             except ValueError:
@@ -100,7 +101,7 @@ class SessionRegistry:
         # If resuming over an old resumable entry with the same name, clear it.
         self.resumable.pop(name, None)
 
-        cfg = self._agent_config_for(command)
+        agent_cfg = self._agent_config_for(command)
 
         session = Session(
             name=name,
@@ -109,9 +110,9 @@ class SessionRegistry:
             cwd=cwd,
             on_exit=self._on_session_exit,
             env=env,
-            resume_pattern=cfg.get("resume_pattern"),
-            resume_flag=cfg.get("resume_flag"),
-            stop_sequence=cfg.get("stop_sequence"),
+            resume_pattern=agent_cfg.get("resume_pattern"),
+            resume_flag=agent_cfg.get("resume_flag"),
+            stop_sequence=agent_cfg.get("stop_sequence"),
         )
         await session.start(rows=rows or 24, cols=cols or 80)
         # Record initial size so the web client knows the PTY dimensions.
@@ -187,7 +188,7 @@ class SessionRegistry:
         """
         session = self.sessions.get(session_id)
         if session and session.status in ("running", "starting"):
-            session.interrupt()
+            session.interrupt(timeout=cfg.GRACEFUL_STOP_TIMEOUT)
 
     def dismiss_resumable(self, session_id: str):
         """Remove a resumable entry without resuming it."""

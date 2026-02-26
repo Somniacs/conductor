@@ -73,6 +73,34 @@ Conductor works with any interactive terminal process. The dashboard ships with 
 - **Builds and test suites** — compilation, CI pipelines, test runs
 - **Any terminal process** — if it runs in a terminal, Conductor can manage it
 
+### Adding commands to the allowlist
+
+The dashboard can only launch commands from the allowlist. The CLI is unrestricted.
+
+**From the dashboard (recommended):** Open the hamburger menu → **Settings** (only visible on localhost). Add, edit, or remove commands from the **Allowed Commands** section and click **Save**. Changes take effect immediately on all connected clients — no restart needed. Settings are stored in `~/.conductor/config.yaml`.
+
+**From the config file:** Edit `~/.conductor/config.yaml` directly (created on first save from Settings):
+
+```yaml
+allowed_commands:
+  - command: "claude"
+    label: "Claude Code"
+  - command: "python3"
+    label: "Python"
+```
+
+Optional fields for advanced behavior:
+
+```yaml
+  - command: "my-agent"
+    label: "My Agent"
+    resume_pattern: "--resume\\s+(\\S+)"  # regex to capture resume token from output
+    resume_flag: "--resume"               # flag used when resuming
+    stop_sequence: ["\x03", "/exit", "\r"] # graceful stop keystrokes
+```
+
+After editing the file, restart the server: `conductor restart`.
+
 ## Prerequisites
 
 - **Python 3.10+** — check with `python3 --version` (or `py --version` on Windows)
@@ -290,7 +318,8 @@ Yes. Conductor runs entirely on your machines — no cloud backend, no vendor ac
 - **Local only** — the server binds to your machine. Without Tailscale (or another VPN), it is not reachable from outside your local network.
 - **No authentication layer needed** — when using Tailscale, only devices signed into *your* Tailscale account can reach the server. The network itself is the firewall.
 - **No data leaves your machine** — session output stays in an in-memory buffer on localhost. Nothing is logged to external services.
-- **Restricted dashboard commands** — the web dashboard can only launch commands from a predefined allowlist (`config.py`). The CLI is unrestricted, but the browser cannot start arbitrary processes.
+- **Restricted dashboard commands** — the web dashboard can only launch commands from a predefined allowlist. The CLI is unrestricted, but the browser cannot start arbitrary processes.
+- **Localhost-only admin** — the Settings panel and admin API (`/admin/settings`) are only accessible from `127.0.0.1`. Remote clients cannot view or modify server configuration.
 - **No shell injection** — session input is sent through the PTY as keystrokes, not evaluated as shell commands by Conductor itself.
 - **Sanitized session names** — names are validated against a strict allowlist (alphanumeric, hyphens, underscores, max 64 chars) on both the frontend and backend to prevent path traversal or injection via crafted names.
 - **Open source (MIT)** — the entire codebase is a single Python package and a single HTML file. Read it, audit it, fork it.
@@ -314,6 +343,7 @@ The web dashboard provides:
 - **Font size controls** — per-panel `+` / `−` buttons, adaptive defaults for desktop and mobile
 - **Idle notifications** — browser notification when a session is waiting for input (when tab not visible)
 - **Link Device** — QR code in the hamburger menu for opening the dashboard on another device
+- **Settings panel** — manage allowed commands, directories, buffer size, upload limits, and stop timeout from the dashboard (localhost only). Changes persist and propagate to all clients automatically
 - **Server management** — add/remove servers, Tailscale device picker, QR scanner, connection status
 - **File upload** — paste (Ctrl+V), drag-and-drop, or use the attachment button to upload any file (images, PDFs, code, text, etc.); shows an upload dialog with progress, then lets you insert the file path into the terminal or copy it to clipboard. Uploaded files are auto-cleaned when the session ends
 - **Mobile extra keys** — on-screen toolbar with ESC, TAB, arrows, CTRL, ALT, Page Up/Down, Home/End, and attachment button; appears above the virtual keyboard on touch devices, with collapsible drawer (state persisted)
@@ -367,6 +397,8 @@ Default port `7777`. All endpoints relative to your host. OpenAPI spec at `/open
 | `GET` | `/tailscale/peers` | Online Tailscale peers for device picker |
 | `GET` | `/config` | Allowed commands and default directories |
 | `GET` | `/browse?path=~` | Directory listing for the directory picker |
+| `GET` | `/admin/settings` | Full admin settings (localhost only, 403 for remote) |
+| `PUT` | `/admin/settings` | Update settings and persist to `~/.conductor/config.yaml` (localhost only) |
 
 ## Agent Integration
 

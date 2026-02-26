@@ -487,20 +487,53 @@ def status(use_json):
     click.echo(f"  Auth: {'bearer token' if CONDUCTOR_TOKEN else 'none'}")
 
 
-def stop_server() -> bool:
-    """Stop the server daemon. Returns True if it was stopped."""
+def _find_server_pid() -> int | None:
+    """Find the conductor server PID, trying PID file first, then process list."""
+    # 1. Try PID file
     if PID_FILE.exists():
         try:
             pid = int(PID_FILE.read_text().strip())
-            if sys.platform == "win32":
-                subprocess.run(["taskkill", "/F", "/PID", str(pid)],
-                               capture_output=True)
-            else:
-                os.kill(pid, signal.SIGTERM)
-            PID_FILE.unlink(missing_ok=True)
-            return True
+            # Verify it's actually the conductor server
+            os.kill(pid, 0)
+            return pid
         except (ProcessLookupError, ValueError, OSError):
             PID_FILE.unlink(missing_ok=True)
+
+    # 2. Fall back to searching for the process
+    if sys.platform == "win32":
+        return None
+    try:
+        result = subprocess.run(
+            ["pgrep", "-f", "conductor.server.app"],
+            capture_output=True, text=True, timeout=5,
+        )
+        if result.returncode == 0:
+            # May match multiple lines; take the first
+            for line in result.stdout.strip().split("\n"):
+                pid = int(line.strip())
+                if pid != os.getpid():
+                    return pid
+    except Exception:
+        pass
+    return None
+
+
+def stop_server() -> bool:
+    """Stop the server daemon. Returns True if it was stopped."""
+    pid = _find_server_pid()
+    if pid is None:
+        return False
+
+    try:
+        if sys.platform == "win32":
+            subprocess.run(["taskkill", "/F", "/PID", str(pid)],
+                           capture_output=True)
+        else:
+            os.kill(pid, signal.SIGTERM)
+        PID_FILE.unlink(missing_ok=True)
+        return True
+    except (ProcessLookupError, ValueError, OSError):
+        PID_FILE.unlink(missing_ok=True)
 
     return False
 
@@ -564,7 +597,7 @@ def open():
 def qr():
     """Show a QR code to open the dashboard on your phone.
 
-    Detects your Tailscale IP and generates a scannable QR code.
+    Detects your Tailscale MagicDNS name (or IP) and generates a scannable QR code.
     Prints it in the terminal and opens a clean SVG image as fallback.
     """
     import shutil
@@ -574,21 +607,35 @@ def qr():
     import qrcode
     import qrcode.image.svg
 
-    # Try to get Tailscale IP
-    tailscale_ip = None
+    # Try to get Tailscale MagicDNS name (stable across IP changes), fall back to IP
+    tailscale_host = None
     if shutil.which("tailscale"):
         try:
             result = subprocess.run(
-                ["tailscale", "ip", "-4"],
+                ["tailscale", "status", "--json"],
                 capture_output=True, text=True, timeout=5,
             )
             if result.returncode == 0:
-                tailscale_ip = result.stdout.strip().split("\n")[0]
+                import json as _json
+                status = _json.loads(result.stdout)
+                dns_name = status.get("Self", {}).get("DNSName", "").rstrip(".")
+                if dns_name:
+                    tailscale_host = dns_name
         except Exception:
             pass
+        if not tailscale_host:
+            try:
+                result = subprocess.run(
+                    ["tailscale", "ip", "-4"],
+                    capture_output=True, text=True, timeout=5,
+                )
+                if result.returncode == 0:
+                    tailscale_host = result.stdout.strip().split("\n")[0]
+            except Exception:
+                pass
 
-    if tailscale_ip:
-        url = f"http://{tailscale_ip}:{PORT}"
+    if tailscale_host:
+        url = f"http://{tailscale_host}:{PORT}"
     else:
         url = f"http://localhost:{PORT}"
         click.echo("Tailscale not found. Using localhost (won't work from other devices).")

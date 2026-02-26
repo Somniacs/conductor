@@ -33,16 +33,18 @@ from pydantic import BaseModel
 _SAFE_NAME = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9 _.~-]{0,63}$")
 
 from conductor.sessions.registry import SessionRegistry
+from conductor.utils import config as cfg
 from conductor.utils.config import (
-    ALLOWED_COMMANDS, CONDUCTOR_TOKEN,
-    DEFAULT_DIRECTORIES, MAX_UPLOAD_SIZE, PORT, UPLOADS_DIR, VERSION,
+    CONDUCTOR_TOKEN, PORT, UPLOADS_DIR, VERSION,
 )
 
 router = APIRouter()
 registry = SessionRegistry()
 
-# Build set of allowed base commands for fast lookup
-_allowed_commands = {shlex.split(c["command"])[0] for c in ALLOWED_COMMANDS}
+
+def _allowed_base_commands() -> set[str]:
+    """Build set of allowed base commands from current config (re-evaluated on each call)."""
+    return {shlex.split(c["command"])[0] for c in cfg.ALLOWED_COMMANDS}
 
 # Content-type to file extension fallback mapping
 _MIME_EXTENSIONS: dict[str, str] = {
@@ -255,19 +257,23 @@ def _get_tailscale_peers():
         status = json.loads(result.stdout)
         peers = []
         for peer in (status.get("Peer") or {}).values():
-            if not peer.get("Online"):
-                continue
             ips = peer.get("TailscaleIPs", [])
             ipv4 = next((ip for ip in ips if "." in ip), None)
             if not ipv4:
                 continue
             dns_name = (peer.get("DNSName") or "").rstrip(".")
+            hostname = peer.get("HostName", "")
+            # Some devices (e.g. Android) report "localhost" — derive a
+            # meaningful name from the MagicDNS name instead.
+            if (not hostname or hostname == "localhost") and dns_name:
+                hostname = dns_name.split(".")[0]
             peers.append({
-                "hostname": peer.get("HostName", ""),
+                "hostname": hostname,
                 "dns_name": dns_name,
                 "ip": ipv4,
+                "online": bool(peer.get("Online")),
             })
-        return sorted(peers, key=lambda p: p["hostname"].lower())
+        return sorted(peers, key=lambda p: (not p["online"], p["hostname"].lower()))
     except Exception:
         return []
 
@@ -278,11 +284,12 @@ async def get_config():
     # Only expose frontend-safe fields (not stop_sequence with raw escapes).
     safe = [
         {k: v for k, v in c.items() if k != "stop_sequence"}
-        for c in ALLOWED_COMMANDS
+        for c in cfg.ALLOWED_COMMANDS
     ]
     return {
         "allowed_commands": safe,
-        "default_directories": DEFAULT_DIRECTORIES,
+        "default_directories": cfg.DEFAULT_DIRECTORIES,
+        "config_version": cfg.get_config_version(),
     }
 
 
@@ -313,9 +320,36 @@ async def browse_directory(path: str = "~"):
         raise HTTPException(status_code=400, detail=str(e))
 
 
+def _require_localhost(request: Request):
+    """Raise 403 if the request is not from localhost."""
+    host = request.client.host if request.client else ""
+    if host not in ("127.0.0.1", "::1"):
+        raise HTTPException(status_code=403, detail="Admin settings are only accessible from localhost")
+
+
+@router.get("/admin/settings")
+async def get_admin_settings(request: Request):
+    """Return full settings for the admin panel. Localhost only."""
+    _require_localhost(request)
+    return cfg.get_admin_settings()
+
+
+@router.put("/admin/settings")
+async def put_admin_settings(request: Request):
+    """Update settings and persist to ~/.conductor/config.yaml. Localhost only."""
+    _require_localhost(request)
+    data = await request.json()
+    cfg.save_user_config(data)
+    return {"status": "ok", "config_version": cfg.get_config_version()}
+
+
 @router.get("/sessions")
-async def list_sessions():
-    return registry.list_all()
+async def list_sessions(request: Request):
+    from starlette.responses import JSONResponse
+    data = registry.list_all()
+    resp = JSONResponse(data)
+    resp.headers["X-Config-Version"] = str(cfg.get_config_version())
+    return resp
 
 
 @router.get("/sessions/{session_id}", response_model=SessionResponse)
@@ -346,10 +380,11 @@ async def create_session(req: RunRequest, request: Request):
         except ValueError:
             raise HTTPException(status_code=400, detail="Invalid command")
 
-        if base_cmd not in _allowed_commands:
+        allowed = _allowed_base_commands()
+        if base_cmd not in allowed:
             raise HTTPException(
                 status_code=403,
-                detail=f"Command '{base_cmd}' is not allowed. Permitted: {', '.join(sorted(_allowed_commands))}",
+                detail=f"Command '{base_cmd}' is not allowed. Permitted: {', '.join(sorted(allowed))}",
             )
 
     try:
@@ -410,8 +445,8 @@ async def upload_file(session_id: str, request: Request):
     body = await request.body()
     if not body:
         raise HTTPException(status_code=400, detail="Empty request body")
-    if len(body) > MAX_UPLOAD_SIZE:
-        raise HTTPException(status_code=413, detail="File too large (max 10 MB)")
+    if len(body) > cfg.MAX_UPLOAD_SIZE:
+        raise HTTPException(status_code=413, detail=f"File too large (max {cfg.MAX_UPLOAD_SIZE // (1024*1024)} MB)")
 
     content_type = (request.headers.get("content-type") or "").split(";")[0].strip()
 

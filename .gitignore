@@ -12,3 +12,4 @@ venv/
 *.log
 CLAUDE.md
 .claude/
+.ai/

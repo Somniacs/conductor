@@ -42,7 +42,8 @@ _DEFAULT_RESUME_RE = re.compile(r'--resume\s+(\S+)')
 import shutil
 
 from conductor.proxy.pty_wrapper import PTYProcess
-from conductor.utils.config import BUFFER_MAX_BYTES, UPLOADS_DIR
+from conductor.utils import config as cfg
+from conductor.utils.config import UPLOADS_DIR
 
 _IS_WIN = sys.platform == "win32"
 
@@ -137,8 +138,8 @@ class Session:
 
     def _append_buffer(self, data: bytes):
         self.buffer.extend(data)
-        if len(self.buffer) > BUFFER_MAX_BYTES:
-            excess = len(self.buffer) - BUFFER_MAX_BYTES
+        if len(self.buffer) > cfg.BUFFER_MAX_BYTES:
+            excess = len(self.buffer) - cfg.BUFFER_MAX_BYTES
             del self.buffer[:excess]
 
     def _broadcast(self, data: bytes):

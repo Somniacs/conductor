@@ -184,7 +184,7 @@
             gap: 6px;
             padding: 8px 12px 4px;
             font-size: 11px;
-            color: #606080;
+            color: #7878a0;
             letter-spacing: 0.3px;
         }
         .server-group-header:first-child { padding-top: 4px; }
@@ -209,7 +209,7 @@
         .new-session label {
             display: block;
             font-size: 11px;
-            color: #808090;
+            color: #9898b0;
             margin-bottom: 3px;
             margin-top: 8px;
         }
@@ -283,7 +283,7 @@
         }
         .confirm-cancel {
             background: transparent;
-            color: #a0a0b0;
+            color: #b0b0c8;
         }
         .confirm-cancel:hover { background: #1e1e3e; }
         .confirm-ok {
@@ -347,7 +347,7 @@
         .stop-actions .stop-kill:hover { background: #4a2a2a; }
         .stop-actions .stop-cancel {
             background: transparent;
-            color: #a0a0b0;
+            color: #b0b0c8;
             text-align: center;
         }
         .stop-actions .stop-cancel:hover { background: #1e1e3e; }
@@ -383,7 +383,7 @@
         }
         .about-box .about-version {
             font-size: 11px;
-            color: #606080;
+            color: #7878a0;
             margin-bottom: 14px;
         }
         .about-box p {
@@ -399,7 +399,7 @@
         .about-box a:hover { text-decoration: underline; }
         .about-box .about-section {
             font-size: 11px;
-            color: #606080;
+            color: #7878a0;
             text-transform: uppercase;
             letter-spacing: 0.5px;
             margin: 14px 0 6px;
@@ -409,7 +409,7 @@
             padding: 0;
             margin: 0 0 10px;
             font-size: 12px;
-            color: #a0a0b0;
+            color: #b0b0c8;
         }
         .about-box ul li { padding: 2px 0; }
         .about-close {
@@ -418,7 +418,7 @@
             right: 12px;
             background: none;
             border: none;
-            color: #606080;
+            color: #7878a0;
             font-size: 18px;
             cursor: pointer;
             padding: 2px 6px;
@@ -428,7 +428,7 @@
         .menu-btn {
             background: none;
             border: none;
-            color: #606080;
+            color: #7878a0;
             font-size: 16px;
             cursor: pointer;
             padding: 0;
@@ -493,7 +493,7 @@
             flex-shrink: 0;
             background: none;
             border: none;
-            color: #808090;
+            color: #9898b0;
             cursor: pointer;
             font-size: 14px;
             padding: 2px 6px;
@@ -564,9 +564,9 @@
         .placement-menu .pm-left   { grid-column: 1; grid-row: 3; }
         .placement-menu .pm-right  { grid-column: 3; grid-row: 3; }
         .placement-menu .pm-bottom { grid-column: 2; grid-row: 4; }
-        .placement-menu .pm-title  { grid-column: 1 / 4; text-align: center; font-size: 11px; color: #808090; padding: 2px 0 4px; }
-        .placement-menu .pm-status { grid-column: 1 / 4; text-align: center; font-size: 9px; color: #606080; padding: 2px 0 0; min-height: 14px; white-space: nowrap; }
-        .placement-menu .pm-center { grid-column: 2; grid-row: 3; background: #0a0a1a; border-color: #1a1a3a; color: #808090; font-size: 14px; }
+        .placement-menu .pm-title  { grid-column: 1 / 4; text-align: center; font-size: 11px; color: #9898b0; padding: 2px 0 4px; }
+        .placement-menu .pm-status { grid-column: 1 / 4; text-align: center; font-size: 9px; color: #7878a0; padding: 2px 0 0; min-height: 14px; white-space: nowrap; }
+        .placement-menu .pm-center { grid-column: 2; grid-row: 3; background: #0a0a1a; border-color: #1a1a3a; color: #9898b0; font-size: 14px; }
         .placement-menu .pm-center:hover { background: #1a1a3e; color: #fff; border-color: #4a4aaa; }
 
         /* Panels container */
@@ -656,7 +656,7 @@
             gap: 8px;
         }
         .panel-header button {
-            background: none; border: none; color: #606080;
+            background: none; border: none; color: #7878a0;
             cursor: pointer; font-size: 16px; padding: 4px 6px; line-height: 1;
         }
         .panel-header button:hover { color: #c0c0e0; }
@@ -719,12 +719,13 @@
             display: none;
             user-select: none;
             -webkit-user-select: none;
+            touch-action: none;
         }
         .extra-keys-bar.visible { display: flex; flex-direction: column; align-items: flex-end; }
         .extra-keys-chevron {
             padding: 4px 10px;
             cursor: pointer;
-            color: #606080;
+            color: #7878a0;
             font-size: 10px;
             line-height: 1;
             background: #0e0e24;
@@ -738,8 +739,11 @@
             width: 100%;
             background: #0e0e24;
             border-top: 1px solid #2a2a5a;
+            overflow: hidden;
         }
         .extra-keys-bar.collapsed .extra-keys-drawer { display: none; }
+        .extra-keys-bar.collapsed .extra-keys-chevron { opacity: 0.5; }
+        .extra-keys-bar.collapsed .extra-keys-chevron:active { opacity: 1; }
         .extra-keys-rows {
             display: flex;
             flex-direction: row;
@@ -813,6 +817,9 @@
             width: 100%;
             height: 100%;
             /* min-width is set dynamically from JS after measuring char width */
+            /* Disable all native touch gestures — our JS handler scrolls the
+               xterm viewport directly for smooth pixel-based scrolling. */
+            touch-action: none;
         }
 
         .xterm-scroll-proxy {
@@ -838,6 +845,10 @@
         .xterm-scroll-thumb.active {
             background: #3a3a7a;
         }
+
+        /* .xterm fills the pinned wrapper height so the viewport
+           (position:absolute;top:0;bottom:0) matches the visible area. */
+        .terminal-wrapper .xterm { height: 100%; }
 
         /* Hide xterm's native scrollbar — we use the proxy overlay instead */
         .panel-terminal .xterm .xterm-viewport::-webkit-scrollbar { display: none; }
@@ -991,6 +1002,224 @@
             margin: 0 0 16px;
             font-weight: 600;
         }
+        /* ── Settings dialog ── */
+        .settings-overlay {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,0.5);
+            z-index: 1000;
+            align-items: center;
+            justify-content: center;
+        }
+        .settings-overlay.open { display: flex; }
+        .settings-box {
+            background: #16163a;
+            border: 1px solid #2a2a5a;
+            border-radius: 8px;
+            padding: 24px 28px;
+            min-width: 400px;
+            max-width: 560px;
+            width: 90%;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+            position: relative;
+            max-height: 80vh;
+            overflow-y: auto;
+        }
+        .settings-box h2 {
+            font-size: 16px;
+            color: #8080ff;
+            margin: 0 0 16px;
+            font-weight: 600;
+        }
+        .settings-section {
+            margin-bottom: 16px;
+        }
+        .settings-section-title {
+            font-size: 11px;
+            color: #9898b0;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 8px;
+        }
+        .settings-cmd-row {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 5px 0;
+            border-bottom: 1px solid #1a1a3a;
+            font-size: 13px;
+        }
+        .settings-cmd-row .cmd-label {
+            color: #c0c0e0;
+            min-width: 100px;
+            font-weight: 500;
+        }
+        .settings-cmd-row .cmd-command {
+            color: #8888a8;
+            flex: 1;
+            font-family: monospace;
+            font-size: 12px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        .settings-cmd-row .cmd-actions {
+            display: flex;
+            gap: 4px;
+        }
+        .settings-cmd-row .cmd-actions button {
+            background: none;
+            border: none;
+            color: #7878a0;
+            cursor: pointer;
+            font-size: 14px;
+            padding: 2px 4px;
+        }
+        .settings-cmd-row .cmd-actions button:hover { color: #a0a0d0; }
+        .settings-input {
+            width: 100%;
+            padding: 6px 8px;
+            background: #0e0e2a;
+            border: 1px solid #2a2a5a;
+            border-radius: 4px;
+            color: #c0c0e0;
+            font-size: 13px;
+            box-sizing: border-box;
+        }
+        .settings-input:focus {
+            outline: none;
+            border-color: #4040aa;
+        }
+        .settings-row {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 8px;
+        }
+        .settings-row label {
+            font-size: 12px;
+            color: #a0a0c0;
+            min-width: 120px;
+        }
+        .settings-row input[type="number"] {
+            width: 100px;
+            padding: 5px 8px;
+            background: #0e0e2a;
+            border: 1px solid #2a2a5a;
+            border-radius: 4px;
+            color: #c0c0e0;
+            font-size: 13px;
+        }
+        .settings-row input[type="number"]:focus {
+            outline: none;
+            border-color: #4040aa;
+        }
+        .settings-dir-row {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            margin-bottom: 4px;
+        }
+        .settings-dir-row input {
+            flex: 1;
+        }
+        .settings-dir-row button {
+            background: none;
+            border: none;
+            color: #7878a0;
+            cursor: pointer;
+            font-size: 16px;
+            padding: 0 4px;
+        }
+        .settings-dir-row button:hover { color: #ff6060; }
+        .settings-info-row {
+            display: flex;
+            gap: 10px;
+            font-size: 12px;
+            color: #7878a0;
+            margin-bottom: 4px;
+        }
+        .settings-info-row .info-label { color: #9898b0; min-width: 120px; }
+        .settings-info-row .info-value { color: #a0a0c0; }
+        .settings-hint {
+            font-size: 11px;
+            color: #7878a0;
+            margin-top: 4px;
+            line-height: 1.4;
+        }
+        .settings-hint code {
+            background: #0e0e2a;
+            padding: 1px 5px;
+            border-radius: 3px;
+            color: #a0a0c0;
+            font-size: 11px;
+        }
+        .settings-footer {
+            display: flex;
+            justify-content: flex-end;
+            gap: 8px;
+            margin-top: 16px;
+            padding-top: 12px;
+            border-top: 1px solid #1a1a3a;
+        }
+        .settings-footer button {
+            padding: 6px 16px;
+            border-radius: 4px;
+            font-size: 13px;
+            cursor: pointer;
+        }
+        .settings-footer .btn-save {
+            background: #3030aa;
+            border: none;
+            color: #fff;
+        }
+        .settings-footer .btn-save:hover { background: #4040cc; }
+        .settings-footer .btn-cancel {
+            background: none;
+            border: 1px solid #2a2a5a;
+            color: #9898b0;
+        }
+        .settings-footer .btn-cancel:hover { border-color: #4040aa; color: #a0a0c0; }
+        .settings-add-btn {
+            background: none;
+            border: 1px dashed #2a2a5a;
+            border-radius: 4px;
+            color: #7878a0;
+            cursor: pointer;
+            font-size: 12px;
+            padding: 4px 10px;
+            margin-top: 6px;
+        }
+        .settings-add-btn:hover { border-color: #4040aa; color: #a0a0d0; }
+        .settings-edit-form {
+            background: #0e0e2a;
+            border: 1px solid #2a2a5a;
+            border-radius: 4px;
+            padding: 10px;
+            margin: 6px 0;
+        }
+        .settings-edit-form .form-row {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 6px;
+        }
+        .settings-edit-form .form-row label {
+            font-size: 11px;
+            color: #9898b0;
+            min-width: 90px;
+        }
+        .settings-edit-form .form-row input {
+            flex: 1;
+        }
+        .settings-edit-form .form-actions {
+            display: flex;
+            justify-content: flex-end;
+            gap: 6px;
+            margin-top: 8px;
+        }
+
         .server-list-item {
             display: flex;
             align-items: center;
@@ -1013,7 +1242,7 @@
         }
         .server-list-item .server-url-text {
             font-size: 11px;
-            color: #606080;
+            color: #7878a0;
             overflow: hidden;
             text-overflow: ellipsis;
             white-space: nowrap;
@@ -1021,7 +1250,7 @@
         .server-list-item button {
             background: none;
             border: none;
-            color: #606080;
+            color: #7878a0;
             cursor: pointer;
             font-size: 14px;
             padding: 2px 6px;
@@ -1059,7 +1288,7 @@
             background: #0e0e24;
             border-radius: 5px;
             font-size: 12px;
-            color: #808090;
+            color: #9898b0;
         }
         .server-self-info .self-url {
             color: #8080ff;
@@ -1207,7 +1436,7 @@
             cursor: pointer;
             font-size: 13px;
             background: transparent;
-            color: #a0a0b0;
+            color: #b0b0c8;
         }
         .upload-actions button:hover { background: #1e1e3e; }
         .upload-actions .upload-insert {
@@ -1229,6 +1458,7 @@
                     <button class="menu-btn" onclick="toggleMenu()" title="Menu">&#9776;</button>
                     <div class="menu-dropdown" id="hamburger-menu">
                         <a onclick="toggleMenu();toggleServersDialog()">Servers</a>
+                        <a id="settings-menu-item" style="display:none" onclick="toggleMenu();toggleSettingsDialog()">Settings</a>
                         <div class="menu-sep"></div>
                         <a onclick="toggleMenu();toggleQR()">Link Device</a>
                         <div class="menu-sep"></div>
@@ -1246,7 +1476,7 @@
             <div class="new-session" id="new-session-dialog">
                 <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
                     <span style="font-size:12px;font-weight:500;color:#a0a0d0;">New Session</span>
-                    <button onclick="toggleNewSession()" style="background:none;border:none;color:#606080;cursor:pointer;font-size:16px;padding:0 2px;line-height:1;" title="Cancel">&times;</button>
+                    <button onclick="toggleNewSession()" style="background:none;border:none;color:#7878a0;cursor:pointer;font-size:16px;padding:0 2px;line-height:1;" title="Cancel">&times;</button>
                 </div>
                 <div id="server-selector-row" style="display:none;">
                     <label>Machine</label>
@@ -1280,6 +1510,18 @@
         <button class="pm-right" onclick="placeSession('right')" data-hint="Place right">&#x27A1;</button>
         <button class="pm-bottom" onclick="placeSession('bottom')" data-hint="Place below">&#x2B07;</button>
         <div class="pm-status" id="pm-status"></div>
+    </div>
+
+    <div class="settings-overlay" id="settings-dialog" onclick="if(event.target===this)toggleSettingsDialog()">
+        <div class="settings-box">
+            <button class="about-close" onclick="toggleSettingsDialog()">&times;</button>
+            <h2>Settings</h2>
+            <div id="settings-content"></div>
+            <div class="settings-footer">
+                <button class="btn-cancel" onclick="toggleSettingsDialog()">Cancel</button>
+                <button class="btn-save" onclick="saveSettings()">Save</button>
+            </div>
+        </div>
     </div>
 
     <div class="about-overlay" id="about-dialog" onclick="if(event.target===this)toggleAbout()">
@@ -1323,13 +1565,13 @@
             <h2>Servers</h2>
             <div id="servers-list"></div>
             <div id="tailscale-picker" style="margin-top:12px;">
-                <label style="display:block;font-size:11px;color:#808090;margin-bottom:4px;">Tailscale devices</label>
+                <label style="display:block;font-size:11px;color:#9898b0;margin-bottom:4px;">Tailscale devices</label>
                 <div id="tailscale-picker-content">
                     <div style="font-size:12px;color:#505070;padding:4px 0;">Loading...</div>
                 </div>
             </div>
             <div style="margin-top:10px;">
-                <label style="display:block;font-size:11px;color:#808090;margin-bottom:4px;">Or add manually</label>
+                <label style="display:block;font-size:11px;color:#9898b0;margin-bottom:4px;">Or add manually</label>
                 <div class="server-add-form">
                     <input type="text" id="server-url-input" placeholder="http://100.x.x.x:7777" autocomplete="off"
                         onkeydown="if(event.key==='Enter')addServerFromInput()">
@@ -1452,6 +1694,19 @@
             if (!servers.length) {
                 servers = [{ key: 'local', label: 'This Machine', url: null, enabled: true }];
             }
+            // Clean up labels: strip full DNS names to short device name
+            let changed = false;
+            servers.forEach(s => {
+                if (s.key === 'local') return;
+                // Strip star prefix from old format
+                let lbl = s.label.replace(/^\u2605\s*/, '');
+                // If label looks like a full DNS name (contains dots), keep only first segment
+                if (lbl.includes('.') && lbl.match(/\.\w+\.\w+/)) {
+                    lbl = lbl.split('.')[0];
+                }
+                if (lbl !== s.label) { s.label = lbl; changed = true; }
+            });
+            if (changed) saveServers();
         }
 
         function saveServers() {
@@ -1614,40 +1869,57 @@
         function _fitPanelCore(p) {
             if (!p.fitAddon || !p._termOpened) return;
             const target = p._termWrapper || p._termEl;
+            const scrollContainer = target.parentElement; // .panel-terminal
 
             // Use PTY dimensions if known (host terminal is the authority),
             // otherwise fall back to fit addon for browser-only sessions.
             if (p._ptyRows && p._ptyCols) {
-                // 1. Reset wrapper to natural width so we can measure char size
-                target.style.minWidth = '';
-                target.style.width = '';
+                // CLI terminal owns columns (for correct line wrapping).
+                // Rows always match the visible panel area:
+                //  - growing the panel pulls scrollback into view
+                //  - shrinking pushes lines to scrollback
+                //  - scrollbar only appears when content overflows
+                //
+                // No fitAddon.fit() — read cell dimensions from xterm's
+                // renderer directly to avoid an intermediate resize that
+                // would reflow the buffer and drift the cursor.
 
-                // 2. Fit to panel width — gives us accurate char width
-                try { p.fitAddon.fit(); } catch (e) {}
-
-                let charWidth = 8;
-                if (p.terminal.cols > 0 && target.clientWidth > 0) {
-                    charWidth = target.clientWidth / p.terminal.cols;
+                // 1. Get cell dimensions from the renderer
+                let cellWidth = 8, cellHeight = 14;
+                try {
+                    const d = p.terminal._core._renderService.dimensions;
+                    if (d && d.css && d.css.cell) {
+                        if (d.css.cell.width > 0) cellWidth = d.css.cell.width;
+                        if (d.css.cell.height > 0) cellHeight = d.css.cell.height;
+                    }
+                } catch (e) {
+                    if (p.terminal.cols > 0 && target.clientWidth > 0) {
+                        cellWidth = target.clientWidth / p.terminal.cols;
+                    }
                 }
 
-                // 3. Expand wrapper to accommodate PTY columns
-                const neededWidth = Math.ceil(p._ptyCols * charWidth);
-                target.style.minWidth = neededWidth + 'px';
+                // 2. Set min-width for PTY columns (horizontal scroll if needed)
+                target.style.minWidth = Math.ceil(p._ptyCols * cellWidth) + 'px';
 
-                // 4. Re-fit — xterm now sees the wider container and
-                //    updates its viewport/canvas to match
-                try { p.fitAddon.fit(); } catch (e) {}
+                // 3. Pin wrapper height (clientHeight subtracts scrollbar)
+                const visH = scrollContainer.clientHeight;
+                if (visH > 0) {
+                    target.style.height = visH + 'px';
+                } else {
+                    requestAnimationFrame(() => _fitPanelCore(p));
+                    return;
+                }
 
-                // 5. Keep PTY cols (affects text wrapping) but use
-                //    fit-calculated rows to fill the panel height.
-                const fitRows = Math.max(p.terminal.rows, p._ptyRows);
-                if (p.terminal.cols !== p._ptyCols || p.terminal.rows !== fitRows) {
-                    p.terminal.resize(p._ptyCols, fitRows);
+                // 4. Rows = visible area.  Single resize, no oscillation.
+                const visibleRows = Math.max(1, Math.floor(visH / cellHeight));
+                if (p.terminal.cols !== p._ptyCols || p.terminal.rows !== visibleRows) {
+                    p.terminal.resize(p._ptyCols, visibleRows);
                 }
             } else {
-                // Browser-only session — reset any CLI-owned width
+                // Browser-only session — reset any CLI-owned dimensions
                 target.style.minWidth = '';
                 target.style.width = '';
+                target.style.height = '';
 
                 try {
                     p.fitAddon.fit();
@@ -1658,6 +1930,17 @@
                     const charWidth = target.clientWidth / p.terminal.cols;
                     target.style.minWidth = Math.ceil(MIN_COLS * charWidth) + 'px';
                 }
+                // Pin height to visible area (accounts for horizontal scrollbar).
+                // Guard against 0 on mobile.
+                const visH2 = scrollContainer.clientHeight;
+                if (visH2 > 0) {
+                    target.style.height = visH2 + 'px';
+                } else {
+                    requestAnimationFrame(() => _fitPanelCore(p));
+                    return;
+                }
+                try { p.fitAddon.fit(); } catch (e) {}
+
                 if (p.terminal.cols < MIN_COLS) {
                     p.terminal.resize(MIN_COLS, p.terminal.rows);
                 }
@@ -1682,6 +1965,9 @@
                 const resp = await fetch(serverUrl(serverKey, '/config'));
                 const cfg = await resp.json();
                 _serverConfigs[serverKey] = cfg;
+                if (serverKey === 'local' && cfg.config_version !== undefined) {
+                    _lastConfigVersion = cfg.config_version;
+                }
                 if (serverKey === _newSessionServer) {
                     allowedCommands = cfg.allowed_commands || [];
                     populateCommandSelect();
@@ -1749,6 +2035,17 @@
                     clearTimeout(timer);
                     const data = await resp.json();
                     setServerConnectedStatus(srv.key, true);
+                    // Check config version header (local server only)
+                    if (srv.key === 'local') {
+                        const cv = resp.headers.get('X-Config-Version');
+                        if (cv !== null) {
+                            const ver = parseInt(cv);
+                            if (_lastConfigVersion >= 0 && ver !== _lastConfigVersion) {
+                                _refreshConfig();
+                            }
+                            _lastConfigVersion = ver;
+                        }
+                    }
                     const serverSessions = data;
                     serverSessions.forEach(s => {
                         s._server = srv.key;
@@ -1789,37 +2086,27 @@
             const list = document.getElementById('session-list');
             let html;
 
-            if (sessions.length === 0) {
-                html = '<div style="padding:12px;color:#404060;font-size:13px;">No sessions</div>';
-            } else {
-                const multi = _isMultiServer();
+            const groups = {};
+            const serverOrder = servers.filter(s => s.enabled).map(s => s.key);
+            serverOrder.forEach(k => { groups[k] = []; });
+            sessions.forEach(s => {
+                if (!groups[s._server]) groups[s._server] = [];
+                groups[s._server].push(s);
+            });
 
-                if (!multi) {
-                    html = sessions.map(s => renderSessionItem(s)).join('');
+            html = '';
+            for (const key of serverOrder) {
+                const label = getServerLabel(key);
+                const connected = serverConnected[key] !== false;
+                const dotClass = connected ? 'connected' : 'disconnected';
+                html += `<div class="server-group-header">
+                    <span class="server-dot ${dotClass}"></span>
+                    <span>${escHtml(label)}</span>
+                </div>`;
+                if (groups[key] && groups[key].length > 0) {
+                    html += groups[key].map(s => renderSessionItem(s)).join('');
                 } else {
-                    const groups = {};
-                    const serverOrder = servers.filter(s => s.enabled).map(s => s.key);
-                    serverOrder.forEach(k => { groups[k] = []; });
-                    sessions.forEach(s => {
-                        if (!groups[s._server]) groups[s._server] = [];
-                        groups[s._server].push(s);
-                    });
-
-                    html = '';
-                    for (const key of serverOrder) {
-                        const label = getServerLabel(key);
-                        const connected = serverConnected[key] !== false;
-                        const dotClass = connected ? 'connected' : 'disconnected';
-                        html += `<div class="server-group-header">
-                            <span class="server-dot ${dotClass}"></span>
-                            <span>${escHtml(label)}</span>
-                        </div>`;
-                        if (groups[key] && groups[key].length > 0) {
-                            html += groups[key].map(s => renderSessionItem(s)).join('');
-                        } else {
-                            html += '<div style="padding:4px 12px;color:#404060;font-size:11px;">No sessions</div>';
-                        }
-                    }
+                    html += '<div style="padding:4px 12px;color:#404060;font-size:11px;">No sessions</div>';
                 }
             }
 
@@ -1870,7 +2157,7 @@
                 <div class="session-item ${isFocused ? 'focused' : isOpen ? 'open' : ''}" ${clickable ? `onclick="focusSession('${cidEsc}', '${nameEsc}', event)"` : ''}>
                     <div class="session-name">
                         <div>${escHtml(s.name)}${statusBadge}</div>
-                        <div style="font-size:10px;color:#606080;font-weight:400;">${escHtml(appLabel)}</div>
+                        <div style="font-size:10px;color:#7878a0;font-weight:400;">${escHtml(appLabel)}</div>
                     </div>
                     <div class="session-actions">
                         ${actions}
@@ -2101,7 +2388,7 @@
             termOuter.appendChild(scrollProxy);
 
             // Show server name in panel header when multi-server
-            const serverLabel = _isMultiServer() ? ` <span style="font-size:10px;color:#606080;">(${escHtml(getServerLabel(panel.server))})</span>` : '';
+            const serverLabel = _isMultiServer() ? ` <span style="font-size:10px;color:#7878a0;">(${escHtml(getServerLabel(panel.server))})</span>` : '';
 
             // panel.id is serverKey::sessionName — safe chars only (validated by _SAFE_NAME + IP:port)
             // Escape for JS string context (defense in depth)
@@ -2171,6 +2458,25 @@
 
                 term.onData((data) => {
                     if (panel.ws && panel.ws.readyState === WebSocket.OPEN) {
+                        // Apply extra-keys modifiers (Ctrl/Alt) to regular keyboard input
+                        if ((_ekMods.ctrl || _ekMods.alt) && data.length === 1) {
+                            const ch = data.charCodeAt(0);
+                            let seq = data;
+                            if (_ekMods.ctrl && ch >= 0x40 && ch <= 0x7e) {
+                                // Ctrl + printable char: convert to control code
+                                // a-z → 1-26, A-Z → 1-26, [→27, \→28, ]→29, ^→30, _→31
+                                seq = String.fromCharCode(ch & 0x1f);
+                            } else if (_ekMods.ctrl && ch >= 0x20 && ch < 0x40) {
+                                // Ctrl+2 → NUL, Ctrl+6 → RS, etc. — send raw
+                                seq = data;
+                            }
+                            if (_ekMods.alt) {
+                                seq = '\x1b' + seq;
+                            }
+                            panel.ws.send(seq);
+                            _clearModifiers();
+                            return;
+                        }
                         panel.ws.send(data);
                     }
                 });
@@ -2229,28 +2535,25 @@
             panel.terminal.open(target);
             panel._termOpened = true;
 
-            // Mobile one-finger scroll: capture touch events on the wrapper
-            // (before xterm gets them) and use terminal.scrollLines() — xterm's
-            // own API — for reliable line-based scrolling with momentum.
-            // touchstart must be non-passive so Chrome doesn't pre-commit to
-            // native scroll behavior before our touchmove preventDefault fires.
+            // Mobile touch scroll: direction-locked vertical + horizontal
+            // scrolling with momentum.  Vertical scrolls the xterm viewport
+            // (scrollback), horizontal scrolls .panel-terminal (wide content).
+            // touch-action: none on .terminal-wrapper means we handle everything.
             if ('ontouchstart' in window) {
-                const t = panel.terminal;
-                let tY = null, tScroll = false, tVel = 0, tTime = 0;
-                let tAccum = 0, tMom = null, lineH = 18;
-
-                const calcLineH = () => {
-                    const vp = target.querySelector('.xterm-viewport');
-                    return (vp && t.buffer.active.length > 0)
-                        ? vp.scrollHeight / t.buffer.active.length : 18;
-                };
+                let tY = null, tX = null, tScroll = false, tDir = null;
+                let tVel = 0, tTime = 0, tMom = null;
+                const getVp = () => target.querySelector('.xterm-viewport');
+                const hScroller = target.parentElement; // .panel-terminal
 
                 function momTick() {
                     tVel *= 0.93;
                     if (Math.abs(tVel) < 0.5) { tMom = null; return; }
-                    tAccum += tVel;
-                    const n = Math.trunc(tAccum / lineH);
-                    if (n) { t.scrollLines(n); tAccum -= n * lineH; }
+                    if (tDir === 'v') {
+                        const vp = getVp();
+                        if (vp) vp.scrollTop += tVel;
+                    } else {
+                        hScroller.scrollLeft += tVel;
+                    }
                     tMom = requestAnimationFrame(momTick);
                 }
 
@@ -2258,31 +2561,41 @@
                     if (tMom) { cancelAnimationFrame(tMom); tMom = null; }
                     if (e.touches.length === 1) {
                         tY = e.touches[0].clientY;
+                        tX = e.touches[0].clientX;
                         tTime = e.timeStamp;
-                        tVel = 0; tScroll = false; tAccum = 0;
-                        lineH = calcLineH();
+                        tVel = 0; tScroll = false; tDir = null;
                     }
                 }, { passive: false, capture: true });
 
                 target.addEventListener('touchmove', (e) => {
                     if (e.touches.length !== 1 || tY === null) return;
                     const dy = tY - e.touches[0].clientY;
-                    if (!tScroll && Math.abs(dy) > 8) tScroll = true;
+                    const dx = tX - e.touches[0].clientX;
+                    // Lock direction after 4px movement
+                    if (!tScroll && (Math.abs(dy) > 4 || Math.abs(dx) > 4)) {
+                        tScroll = true;
+                        tDir = Math.abs(dy) >= Math.abs(dx) ? 'v' : 'h';
+                    }
                     if (tScroll) {
                         e.preventDefault();
                         e.stopPropagation();
                         const dt = e.timeStamp - tTime;
-                        if (dt > 0) tVel = dy / dt * 16;
                         tTime = e.timeStamp;
-                        tY = e.touches[0].clientY;
-                        tAccum += dy;
-                        const n = Math.trunc(tAccum / lineH);
-                        if (n) { t.scrollLines(n); tAccum -= n * lineH; }
+                        if (tDir === 'v') {
+                            if (dt > 0) tVel = dy / dt * 16;
+                            tY = e.touches[0].clientY;
+                            const vp = getVp();
+                            if (vp) vp.scrollTop += dy;
+                        } else {
+                            if (dt > 0) tVel = dx / dt * 16;
+                            tX = e.touches[0].clientX;
+                            hScroller.scrollLeft += dx;
+                        }
                     }
                 }, { passive: false, capture: true });
 
                 target.addEventListener('touchend', () => {
-                    tY = null;
+                    tY = null; tX = null;
                     if (tScroll && Math.abs(tVel) > 1.5) {
                         tMom = requestAnimationFrame(momTick);
                     }
@@ -2297,6 +2610,16 @@
                 if (panel.terminal.cols > 0 && target.clientWidth > 0) {
                     const charWidth = target.clientWidth / panel.terminal.cols;
                     target.style.minWidth = Math.ceil(MIN_COLS * charWidth) + 'px';
+                }
+                // Pin wrapper height to visible area (horizontal scrollbar
+                // steals vertical space that CSS height:100% doesn't subtract).
+                // Guard against 0 on mobile before layout settles.
+                // Don't call fit() again here — _fitPanelCore will handle
+                // the final sizing (including PTY dimensions if applicable).
+                const scrollContainer = target.parentElement;
+                const visH = scrollContainer.clientHeight;
+                if (visH > 0) {
+                    target.style.height = visH + 'px';
                 }
 
                 // Set up custom vertical scroll thumb — positioned manually so it
@@ -2572,7 +2895,11 @@
         // so the terminal area shrinks instead of being overlapped.
         function _syncExtraKeysHeight() {
             const bar = document.getElementById('extra-keys-bar');
-            const h = (bar && bar.classList.contains('visible')) ? bar.offsetHeight : 0;
+            // When collapsed, the handle overlays the terminal (0 height reserved)
+            // so we don't waste vertical space on mobile.
+            const visible = bar && bar.classList.contains('visible');
+            const collapsed = bar && bar.classList.contains('collapsed');
+            const h = (visible && !collapsed) ? bar.offsetHeight : 0;
             document.documentElement.style.setProperty('--extra-keys-height', h + 'px');
             // Refit panels to fill the new available height
             panels.forEach(p => fitPanel(p));
@@ -2589,11 +2916,17 @@
             if (!bar || !window.visualViewport) return;
             const vv = window.visualViewport;
             const keyboardOpen = (window.innerHeight - vv.height) > 100;
-            const bottomOffset = Math.max(0, Math.round(window.innerHeight - vv.height - vv.offsetTop));
             if (keyboardOpen) {
                 if (_ekHideTimer) { clearTimeout(_ekHideTimer); _ekHideTimer = null; }
                 bar.classList.add('visible');
-                bar.style.bottom = bottomOffset + 'px';
+                // Position at the bottom of the VISUAL viewport (what the
+                // user actually sees).  Use 'top' instead of 'bottom' so
+                // the bar follows the visual viewport when the browser
+                // auto-scrolls to keep a focused panel in view (e.g. the
+                // lower panel in split mode).
+                const barH = bar.offsetHeight;
+                bar.style.bottom = 'auto';
+                bar.style.top = (vv.offsetTop + vv.height - barH) + 'px';
                 _applyEkState();
             } else if (bar.classList.contains('visible')) {
                 // Delay hide — keyboard may reopen immediately on panel switch
@@ -2604,14 +2937,21 @@
                         const vv2 = window.visualViewport;
                         if (vv2 && (window.innerHeight - vv2.height) > 100) return;
                         bar.classList.remove('visible');
+                        bar.style.top = '';
+                        bar.style.bottom = '0';
                         _syncExtraKeysHeight();
                     }, 400);
                 }
             }
         }
         if (window.visualViewport) {
+            // Resize: keyboard open/close.
+            // Scroll (debounced): browser auto-scrolls visual viewport
+            // when user switches between panels in split view.
+            // Terminal touch scrolling doesn't trigger visualViewport
+            // scroll (touch-action: none on wrapper), so this is safe.
             window.visualViewport.addEventListener('resize', _updateExtraKeysPosition);
-            window.visualViewport.addEventListener('scroll', _updateExtraKeysPosition);
+            window.visualViewport.addEventListener('scroll', debounce(_updateExtraKeysPosition, 80));
         }
 
         function toggleThemeMenu(id) {
@@ -3115,12 +3455,237 @@
             return h === 'localhost' || h === '127.0.0.1' || h === '::1' || h === '0.0.0.0';
         }
 
+        // ── Settings dialog (localhost-only) ──────────────────────────────
+
+        let _settingsData = null;  // loaded from /admin/settings
+
+        // Show settings menu item only on localhost
+        if (isLocalhost()) {
+            const mi = document.getElementById('settings-menu-item');
+            if (mi) mi.style.display = '';
+        }
+
+        async function toggleSettingsDialog() {
+            const dialog = document.getElementById('settings-dialog');
+            dialog.classList.toggle('open');
+            if (dialog.classList.contains('open')) {
+                await loadSettings();
+            }
+        }
+
+        async function loadSettings() {
+            const el = document.getElementById('settings-content');
+            el.innerHTML = '<div style="color:#7878a0;font-size:13px;padding:8px 0;">Loading...</div>';
+            try {
+                const resp = await fetch('/admin/settings');
+                if (resp.status === 403) {
+                    el.innerHTML = '<div style="color:#ff6060;font-size:13px;">Settings are only available from localhost.</div>';
+                    return;
+                }
+                _settingsData = await resp.json();
+                renderSettings();
+            } catch (e) {
+                el.innerHTML = '<div style="color:#ff6060;font-size:13px;">Failed to load settings.</div>';
+            }
+        }
+
+        function renderSettings() {
+            const el = document.getElementById('settings-content');
+            const d = _settingsData;
+            if (!d) return;
+
+            let html = '';
+
+            // ── Commands section
+            html += '<div class="settings-section"><div class="settings-section-title">Allowed Commands</div>';
+            html += '<div id="settings-commands">';
+            (d.allowed_commands || []).forEach((cmd, i) => {
+                html += `<div class="settings-cmd-row" data-idx="${i}">`;
+                html += `<span class="cmd-label">${escHtml(cmd.label || '')}</span>`;
+                html += `<span class="cmd-command">${escHtml(cmd.command || '')}</span>`;
+                html += `<span class="cmd-actions">`;
+                html += `<button onclick="editCommand(${i})" title="Edit">&#9998;</button>`;
+                html += `<button onclick="removeCommand(${i})" title="Remove">&times;</button>`;
+                html += `</span></div>`;
+            });
+            html += '</div>';
+            html += '<button class="settings-add-btn" onclick="addCommand()">+ Add command</button>';
+            html += '</div>';
+
+            // ── Command edit form (hidden by default)
+            html += '<div id="settings-cmd-edit" style="display:none"></div>';
+
+            // ── Directories section
+            html += '<div class="settings-section"><div class="settings-section-title">Default Directories</div>';
+            html += '<div id="settings-dirs">';
+            (d.default_directories || []).forEach((dir, i) => {
+                html += `<div class="settings-dir-row">`;
+                html += `<input class="settings-input" value="${escHtml(dir)}" onchange="updateDir(${i}, this.value)">`;
+                html += `<button onclick="removeDir(${i})" title="Remove">&times;</button>`;
+                html += `</div>`;
+            });
+            html += '</div>';
+            html += '<button class="settings-add-btn" onclick="addDir()">+ Add directory</button>';
+            html += '</div>';
+
+            // ── Limits section
+            html += '<div class="settings-section"><div class="settings-section-title">Limits</div>';
+            html += '<div class="settings-row"><label>Buffer size (MB)</label>';
+            html += `<input type="number" min="1" max="100" value="${Math.round((d.buffer_max_bytes || 1000000) / (1024*1024))}" onchange="_settingsData.buffer_max_bytes = Math.round(this.value * 1024 * 1024)">`;
+            html += '</div>';
+            html += '<div class="settings-row"><label>Max upload (MB)</label>';
+            html += `<input type="number" min="1" max="500" value="${Math.round((d.max_upload_size || 10485760) / (1024*1024))}" onchange="_settingsData.max_upload_size = Math.round(this.value * 1024 * 1024)">`;
+            html += '</div>';
+            html += '<div class="settings-row"><label>Stop timeout (s)</label>';
+            html += `<input type="number" min="5" max="300" value="${d.graceful_stop_timeout || 30}" onchange="_settingsData.graceful_stop_timeout = parseInt(this.value)">`;
+            html += '</div>';
+            html += '</div>';
+
+            // ── Info section (read-only)
+            html += '<div class="settings-section"><div class="settings-section-title">Server Info</div>';
+            html += `<div class="settings-info-row"><span class="info-label">Version</span><span class="info-value">${escHtml(d.version || '')}</span></div>`;
+            html += `<div class="settings-info-row"><span class="info-label">Host</span><span class="info-value">${escHtml(d.host || '')}:${d.port || ''}</span></div>`;
+            html += `<div class="settings-info-row"><span class="info-label">Auth token</span><span class="info-value">${d.auth_enabled ? 'Enabled' : 'Not set'}</span></div>`;
+            if (!d.auth_enabled) {
+                html += '<div class="settings-hint">Set <code>CONDUCTOR_TOKEN</code> in your environment or systemd service to require authentication for API access.</div>';
+            }
+            html += '</div>';
+
+            el.innerHTML = html;
+        }
+
+        function editCommand(idx) {
+            const cmd = _settingsData.allowed_commands[idx];
+            if (!cmd) return;
+            const el = document.getElementById('settings-cmd-edit');
+            el.style.display = 'block';
+            el.innerHTML = `
+                <div class="settings-edit-form">
+                    <div class="form-row"><label>Label</label><input class="settings-input" id="cmd-edit-label" value="${escHtml(cmd.label || '')}"></div>
+                    <div class="form-row"><label>Command</label><input class="settings-input" id="cmd-edit-command" value="${escHtml(cmd.command || '')}"></div>
+                    <div class="form-row"><label>Resume pattern</label><input class="settings-input" id="cmd-edit-resume-pattern" value="${escHtml(cmd.resume_pattern || '')}" placeholder="e.g. --resume\\s+(\\S+)"></div>
+                    <div class="form-row"><label>Resume flag</label><input class="settings-input" id="cmd-edit-resume-flag" value="${escHtml(cmd.resume_flag || '')}" placeholder="e.g. --resume"></div>
+                    <div class="form-row"><label>Stop sequence</label><input class="settings-input" id="cmd-edit-stop" value="${escHtml((cmd.stop_sequence || []).join(', '))}" placeholder="e.g. \\x03, /exit, \\r"></div>
+                    <div class="form-actions">
+                        <button class="btn-cancel" onclick="document.getElementById('settings-cmd-edit').style.display='none'">Cancel</button>
+                        <button class="btn-save" onclick="saveCommand(${idx})">Apply</button>
+                    </div>
+                </div>`;
+            document.getElementById('cmd-edit-label').focus();
+        }
+
+        function saveCommand(idx) {
+            const label = document.getElementById('cmd-edit-label').value.trim();
+            const command = document.getElementById('cmd-edit-command').value.trim();
+            if (!label || !command) return;
+
+            const cmd = _settingsData.allowed_commands[idx] || {};
+            cmd.label = label;
+            cmd.command = command;
+
+            const rp = document.getElementById('cmd-edit-resume-pattern').value.trim();
+            const rf = document.getElementById('cmd-edit-resume-flag').value.trim();
+            if (rp) cmd.resume_pattern = rp; else delete cmd.resume_pattern;
+            if (rf) cmd.resume_flag = rf; else delete cmd.resume_flag;
+
+            const stopStr = document.getElementById('cmd-edit-stop').value.trim();
+            if (stopStr) {
+                cmd.stop_sequence = stopStr.split(',').map(s => {
+                    s = s.trim();
+                    // Convert escape sequences back
+                    s = s.replace(/\\x([0-9a-fA-F]{2})/g, (_, h) => String.fromCharCode(parseInt(h, 16)));
+                    s = s.replace(/\\r/g, '\r').replace(/\\n/g, '\n').replace(/\\t/g, '\t');
+                    return s;
+                });
+            } else {
+                delete cmd.stop_sequence;
+            }
+
+            _settingsData.allowed_commands[idx] = cmd;
+            document.getElementById('settings-cmd-edit').style.display = 'none';
+            renderSettings();
+        }
+
+        function addCommand() {
+            _settingsData.allowed_commands.push({ command: '', label: '' });
+            renderSettings();
+            editCommand(_settingsData.allowed_commands.length - 1);
+        }
+
+        function removeCommand(idx) {
+            _settingsData.allowed_commands.splice(idx, 1);
+            renderSettings();
+        }
+
+        function updateDir(idx, value) {
+            _settingsData.default_directories[idx] = value;
+        }
+
+        function addDir() {
+            _settingsData.default_directories.push('');
+            renderSettings();
+            // Focus the last input
+            const inputs = document.querySelectorAll('#settings-dirs input');
+            if (inputs.length) inputs[inputs.length - 1].focus();
+        }
+
+        function removeDir(idx) {
+            _settingsData.default_directories.splice(idx, 1);
+            renderSettings();
+        }
+
+        async function saveSettings() {
+            if (!_settingsData) return;
+
+            // Clean up: remove empty commands and directories
+            _settingsData.allowed_commands = _settingsData.allowed_commands.filter(c => c.command && c.label);
+            _settingsData.default_directories = _settingsData.default_directories.filter(d => d.trim());
+
+            try {
+                const resp = await fetch('/admin/settings', {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(_settingsData),
+                });
+                if (resp.ok) {
+                    document.getElementById('settings-dialog').classList.remove('open');
+                    // Trigger config re-fetch for this client
+                    await _refreshConfig();
+                } else {
+                    const err = await resp.json().catch(() => ({}));
+                    alert('Failed to save: ' + (err.detail || resp.statusText));
+                }
+            } catch (e) {
+                alert('Failed to save settings: ' + e.message);
+            }
+        }
+
+        // ── Config version tracking ───────────────────────────────────────
+
+        let _lastConfigVersion = -1;
+
+        async function _refreshConfig() {
+            try {
+                const resp = await fetch('/config');
+                const data = await resp.json();
+                if (data.config_version !== undefined) {
+                    _lastConfigVersion = data.config_version;
+                }
+                // Update cached config and rebuild command dropdown
+                _serverConfigs['local'] = data;
+                if (_newSessionServer === 'local') {
+                    allowedCommands = data.allowed_commands || [];
+                    populateCommandSelect();
+                }
+            } catch (e) {}
+        }
+
         async function toggleQR() {
             const dialog = document.getElementById('qr-dialog');
             dialog.classList.toggle('open');
             if (dialog.classList.contains('open')) {
                 const container = document.getElementById('qr-content');
-                container.innerHTML = '<p style="font-size:12px;color:#606080;">Loading...</p>';
+                container.innerHTML = '<p style="font-size:12px;color:#7878a0;">Loading...</p>';
 
                 // Determine the best reachable URL for other devices
                 let url = window.location.href;
@@ -3129,14 +3694,16 @@
                     try {
                         const resp = await fetch('/info');
                         const info = await resp.json();
-                        if (info.tailscale_ip) {
+                        if (info.tailscale_name) {
+                            url = `http://${info.tailscale_name}:${info.port}`;
+                        } else if (info.tailscale_ip) {
                             url = `http://${info.tailscale_ip}:${info.port}`;
                         } else {
                             container.innerHTML = `
                                 <div style="padding:16px 8px;">
                                     <div style="font-size:28px;margin-bottom:10px;">&#9888;</div>
                                     <p style="font-size:13px;color:#ff9944;margin:0 0 8px;">No reachable address found</p>
-                                    <p style="font-size:12px;color:#808090;margin:0;line-height:1.5;">
+                                    <p style="font-size:12px;color:#9898b0;margin:0;line-height:1.5;">
                                         Install Tailscale to make this server reachable from other devices.
                                     </p>
                                 </div>`;
@@ -3149,9 +3716,9 @@
                 }
 
                 container.innerHTML = `
-                    <p style="font-size:12px;color:#808090;margin-bottom:14px;">Scan to open on another device</p>
+                    <p style="font-size:12px;color:#9898b0;margin-bottom:14px;">Scan to open on another device</p>
                     <canvas id="qr-canvas" style="margin:0 auto 12px;display:block;border-radius:6px;"></canvas>
-                    <p style="font-size:11px;color:#606080;word-break:break-all;margin:0;"></p>`;
+                    <p style="font-size:11px;color:#7878a0;word-break:break-all;margin:0;"></p>`;
                 container.querySelector('p:last-child').textContent = url;
                 try {
                     const qr = qrcode(0, 'M');
@@ -3208,7 +3775,7 @@
                 if (info.hostname) {
                     const local = servers.find(s => s.key === 'local');
                     if (local) {
-                        local.label = '\u2605 ' + info.hostname;
+                        local.label = info.hostname;
                         saveServers();
                         renderSessionList();
                     }
@@ -3227,7 +3794,7 @@
                 }
                 el.innerHTML = html;
             } catch (e) {
-                el.innerHTML = '<div style="color:#606080;">Could not fetch server info</div>';
+                el.innerHTML = '<div style="color:#7878a0;">Could not fetch server info</div>';
             }
         }
 
@@ -3238,7 +3805,7 @@
                 const resp = await fetch('/tailscale/peers');
                 const peers = await resp.json();
                 if (!peers || peers.length === 0) {
-                    content.innerHTML = '<div style="font-size:12px;color:#505070;padding:4px 0;">No Tailscale peers online</div>';
+                    content.innerHTML = '<div style="font-size:12px;color:#505070;padding:4px 0;">No Tailscale peers found</div>';
                     return;
                 }
                 // Filter out peers already added as servers
@@ -3256,9 +3823,12 @@
                     <div style="display:flex;gap:6px;">
                         <select id="tailscale-select" style="flex:1;padding:7px 10px;background:#0a0a1a;border:1px solid #2a2a5a;color:#e0e0e0;border-radius:5px;font-size:13px;">
                             ${available.map(p => {
-                                const label = p.dns_name || p.hostname || p.ip;
-                                const url = 'http://' + p.ip + ':' + PORT;
-                                return `<option value="${escHtml(url)}" data-label="${escHtml(label)}">${escHtml(p.hostname)} (${escHtml(p.ip)})</option>`;
+                                const label = p.hostname || p.dns_name || p.ip;
+                                const host = p.dns_name || p.ip;
+                                const url = 'http://' + host + ':' + PORT;
+                                const dot = p.online ? '\u25CF' : '\u25CB';
+                                const dotColor = p.online ? '#44dd77' : '#505070';
+                                return `<option value="${escHtml(url)}" data-label="${escHtml(label)}" data-online="${p.online ? '1' : ''}" style="color:${p.online ? '#e0e0e0' : '#707090'}">${dot} ${escHtml(p.hostname)} (${escHtml(p.ip)})</option>`;
                             }).join('')}
                         </select>
                         <button onclick="addTailscaleDevice()" style="padding:7px 14px;background:#2a2a6a;border:1px solid #3a3aaa;color:#e0e0e0;border-radius:5px;cursor:pointer;font-size:13px;white-space:nowrap;">Add</button>
@@ -3276,19 +3846,32 @@
             const url = sel.value;
             if (!url) return;
             const label = sel.options[sel.selectedIndex].dataset.label || url;
+            const isOnline = sel.options[sel.selectedIndex].dataset.online === '1';
 
-            const info = await probeServer(url);
-            if (info) {
-                const finalLabel = info.tailscale_name || info.hostname || label;
-                const server = addServer(info.url, finalLabel);
-                if (server) {
+            if (isOnline) {
+                // Probe online devices to confirm and get server info
+                const info = await probeServer(url);
+                if (info) {
+                    const finalLabel = info.hostname || info.tailscale_name || label;
+                    const finalUrl = info.tailscale_name
+                        ? 'http://' + info.tailscale_name + ':' + (info.port || PORT)
+                        : info.url;
+                    const server = addServer(finalUrl, finalLabel);
+                    if (server) {
+                        renderServersDialog();
+                        updateServerSelectorVisibility();
+                        fetchConfig(server.key);
+                        fetchAllSessions();
+                    }
+                } else {
+                    // Probe failed — add with URL as-is
+                    addServer(url, label);
                     renderServersDialog();
                     updateServerSelectorVisibility();
-                    fetchConfig(server.key);
                     fetchAllSessions();
                 }
             } else {
-                // Server not reachable but add anyway — user can see red dot
+                // Offline device — skip probe, add directly
                 addServer(url, label);
                 renderServersDialog();
                 updateServerSelectorVisibility();
@@ -3304,7 +3887,7 @@
                 const connected = serverConnected[s.key] !== false;
                 const dotClass = connected ? 'connected' : 'disconnected';
                 const removeBtn = s.key !== 'local' ?
-                    `<button onclick="removeServer('${s.key.replace(/'/g, "\\'")}');renderServersDialog()" title="Remove">&times;</button>` : '';
+                    `<button onclick="removeServer('${s.key.replace(/'/g, "\\'")}');renderServersDialog();fetchTailscalePeers()" title="Remove">&times;</button>` : '';
                 const urlText = s.url || '(local)';
                 return `<div class="server-list-item">
                     <span class="server-dot ${dotClass}"></span>
@@ -3343,8 +3926,12 @@
                 return;
             }
 
-            const label = info.tailscale_name || info.hostname || url.replace(/^https?:\/\//, '');
-            const server = addServer(info.url, label);
+            const label = info.hostname || info.tailscale_name || url.replace(/^https?:\/\//, '');
+            // Prefer MagicDNS name for stable URL even if Tailscale IP changes
+            const finalUrl = info.tailscale_name
+                ? 'http://' + info.tailscale_name + ':' + (info.port || PORT)
+                : info.url;
+            const server = addServer(finalUrl, label);
             if (!server) {
                 // Already exists
                 input.value = '';
@@ -3463,8 +4050,12 @@
                 return;
             }
 
-            const label = info.tailscale_name || info.hostname || url.replace(/^https?:\/\//, '');
-            const server = addServer(info.url, label);
+            const label = info.hostname || info.tailscale_name || url.replace(/^https?:\/\//, '');
+            // Prefer MagicDNS name for stable URL even if Tailscale IP changes
+            const finalUrl = info.tailscale_name
+                ? 'http://' + info.tailscale_name + ':' + (info.port || PORT)
+                : info.url;
+            const server = addServer(finalUrl, label);
             if (server) {
                 renderServersDialog();
                 updateServerSelectorVisibility();
@@ -3680,10 +4271,18 @@
             } catch (e) {}
         }
 
-        // --- Window resize fallback ---
+        // --- Window / viewport resize ---
         window.addEventListener('resize', debounce(() => {
             panels.forEach(p => fitPanel(p));
         }, 150));
+        // On mobile, visualViewport resize fires when the address bar
+        // hides/shows or the keyboard opens — the layout viewport stays
+        // unchanged so window.resize doesn't fire.
+        if (window.visualViewport) {
+            window.visualViewport.addEventListener('resize', debounce(() => {
+                panels.forEach(p => fitPanel(p));
+            }, 200));
+        }
 
         // --- Notifications ---
         // Detect when a session needs attention by scanning terminal output.
