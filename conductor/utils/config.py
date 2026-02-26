@@ -16,7 +16,7 @@
 import os
 from pathlib import Path
 
-VERSION = "0.3.0"
+VERSION = "0.3.1"
 CONDUCTOR_TOKEN = os.environ.get("CONDUCTOR_TOKEN")
 
 HOST = "0.0.0.0"

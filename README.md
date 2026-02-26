@@ -8,6 +8,12 @@ Conductor keeps them moving. It runs entirely on your machines. No remote backen
 
 **New here?** Check out the [Quick Start Guide](docs/intro.md) — install, run an agent, and set up phone access in 5 minutes.
 
+---
+
+**Contents:** [What It Looks Like](#what-it-looks-like) · [How It Works](#how-it-works) · [What You Can Run](#what-you-can-run) · [Prerequisites](#prerequisites) · [Install](#install) · [Usage](#usage) · [Is It Safe?](#is-it-safe) · [Dashboard](#dashboard) · [CLI Reference](#cli-reference) · [API](#api) · [Agent Integration](#agent-integration) · [Project Structure](#project-structure) · [Platform Support](#platform-support)
+
+---
+
 ## What It Looks Like
 
 | Desktop | Mobile | Mobile (keyboard) |
@@ -160,6 +166,8 @@ conductor run <agent> review
 ```
 
 Open the dashboard in your browser — locally at `http://127.0.0.1:7777`, or from any device on your Tailscale network at `http://100.x.x.x:7777` (your Tailscale IP).
+
+Want the dashboard always available? See [Auto-Start on Boot](docs/autostart.md) for systemd, launchd, and Task Scheduler setup.
 
 ### Multi-machine setup
 

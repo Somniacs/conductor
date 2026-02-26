@@ -26,7 +26,7 @@ from pathlib import Path
 import click
 import httpx
 
-from conductor.utils.config import BASE_URL, CONDUCTOR_TOKEN, HOST, PORT, PID_FILE, ensure_dirs
+from conductor.utils.config import BASE_URL, CONDUCTOR_TOKEN, HOST, PORT, PID_FILE, VERSION, ensure_dirs
 
 
 def _auth_headers() -> dict[str, str]:
@@ -107,6 +107,7 @@ def start_server_daemon() -> bool:
 
 
 @click.group()
+@click.version_option(VERSION, prog_name="conductor")
 def cli():
     """Conductor - Local orchestration for interactive terminal processes."""
 
