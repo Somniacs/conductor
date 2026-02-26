@@ -102,6 +102,19 @@
         }
         .server-status.disconnected { display: block; }
 
+        .update-status {
+            display: none;
+            padding: 8px 12px;
+            background: #1a2a3a;
+            border-top: 1px solid #2a3a5a;
+            color: #60b0ff;
+            font-size: 11px;
+            text-align: center;
+            text-decoration: none;
+            cursor: pointer;
+        }
+        .update-status:hover { background: #1e3040; }
+
         #session-list {
             flex: 1;
             overflow-y: auto;
@@ -1473,6 +1486,7 @@
             </div>
             <div class="server-status" id="server-status">Server disconnected — retrying...</div>
             <div id="session-list"></div>
+            <a class="update-status" id="update-status" target="_blank"></a>
             <div class="new-session" id="new-session-dialog">
                 <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
                     <span style="font-size:12px;font-weight:500;color:#a0a0d0;">New Session</span>
@@ -4392,6 +4406,44 @@
         // Start polling sessions from all servers
         fetchAllSessions();
         setInterval(fetchAllSessions, 1500);
+
+        // --- Update check ---
+        function _semverNewer(a, b) {
+            const pa = a.split('.').map(Number);
+            const pb = b.split('.').map(Number);
+            for (let i = 0; i < 3; i++) {
+                if ((pa[i] || 0) > (pb[i] || 0)) return true;
+                if ((pa[i] || 0) < (pb[i] || 0)) return false;
+            }
+            return false;
+        }
+
+        function checkForUpdate() {
+            if (sessionStorage.getItem('_updateChecked')) return;
+            sessionStorage.setItem('_updateChecked', '1');
+
+            const cur = document.querySelector('.about-version')
+                ?.textContent?.trim()?.replace(/^v/, '');
+            if (!cur) return;
+
+            fetch('https://api.github.com/repos/somniacs/conductor/releases/latest')
+                .then(r => r.ok ? r.json() : null)
+                .then(data => {
+                    if (!data || !data.tag_name) return;
+                    const latest = data.tag_name.replace(/^v/, '');
+                    if (_semverNewer(latest, cur)) {
+                        const el = document.getElementById('update-status');
+                        if (el) {
+                            el.textContent = '\u2191 v' + latest + ' available';
+                            el.href = data.html_url;
+                            el.style.display = 'block';
+                        }
+                    }
+                })
+                .catch(() => {});
+        }
+
+        setTimeout(checkForUpdate, 5000);
     </script>
 </body>
 </html>
