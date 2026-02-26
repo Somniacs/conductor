@@ -14,11 +14,15 @@
 """Central configuration — networking, paths, buffer sizes, command whitelist."""
 
 import os
+from importlib.metadata import version as _pkg_version
 from pathlib import Path
 
 import yaml
 
-VERSION = "0.3.1"
+try:
+    VERSION = _pkg_version("conductor")
+except Exception:
+    VERSION = "0.0.0"
 CONDUCTOR_TOKEN = os.environ.get("CONDUCTOR_TOKEN")
 
 HOST = "0.0.0.0"

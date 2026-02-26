@@ -1496,7 +1496,7 @@
             <div class="sidebar-actions">
                 <button onclick="toggleNewSession()">+ New</button>
             </div>
-            <div class="server-status" id="server-status"><span class="spinner"></span>Server disconnected — retrying...</div>
+            <div class="server-status" id="server-status"><span class="spinner"></span>Server disconnected</div>
             <div id="session-list"></div>
             <a class="update-status" id="update-status" target="_blank"></a>
             <div class="new-session" id="new-session-dialog">
@@ -1554,7 +1554,7 @@
         <div class="about-box">
             <button class="about-close" onclick="toggleAbout()">&times;</button>
             <h2><span style="font-size:1.4em;vertical-align:middle">♭</span> conductor</h2>
-            <div class="about-version">v0.3.1</div>
+            <div class="about-version">v...</div>
             <p>Local orchestration layer for interactive terminal processes. Run sessions on your workstation, interact from anywhere.</p>
             <div class="about-section">Built with</div>
             <ul>
@@ -3796,6 +3796,12 @@
                 const resp = await fetch('/info');
                 const info = await resp.json();
                 if (info.port) PORT = info.port;
+
+                // Populate version from server (single source: pyproject.toml)
+                if (info.version) {
+                    const vEl = document.querySelector('.about-version');
+                    if (vEl) vEl.textContent = 'v' + info.version;
+                }
 
                 // Update local server label to real hostname
                 if (info.hostname) {

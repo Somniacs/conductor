@@ -2,6 +2,11 @@
 
 All notable changes to Conductor are documented here.
 
+## v0.3.2
+
+- **Update notification** — the dashboard checks GitHub for new releases on load and shows a subtle banner at the bottom of the sidebar when an update is available; click to open the release page
+- **Reconnect spinner** — the "Server disconnected" status bar now shows a spinning indicator instead of static text
+
 ## v0.3.1
 
 - **Admin settings panel** — localhost-only Settings dialog in the web dashboard for managing allowed commands, default directories, buffer size, upload limits, and stop timeout. Changes persist to `~/.conductor/config.yaml` and propagate to all connected clients automatically

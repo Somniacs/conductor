@@ -231,6 +231,7 @@ async def server_info():
     return {
         "hostname": socket.gethostname(),
         "port": PORT,
+        "version": VERSION,
         "tailscale_ip": ts_ip,
         "tailscale_name": ts_name,
     }

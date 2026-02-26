@@ -180,6 +180,10 @@ pip install -e .
 
 </details>
 
+### Updating
+
+The dashboard shows a notification when a new version is available. To update, download the latest release and run `./install.sh` (or `install.ps1` on Windows) again. Your settings (`~/.conductor/config.yaml`), sessions, and uploads are preserved — only the application code is replaced.
+
 ## Usage
 
 ### Start sessions
@@ -349,6 +353,7 @@ The web dashboard provides:
 - **Mobile extra keys** — on-screen toolbar with ESC, TAB, arrows, CTRL, ALT, Page Up/Down, Home/End, and attachment button; appears above the virtual keyboard on touch devices, with collapsible drawer (state persisted)
 - **Mobile touch scroll** — one-finger scroll with momentum in terminal panels
 - **Collapsible sidebar** — chevron toggle, auto-reopens when all panels close
+- **Update notification** — on load, the dashboard checks GitHub for new releases. When a newer version exists, a small banner appears at the bottom of the sidebar. Click it to open the release page — no automatic download or install, you stay in full control
 - **Auto-reconnect** — WebSocket reconnects automatically on disconnect
 - **Minimum 80 columns** — narrow panels get horizontal scroll instead of reflow
 - **Mobile-friendly** — responsive drawer, touch targets, dynamic viewport height, adaptive font size and scrollback
