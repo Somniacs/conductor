@@ -13,6 +13,8 @@ All notable changes to Conductor are documented here.
 - **Fix:** extra-keys drawer toggle now works reliably on mobile after collapsing
 - **Fix:** custom scrollbar drag now works on mobile (was mouse-only; added touch event support)
 - **Fix:** extra-keys drawer no longer overlaps terminal content; terminal resizes to fit above keyboard and drawer
+- **Shift modifier** — Shift button (⇧) on the mobile extra-keys bar enables Shift+Tab, Shift+Arrow, and other modified key sequences (useful for edit mode in Claude/Codex)
+- **Extra-keys layout** — added pipe (|) key; Tab and Shift use Unicode symbols (⇥/⇧); ↑ and ↓ arrows are vertically aligned across rows
 
 ## v0.3.2
 

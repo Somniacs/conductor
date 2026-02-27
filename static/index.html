@@ -1697,17 +1697,19 @@
                 <div class="extra-keys-cols">
                     <div class="extra-keys-row">
                         <button onpointerdown="sendKey('Escape')">ESC</button>
-                        <button onpointerdown="sendKey('/')">/</button>
-                        <button onpointerdown="sendKey('-')">&#8211;</button>
+                        <button onpointerdown="sendKey('/')" style="flex:.6">/</button>
+                        <button onpointerdown="sendKey('-')" style="flex:.6">&#8211;</button>
+                        <button onpointerdown="sendKey('|')" style="flex:.6">|</button>
                         <button onpointerdown="sendKey('Home')">HOME</button>
                         <button onpointerdown="sendKey('ArrowUp')">&uarr;</button>
                         <button onpointerdown="sendKey('End')">END</button>
                         <button onpointerdown="sendKey('PageUp')">PGUP</button>
                     </div>
                     <div class="extra-keys-row">
-                        <button onpointerdown="sendKey('Tab')">TAB</button>
+                        <button onpointerdown="sendKey('Tab')" style="flex:.6">&#x21E5;</button>
+                        <button onpointerdown="toggleModifier('shift')" id="ek-shift" style="flex:.6">&#x21E7;</button>
                         <button onpointerdown="toggleModifier('ctrl')" id="ek-ctrl">CTRL</button>
-                        <button onpointerdown="toggleModifier('alt')" id="ek-alt">ALT</button>
+                        <button onpointerdown="toggleModifier('alt')" id="ek-alt" style="flex:.6">ALT</button>
                         <button onpointerdown="sendKey('ArrowLeft')">&larr;</button>
                         <button onpointerdown="sendKey('ArrowDown')">&darr;</button>
                         <button onpointerdown="sendKey('ArrowRight')">&rarr;</button>
@@ -2969,6 +2971,7 @@
             Tab: '\t',
             '/': '/',
             '-': '-',
+            '|': '|',
             ArrowUp: '\x1b[A',
             ArrowDown: '\x1b[B',
             ArrowRight: '\x1b[C',
@@ -2980,7 +2983,7 @@
         };
 
         // Global modifier state for the extra-keys bar.
-        const _ekMods = { ctrl: false, alt: false };
+        const _ekMods = { ctrl: false, alt: false, shift: false };
 
         function _getFocusedPanel() {
             return panels.find(p => p.id === focusedPanelId);
@@ -3012,10 +3015,13 @@
         function _clearModifiers() {
             _ekMods.ctrl = false;
             _ekMods.alt = false;
+            _ekMods.shift = false;
             const ctrlBtn = document.getElementById('ek-ctrl');
             const altBtn = document.getElementById('ek-alt');
+            const shiftBtn = document.getElementById('ek-shift');
             if (ctrlBtn) ctrlBtn.classList.remove('modifier-active');
             if (altBtn) altBtn.classList.remove('modifier-active');
+            if (shiftBtn) shiftBtn.classList.remove('modifier-active');
         }
 
         function sendKey(key) {
@@ -3034,6 +3040,17 @@
                     Home: '\x1bOH', End: '\x1bOF',
                 };
                 if (appSeqs[key]) seq = appSeqs[key];
+            }
+
+            // Shift + key: CSI 1;2 sequences for arrows, backtab for Tab
+            if (_ekMods.shift) {
+                const shiftSeqs = {
+                    Tab: '\x1b[Z',
+                    ArrowUp: '\x1b[1;2A', ArrowDown: '\x1b[1;2B',
+                    ArrowRight: '\x1b[1;2C', ArrowLeft: '\x1b[1;2D',
+                    Home: '\x1b[1;2H', End: '\x1b[1;2F',
+                };
+                if (shiftSeqs[key]) seq = shiftSeqs[key];
             }
 
             // Ctrl + arrow produces CSI 1;5 <dir> sequences
