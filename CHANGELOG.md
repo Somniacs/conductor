@@ -6,12 +6,14 @@ All notable changes to Conductor are documented here.
 
 ### New features
 
-- **Native compositor scroll** — one-finger vertical scrolling on mobile now uses the browser's native scroll engine (hardware-accelerated, zero JS overhead, automatic momentum) instead of a custom JavaScript handler; dramatically smoother and lower latency
+- **Smooth native scrolling** — one-finger scrolling on mobile is now hardware-accelerated with native momentum, replacing the custom JavaScript scroll handler for dramatically lower latency
+- **Focused panel on mobile** — when the keyboard opens with multiple panels, only the active panel is shown at full size; the split layout restores when the keyboard closes
+- **Bigger navigation keys** — Tab, Shift, and arrow keys on the mobile extra-keys bar are larger for easier tapping
 
 ### Fixes
 
-- Mobile terminal no longer shifts upward after scrolling — native scroll could bubble up and vertically scroll `.panel-terminal` (which has `overflow-y: hidden` but still acts as a scroll container); a scroll listener now resets `scrollTop` immediately
-- WebSocket reconnection delay reduced from 2s to 500ms for faster recovery on mobile
+- Mobile terminal no longer shifts upward after scrolling
+- Faster reconnection on mobile (reduced from 2s to 500ms)
 
 ## v0.3.3
 

@@ -353,12 +353,12 @@ The web dashboard provides:
 - **Server management** — add/remove servers, Tailscale device picker, QR scanner, connection status
 - **File upload** — paste (Ctrl+V), drag-and-drop, or use the attachment button to upload any file (images, PDFs, code, text, etc.); shows an upload dialog with progress, then lets you insert the file path into the terminal or copy it to clipboard. Uploaded files are auto-cleaned when the session ends
 - **Mobile extra keys** — on-screen toolbar with ESC, TAB, arrows, CTRL, ALT, Page Up/Down, Home/End, and attachment button; appears above the virtual keyboard on touch devices, with collapsible drawer (state persisted)
-- **Mobile touch scroll** — one-finger scroll with momentum in terminal panels
+- **Mobile touch scroll** — smooth native one-finger scrolling with hardware-accelerated momentum
 - **Collapsible sidebar** — chevron toggle, auto-reopens when all panels close
 - **Update notification** — on load, the dashboard checks GitHub for new releases. When a newer version exists, a small banner appears at the bottom of the sidebar. Click it to open the release page — no automatic download or install, you stay in full control
 - **Auto-reconnect** — WebSocket reconnects automatically on disconnect
 - **Minimum 80 columns** — narrow panels get horizontal scroll instead of reflow
-- **Mobile-friendly** — responsive drawer, touch targets, dynamic viewport height, adaptive font size and scrollback
+- **Mobile-friendly** — responsive drawer, touch targets, dynamic viewport height, adaptive font size and scrollback. When the keyboard opens with multiple panels, the focused panel automatically goes full-screen; the split layout restores when the keyboard closes
 
 ## CLI Reference
 
