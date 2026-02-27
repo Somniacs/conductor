@@ -55,6 +55,7 @@ class Session:
                  cwd: str | None = None, on_exit=None, env: dict | None = None,
                  resume_pattern: str | None = None,
                  resume_flag: str | None = None,
+                 resume_command: str | None = None,
                  stop_sequence: list[str] | None = None):
         self.id = session_id or name
         self.name = name
@@ -70,6 +71,7 @@ class Session:
         self.exit_code: int | None = None
         self.resume_id: str | None = None
         self.resume_flag: str | None = resume_flag
+        self.resume_command: str | None = resume_command
         self._resume_re = re.compile(resume_pattern) if resume_pattern else None
         self._stop_sequence: list[str] | None = stop_sequence
         self.rows: int = 24
@@ -193,7 +195,16 @@ class Session:
         Uses the per-command ``resume_pattern`` if configured, otherwise
         falls back to the default ``--resume <id>`` pattern so existing
         Claude Code sessions keep working.
+
+        If ``resume_command`` is set (e.g. ``codex resume --last``), the
+        session is always resumable — no pattern matching needed.
         """
+        # Agents that manage their own session history (e.g. Codex) don't
+        # print a resume token.  Mark them as always-resumable.
+        if self.resume_command:
+            self.resume_id = "__always__"
+            return
+
         pattern = self._resume_re or _DEFAULT_RESUME_RE
         try:
             # Only inspect the last 4 KB — the resume line is near the end.
@@ -289,9 +300,9 @@ class Session:
             except OSError:
                 break
             if i < len(self._stop_sequence) - 1:
-                # Longer pause after first item (interrupt → wait for prompt).
-                # Shorter pause between command text and Enter key.
-                await asyncio.sleep(2.0 if i == 0 else 0.2)
+                # Pause after first item (interrupt → wait for prompt).
+                # Shorter pause between subsequent items.
+                await asyncio.sleep(1.0 if i == 0 else 0.2)
 
     async def _escalate_kill(self, timeout: float):
         """Wait for *timeout* seconds, then SIGTERM if still running."""
@@ -340,4 +351,6 @@ class Session:
             d["resume_id"] = self.resume_id
         if self.resume_flag:
             d["resume_flag"] = self.resume_flag
+        if self.resume_command:
+            d["resume_command"] = self.resume_command
         return d

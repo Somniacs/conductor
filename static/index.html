@@ -1206,6 +1206,13 @@
             color: #9898b0;
         }
         .settings-footer .btn-cancel:hover { border-color: #4040aa; color: #a0a0c0; }
+        .settings-footer .btn-reset {
+            background: none;
+            border: 1px solid #3a2020;
+            color: #a07070;
+            font-size: 11px;
+        }
+        .settings-footer .btn-reset:hover { border-color: #6a3030; color: #cc8080; }
         .settings-add-btn {
             background: none;
             border: 1px dashed #2a2a5a;
@@ -1544,6 +1551,8 @@
             <h2>Settings</h2>
             <div id="settings-content"></div>
             <div class="settings-footer">
+                <button class="btn-reset" onclick="resetSettings()">Reset to defaults</button>
+                <span style="flex:1"></span>
                 <button class="btn-cancel" onclick="toggleSettingsDialog()">Cancel</button>
                 <button class="btn-save" onclick="saveSettings()">Save</button>
             </div>
@@ -2098,6 +2107,12 @@
                 allSessions.push(..._serverSessions[key]);
             }
             sessions = allSessions;
+
+            // Close panels whose session no longer exists on the server.
+            const knownIds = new Set(allSessions.map(s => s._compoundId));
+            const orphaned = panels.filter(p => !knownIds.has(p.id));
+            orphaned.forEach(p => closePanel(p.id));
+
             renderSessionList();
             validateNewSession();
         }
@@ -3683,6 +3698,22 @@
                 }
             } catch (e) {
                 alert('Failed to save settings: ' + e.message);
+            }
+        }
+
+        async function resetSettings() {
+            if (!confirm('Reset all settings to built-in defaults?')) return;
+            try {
+                const resp = await fetch('/admin/settings/reset', { method: 'POST' });
+                if (resp.ok) {
+                    document.getElementById('settings-dialog').classList.remove('open');
+                    await _refreshConfig();
+                } else {
+                    const err = await resp.json().catch(() => ({}));
+                    alert('Failed to reset: ' + (err.detail || resp.statusText));
+                }
+            } catch (e) {
+                alert('Failed to reset settings: ' + e.message);
             }
         }
 

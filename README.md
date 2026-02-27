@@ -28,7 +28,7 @@ Conductor keeps them moving. It runs entirely on your machines. No remote backen
 | Codex CLI | `conductor run codex backend` |
 | Aider | `conductor run aider refactor` |
 | Goose | `conductor run goose api` |
-| GitHub Copilot | `conductor run "gh copilot" chat` |
+| GitHub Copilot | `conductor run copilot chat` |
 | Custom (allowlisted) | `conductor run python3 train` |
 
 ```
@@ -248,7 +248,9 @@ Added machines are saved in your browser's localStorage. Refresh the page or clo
 
 ### Session resume
 
-When an agent exits and prints a resume token — like Claude Code's `--resume <session-id>` — Conductor captures it from the terminal output automatically. The session stays in the sidebar as **resumable** with a play button. Click it and Conductor starts a new session with the original command plus the `--resume` flag, picking up where you left off.
+When an agent exits and prints a resume token — like Claude Code's `--resume <session-id>` — Conductor captures it from the terminal output automatically. The session stays in the sidebar as **resumable** with a play button. Click it and Conductor starts a new session with the original command plus the resume flag, picking up where you left off.
+
+Agents that manage their own session history — like Codex (`codex resume`) and Copilot (`copilot --resume`) — are always marked as resumable when they exit. Clicking the play button launches the agent's built-in resume command.
 
 Resume tokens are persisted to disk (`~/.conductor/sessions/`), so they survive server restarts and machine reboots. Power-cycle your laptop, start Conductor again, and the resumable session is still there.
 

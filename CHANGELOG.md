@@ -6,6 +6,13 @@ All notable changes to Conductor are documented here.
 
 - **Update notification** — the dashboard checks GitHub for new releases on load and shows a subtle banner at the bottom of the sidebar when an update is available; click to open the release page
 - **Reconnect spinner** — the "Server disconnected" status bar now shows a spinning indicator instead of static text
+- **Codex resume support** — Codex sessions are always resumable; clicking the play button runs `codex resume`. Added `codex --full-auto` variant with `codex resume --last`
+- **Copilot resume support** — GitHub Copilot CLI sessions are always resumable via `copilot --resume` (picker) or `copilot --continue` (most recent). Command changed from `gh copilot` to `copilot` (standalone binary). Added `copilot --allow-all-tools` variant
+- **Command-based resume** — new `resume_command` field for agents that manage their own session history (no token extraction needed); used by Codex and Copilot
+- **Graceful stop improvements** — SIGINT-first kill prevents Node runtime crashes (Codex); reduced stop sequence delay from 2s to 1s; Copilot uses direct SIGINT instead of PTY text commands for instant shutdown
+- **Orphan panel cleanup** — terminal panels are automatically closed when their session disappears from the server
+- **Settings reset** — "Reset to defaults" button in the Settings dialog restores built-in command list, directories, and all other settings
+- **Unified versioning** — version defined in one place (`pyproject.toml`); backend reads via `importlib.metadata`, frontend fetches from `/info`
 
 ## v0.3.1
 

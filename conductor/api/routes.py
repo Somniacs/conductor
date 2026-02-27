@@ -137,6 +137,7 @@ class SessionResponse(BaseModel):
     resize_source: str | None = None
     resume_id: str | None = None
     resume_flag: str | None = None
+    resume_command: str | None = None
     ws_url: str | None = None
 
 
@@ -341,6 +342,14 @@ async def put_admin_settings(request: Request):
     _require_localhost(request)
     data = await request.json()
     cfg.save_user_config(data)
+    return {"status": "ok", "config_version": cfg.get_config_version()}
+
+
+@router.post("/admin/settings/reset")
+async def reset_admin_settings(request: Request):
+    """Reset all settings to built-in defaults. Localhost only."""
+    _require_localhost(request)
+    cfg.reset_to_defaults()
     return {"status": "ok", "config_version": cfg.get_config_version()}
 
 

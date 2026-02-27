@@ -58,8 +58,28 @@ _DEFAULT_ALLOWED_COMMANDS = [
         "resume_flag": "--resume",
         "stop_sequence": ["\x03", "/exit", "\r"],
     },
-    {"command": "codex", "label": "OpenAI Codex CLI"},
-    {"command": "gh copilot", "label": "GitHub Copilot CLI"},
+    {
+        "command": "codex",
+        "label": "OpenAI Codex CLI",
+        "resume_command": "codex resume",
+        "stop_sequence": ["\x03"],
+    },
+    {
+        "command": "codex --full-auto",
+        "label": "OpenAI Codex CLI (full auto)",
+        "resume_command": "codex resume --last",
+        "stop_sequence": ["\x03"],
+    },
+    {
+        "command": "copilot",
+        "label": "GitHub Copilot CLI",
+        "resume_command": "copilot --resume",
+    },
+    {
+        "command": "copilot --allow-all-tools",
+        "label": "GitHub Copilot CLI (allow all)",
+        "resume_command": "copilot --continue",
+    },
     {"command": "aider", "label": "Aider"},
     {"command": "cursor", "label": "Cursor Agent"},
     {"command": "goose", "label": "Goose (Block)"},
@@ -143,6 +163,21 @@ def get_editable_settings() -> dict:
         "max_upload_size": MAX_UPLOAD_SIZE,
         "graceful_stop_timeout": GRACEFUL_STOP_TIMEOUT,
     }
+
+
+def reset_to_defaults():
+    """Reset all settings to built-in defaults and remove config.yaml."""
+    global ALLOWED_COMMANDS, DEFAULT_DIRECTORIES, BUFFER_MAX_BYTES, MAX_UPLOAD_SIZE, GRACEFUL_STOP_TIMEOUT, _config_version
+
+    ALLOWED_COMMANDS = list(_DEFAULT_ALLOWED_COMMANDS)
+    DEFAULT_DIRECTORIES = list(_DEFAULT_DIRECTORIES)
+    BUFFER_MAX_BYTES = 1_000_000
+    MAX_UPLOAD_SIZE = 10 * 1024 * 1024
+    GRACEFUL_STOP_TIMEOUT = 30
+
+    if USER_CONFIG_FILE.exists():
+        USER_CONFIG_FILE.unlink()
+    _config_version += 1
 
 
 def get_admin_settings() -> dict:

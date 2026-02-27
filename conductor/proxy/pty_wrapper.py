@@ -125,8 +125,19 @@ if not _IS_WIN:
         def kill(self) -> None:
             if self.process and self.process.poll() is None:
                 try:
-                    os.killpg(os.getpgid(self.process.pid), signal.SIGTERM)
+                    pgid = os.getpgid(self.process.pid)
+                    # Try SIGINT first — some runtimes (e.g. Node/Codex)
+                    # crash on SIGTERM during teardown.
+                    os.killpg(pgid, signal.SIGINT)
                 except ProcessLookupError:
+                    return
+                # Give the process a moment to exit cleanly, then SIGTERM.
+                import time
+                time.sleep(0.3)
+                try:
+                    if self.process.poll() is None:
+                        os.killpg(os.getpgid(self.process.pid), signal.SIGTERM)
+                except (ProcessLookupError, OSError):
                     pass
 
         def poll(self) -> int | None:

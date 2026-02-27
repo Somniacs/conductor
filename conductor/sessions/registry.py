@@ -59,7 +59,7 @@ class SessionRegistry:
             if base == entry_base:
                 return {
                     k: entry[k]
-                    for k in ("resume_pattern", "resume_flag", "stop_sequence")
+                    for k in ("resume_pattern", "resume_flag", "resume_command", "stop_sequence")
                     if k in entry
                 }
         return {}
@@ -112,6 +112,7 @@ class SessionRegistry:
             env=env,
             resume_pattern=agent_cfg.get("resume_pattern"),
             resume_flag=agent_cfg.get("resume_flag"),
+            resume_command=agent_cfg.get("resume_command"),
             stop_sequence=agent_cfg.get("stop_sequence"),
         )
         await session.start(rows=rows or 24, cols=cols or 80)
@@ -125,10 +126,14 @@ class SessionRegistry:
     async def resume(self, session_id: str) -> Session:
         """Resume a previously exited session using its stored resume ID.
 
-        Uses the per-command ``resume_flag`` (persisted in session metadata)
-        to build the correct CLI invocation, e.g.
-        ``claude ... --resume <id>`` or ``aider --continue <id>``.
-        Falls back to ``--resume`` for backward compatibility.
+        Two modes:
+
+        1. **Token-based** (Claude Code, Copilot) — a ``resume_pattern``
+           captures a token from the terminal output and ``resume_flag``
+           appends it to the original command, e.g.
+           ``claude ... --resume <id>``.
+        2. **Command-based** (Codex) — a fixed ``resume_command`` replaces
+           the original command entirely, e.g. ``codex resume --last``.
         """
         meta = self.resumable.pop(session_id, None)
 
@@ -150,14 +155,20 @@ class SessionRegistry:
         if not meta or not meta.get("resume_id"):
             raise ValueError(f"No resumable session '{session_id}'")
 
-        flag = meta.get("resume_flag", "--resume")
-        # Strip any previous resume flag+id from the command to avoid
-        # accumulation across multiple resumes.
-        import re as _re
-        command = _re.sub(
-            rf'\s*{_re.escape(flag)}\s+\S+', '', meta["command"]
-        ).rstrip()
-        command += f" {flag} {meta['resume_id']}"
+        # Command-based resume (e.g. "codex resume --last") — use as-is.
+        if meta.get("resume_command"):
+            command = meta["resume_command"]
+        else:
+            # Token-based resume — append flag + captured ID to original command.
+            flag = meta.get("resume_flag", "--resume")
+            # Strip any previous resume flag+id from the command to avoid
+            # accumulation across multiple resumes.
+            import re as _re
+            command = _re.sub(
+                rf'\s*{_re.escape(flag)}\s+\S+', '', meta["command"]
+            ).rstrip()
+            command += f" {flag} {meta['resume_id']}"
+
         cwd = meta.get("cwd")
         self._delete_metadata(session_id)
 
