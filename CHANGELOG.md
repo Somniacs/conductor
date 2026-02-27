@@ -8,7 +8,7 @@ All notable changes to Conductor are documented here.
 
 - **Smooth native scrolling** — one-finger scrolling on mobile is now hardware-accelerated with native momentum, replacing the custom JavaScript scroll handler for dramatically lower latency
 - **Focused panel on mobile** — when the keyboard opens with multiple panels, only the active panel is shown at full size; the split layout restores when the keyboard closes
-
+- **Compact extra keys** — reduced vertical size of the mobile extra-keys bar so more terminal content is visible
 
 ### Fixes
 
