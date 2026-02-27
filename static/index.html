@@ -748,7 +748,10 @@
         }
         .extra-keys-bar.visible { display: flex; flex-direction: column; align-items: flex-end; }
         .extra-keys-chevron {
-            padding: 4px 10px;
+            position: absolute;
+            right: 8px;
+            top: -18px;
+            padding: 2px 10px;
             cursor: pointer;
             color: #7878a0;
             font-size: 10px;
@@ -758,6 +761,7 @@
             border-bottom: none;
             border-radius: 4px 4px 0 0;
             -webkit-tap-highlight-color: transparent;
+            z-index: 1;
         }
         .extra-keys-chevron:active { color: #a0a0d0; }
         .extra-keys-drawer {
@@ -831,19 +835,22 @@
         }
 
         .panel-terminal {
-            /* calc leaves 8px for the absolutely-positioned scroll proxy */
+            /* calc leaves room for the absolutely-positioned scroll proxy */
             width: calc(100% - 8px);
             height: 100%;
             overflow-x: auto;
             overflow-y: hidden;
+        }
+        @media (max-width: 700px) {
+            .panel-terminal { width: calc(100% - 16px); }
         }
 
         .terminal-wrapper {
             width: 100%;
             height: 100%;
             /* min-width is set dynamically from JS after measuring char width */
-            /* Disable all native touch gestures — our JS handler scrolls the
-               xterm viewport directly for smooth pixel-based scrolling. */
+            /* We handle all touch gestures in JS (scroll, tap, momentum).
+               touch-action:none prevents the browser from intercepting. */
             touch-action: none;
         }
 
@@ -855,6 +862,10 @@
             width: 8px;
             z-index: 5;
             background: #0a0a1a;
+            touch-action: none;
+        }
+        @media (max-width: 700px) {
+            .xterm-scroll-proxy { width: 16px; }
         }
         .xterm-scroll-thumb {
             position: absolute;
@@ -865,10 +876,37 @@
             border-radius: 3px;
             transition: background 0.15s;
             cursor: pointer;
+            touch-action: none;
+        }
+        @media (max-width: 700px) {
+            .xterm-scroll-thumb { width: 10px; right: 3px; }
         }
         .xterm-scroll-thumb:hover,
         .xterm-scroll-thumb.active {
             background: #3a3a7a;
+        }
+
+        /* Horizontal scroll proxy — mirrors .panel-terminal scrollLeft */
+        .xterm-hscroll-proxy {
+            position: absolute;
+            left: 0;
+            right: 8px;
+            bottom: 0;
+            height: 6px;
+            z-index: 5;
+            display: none;
+        }
+        @media (max-width: 700px) {
+            .xterm-hscroll-proxy { right: 16px; }
+        }
+        .xterm-hscroll-thumb {
+            position: absolute;
+            bottom: 1px;
+            height: 4px;
+            min-width: 20px;
+            background: #2a2a5a;
+            border-radius: 2px;
+            transition: background 0.15s;
         }
 
         /* .xterm fills the pinned wrapper height so the viewport
@@ -1485,7 +1523,7 @@
         <aside class="sidebar" id="sidebar">
             <button class="drawer-toggle" id="drawer-toggle" onclick="toggleDrawer()">&#x2039;</button>
             <div class="sidebar-header">
-                <h1><a href="https://github.com/somniacs/conductor" target="_blank" style="color:inherit;text-decoration:none"><span style="font-size:1.8em;line-height:0;vertical-align:middle">♭</span> conductor</a></h1>
+                <h1><a href="https://github.com/somniacs/conductor" target="_blank" style="color:inherit;text-decoration:none"><span style="font-size:1.8em;line-height:0;vertical-align:middle">♭</span> conductor</a> <span id="sidebar-version" style="font-size:9px;font-weight:400;color:#505070"></span></h1>
                 <div class="menu-wrapper">
                     <button class="menu-btn" onclick="toggleMenu()" title="Menu">&#9776;</button>
                     <div class="menu-dropdown" id="hamburger-menu">
@@ -1653,7 +1691,7 @@
     </div>
 
     <div class="extra-keys-bar" id="extra-keys-bar" onpointerdown="event.preventDefault()">
-        <span class="extra-keys-chevron" onpointerdown="toggleExtraKeysBar()" id="ek-chevron">&#9650;</span>
+        <span class="extra-keys-chevron" onpointerdown="event.stopPropagation(); event.preventDefault(); toggleExtraKeysBar()" id="ek-chevron">&#9650;</span>
         <div class="extra-keys-drawer">
             <div class="extra-keys-rows">
                 <div class="extra-keys-cols">
@@ -2428,6 +2466,15 @@
             scrollProxy.appendChild(scrollThumb);
             termOuter.appendChild(scrollProxy);
 
+            // Horizontal scroll proxy — at the bottom edge, shows when content
+            // is wider than the panel (wide terminal output).
+            const hScrollProxy = document.createElement('div');
+            hScrollProxy.className = 'xterm-hscroll-proxy';
+            const hScrollThumb = document.createElement('div');
+            hScrollThumb.className = 'xterm-hscroll-thumb';
+            hScrollProxy.appendChild(hScrollThumb);
+            termOuter.appendChild(hScrollProxy);
+
             // Show server name in panel header when multi-server
             const serverLabel = _isMultiServer() ? ` <span style="font-size:10px;color:#7878a0;">(${escHtml(getServerLabel(panel.server))})</span>` : '';
 
@@ -2576,71 +2623,94 @@
             panel.terminal.open(target);
             panel._termOpened = true;
 
-            // Mobile touch scroll: direction-locked vertical + horizontal
-            // scrolling with momentum.  Vertical scrolls the xterm viewport
-            // (scrollback), horizontal scrolls .panel-terminal (wide content).
-            // touch-action: none on .terminal-wrapper means we handle everything.
-            if ('ontouchstart' in window) {
-                let tY = null, tX = null, tScroll = false, tDir = null;
-                let tVel = 0, tTime = 0, tMom = null;
-                const getVp = () => target.querySelector('.xterm-viewport');
+
+            // Mobile touch scroll — both axes simultaneously, no direction
+            // locking.  Capture phase + stopPropagation prevents xterm's own
+            // touch handlers from interfering.  Momentum on both axes.
+            //
+            // KEY PERF INSIGHT: every vp.scrollTop assignment fires xterm's
+            // internal scroll→_handleScroll→refresh(0,rows-1) chain = full
+            // re-render.  We rAF-batch vertical updates so at most one
+            // scrollTop write happens per frame.
+            if ('ontouchstart' in window && window.matchMedia('(max-width: 700px)').matches) {
+                let tY = null, tX = null, tMoved = false;
+                let tVelX = 0, tVelY = 0, tTime = 0, tMom = null;
+                let cachedVp = null;
+                const getVp = () => (cachedVp || (cachedVp = target.querySelector('.xterm-viewport')));
                 const hScroller = target.parentElement; // .panel-terminal
 
+                // rAF-batched vertical scroll — accumulate dy, apply once/frame.
+                // Each scrollTop write triggers xterm's _handleScroll → full
+                // re-render.  Batching ensures at most one per frame.
+                let pendingDy = 0;
+                let vScrollRaf = 0;
+
+                function applyVerticalScroll() {
+                    vScrollRaf = 0;
+                    if (pendingDy === 0) return;
+                    const vp = getVp();
+                    if (!vp) { pendingDy = 0; return; }
+                    vp.scrollTop += pendingDy;
+                    pendingDy = 0;
+                }
+
+                function scheduleVScroll(dy) {
+                    pendingDy += dy;
+                    if (!vScrollRaf) vScrollRaf = requestAnimationFrame(applyVerticalScroll);
+                }
+
                 function momTick() {
-                    tVel *= 0.93;
-                    if (Math.abs(tVel) < 0.5) { tMom = null; return; }
-                    if (tDir === 'v') {
-                        const vp = getVp();
-                        if (vp) vp.scrollTop += tVel;
-                    } else {
-                        hScroller.scrollLeft += tVel;
-                    }
+                    tVelX *= 0.93;
+                    tVelY *= 0.93;
+                    if (Math.abs(tVelX) < 0.5 && Math.abs(tVelY) < 0.5) { tMom = null; return; }
+                    if (Math.abs(tVelY) >= 0.5) scheduleVScroll(tVelY);
+                    if (Math.abs(tVelX) >= 0.5) hScroller.scrollLeft += tVelX;
                     tMom = requestAnimationFrame(momTick);
                 }
 
                 target.addEventListener('touchstart', (e) => {
                     if (tMom) { cancelAnimationFrame(tMom); tMom = null; }
+                    if (vScrollRaf) { cancelAnimationFrame(vScrollRaf); vScrollRaf = 0; pendingDy = 0; }
                     if (e.touches.length === 1) {
                         tY = e.touches[0].clientY;
                         tX = e.touches[0].clientX;
                         tTime = e.timeStamp;
-                        tVel = 0; tScroll = false; tDir = null;
+                        tVelX = 0; tVelY = 0; tMoved = false;
                     }
-                }, { passive: false, capture: true });
+                }, { passive: true, capture: true });
 
                 target.addEventListener('touchmove', (e) => {
                     if (e.touches.length !== 1 || tY === null) return;
+                    e.preventDefault();
+                    e.stopPropagation();
+                    tMoved = true;
                     const dy = tY - e.touches[0].clientY;
                     const dx = tX - e.touches[0].clientX;
-                    // Lock direction after 4px movement
-                    if (!tScroll && (Math.abs(dy) > 4 || Math.abs(dx) > 4)) {
-                        tScroll = true;
-                        tDir = Math.abs(dy) >= Math.abs(dx) ? 'v' : 'h';
-                    }
-                    if (tScroll) {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        const dt = e.timeStamp - tTime;
-                        tTime = e.timeStamp;
-                        if (tDir === 'v') {
-                            if (dt > 0) tVel = dy / dt * 16;
-                            tY = e.touches[0].clientY;
-                            const vp = getVp();
-                            if (vp) vp.scrollTop += dy;
-                        } else {
-                            if (dt > 0) tVel = dx / dt * 16;
-                            tX = e.touches[0].clientX;
-                            hScroller.scrollLeft += dx;
-                        }
-                    }
+                    const dt = e.timeStamp - tTime;
+                    tTime = e.timeStamp;
+                    tY = e.touches[0].clientY;
+                    tX = e.touches[0].clientX;
+                    if (dt > 0) { tVelY = dy / dt * 16; tVelX = dx / dt * 16; }
+                    // Vertical: rAF-batched (expensive — triggers xterm re-render)
+                    scheduleVScroll(dy);
+                    // Horizontal: immediate (cheap — plain div, no JS listeners)
+                    hScroller.scrollLeft += dx;
                 }, { passive: false, capture: true });
 
-                target.addEventListener('touchend', () => {
+                target.addEventListener('touchend', (e) => {
+                    const wasTap = !tMoved;
+                    if (tMoved) e.stopPropagation();
                     tY = null; tX = null;
-                    if (tScroll && Math.abs(tVel) > 1.5) {
+                    if (tMoved && (Math.abs(tVelX) > 1.5 || Math.abs(tVelY) > 1.5)) {
                         tMom = requestAnimationFrame(momTick);
                     }
-                    tScroll = false;
+                    tMoved = false;
+                    // Tap → focus terminal + scroll to bottom
+                    if (wasTap) {
+                        panel.terminal.focus();
+                        const vp = getVp();
+                        if (vp) vp.scrollTop = vp.scrollHeight;
+                    }
                 }, { passive: true, capture: true });
             }
 
@@ -2671,6 +2741,7 @@
                         const thumb = panel._scrollThumb;
                         const track = panel._scrollProxy;
 
+                        let scrollThumbRaf = 0;
                         function syncScrollThumb() {
                             const sh = xtermVp.scrollHeight;
                             const ch = xtermVp.clientHeight;
@@ -2686,39 +2757,70 @@
                             thumb.style.height = thumbH + 'px';
                             thumb.style.top = (ratio * maxTop) + 'px';
                         }
+                        // Throttle scroll-driven updates to one per frame
+                        function scheduleThumbSync() {
+                            if (!scrollThumbRaf) {
+                                scrollThumbRaf = requestAnimationFrame(() => {
+                                    scrollThumbRaf = 0;
+                                    syncScrollThumb();
+                                });
+                            }
+                        }
 
                         // Sync when xterm viewport scrolls
-                        xtermVp.addEventListener('scroll', syncScrollThumb);
+                        xtermVp.addEventListener('scroll', scheduleThumbSync, { passive: true });
 
                         // Drag the thumb to scroll the terminal
                         let dragging = false, dragStartY = 0, dragStartST = 0;
-                        thumb.addEventListener('mousedown', (e) => {
-                            e.preventDefault();
+                        function onThumbStart(clientY) {
                             dragging = true;
-                            dragStartY = e.clientY;
+                            dragStartY = clientY;
                             dragStartST = xtermVp.scrollTop;
                             thumb.classList.add('active');
-                            document.addEventListener('mousemove', onThumbDrag);
-                            document.addEventListener('mouseup', onThumbDragEnd);
-                        });
-                        function onThumbDrag(e) {
+                        }
+                        function onThumbMove(clientY) {
+                            if (!dragging) return;
                             const sh = xtermVp.scrollHeight;
                             const ch = xtermVp.clientHeight;
                             const trackH = track.clientHeight;
                             const thumbH = Math.max(20, (ch / sh) * trackH);
                             const maxTop = trackH - thumbH;
                             const maxST = sh - ch;
-                            const dy = e.clientY - dragStartY;
+                            const dy = clientY - dragStartY;
                             xtermVp.scrollTop = dragStartST + (dy / maxTop) * maxST;
                         }
-                        function onThumbDragEnd() {
+                        function onThumbEnd() {
                             dragging = false;
                             thumb.classList.remove('active');
-                            document.removeEventListener('mousemove', onThumbDrag);
-                            document.removeEventListener('mouseup', onThumbDragEnd);
                         }
+                        // Mouse
+                        thumb.addEventListener('mousedown', (e) => {
+                            e.preventDefault();
+                            onThumbStart(e.clientY);
+                            function mm(e) { onThumbMove(e.clientY); }
+                            function mu() { onThumbEnd(); document.removeEventListener('mousemove', mm); document.removeEventListener('mouseup', mu); }
+                            document.addEventListener('mousemove', mm);
+                            document.addEventListener('mouseup', mu);
+                        });
+                        // Touch — drag anywhere on the track (thumb is too
+                        // narrow to hit reliably on mobile).
+                        track.addEventListener('touchstart', (e) => {
+                            e.preventDefault();
+                            // Jump to tap position, then start drag
+                            const rect = track.getBoundingClientRect();
+                            const ratio = (e.touches[0].clientY - rect.top) / rect.height;
+                            const maxST = xtermVp.scrollHeight - xtermVp.clientHeight;
+                            xtermVp.scrollTop = ratio * maxST;
+                            onThumbStart(e.touches[0].clientY);
+                            dragStartST = xtermVp.scrollTop;
+                        }, { passive: false });
+                        track.addEventListener('touchmove', (e) => {
+                            e.preventDefault();
+                            onThumbMove(e.touches[0].clientY);
+                        }, { passive: false });
+                        track.addEventListener('touchend', () => onThumbEnd());
 
-                        // Click on track to jump
+                        // Click on track to jump (desktop)
                         track.addEventListener('mousedown', (e) => {
                             if (e.target === thumb) return;
                             const rect = track.getBoundingClientRect();
@@ -2730,6 +2832,34 @@
                         syncScrollThumb();
                         // Periodically sync in case buffer grows
                         panel._scrollSyncInterval = setInterval(syncScrollThumb, 500);
+
+                        // --- Horizontal scroll indicator ---
+                        const hTrack = termOuter.querySelector('.xterm-hscroll-proxy');
+                        const hThumb = termOuter.querySelector('.xterm-hscroll-thumb');
+                        const hContainer = termEl; // .panel-terminal
+                        if (hTrack && hThumb) {
+                            function syncHScrollThumb() {
+                                const sw = hContainer.scrollWidth;
+                                const cw = hContainer.clientWidth;
+                                if (sw <= cw) {
+                                    hTrack.style.display = 'none';
+                                    return;
+                                }
+                                hTrack.style.display = 'block';
+                                const trackW = hTrack.clientWidth;
+                                const thumbW = Math.max(20, (cw / sw) * trackW);
+                                const maxLeft = trackW - thumbW;
+                                const ratio = hContainer.scrollLeft / (sw - cw);
+                                hThumb.style.width = thumbW + 'px';
+                                hThumb.style.left = (ratio * maxLeft) + 'px';
+                            }
+                            hContainer.addEventListener('scroll', () => {
+                                requestAnimationFrame(syncHScrollThumb);
+                            }, { passive: true });
+                            syncHScrollThumb();
+                            // Also sync periodically (content may change width)
+                            panel._hScrollSyncInterval = setInterval(syncHScrollThumb, 500);
+                        }
                     }
                 }
 
@@ -2960,14 +3090,11 @@
             if (keyboardOpen) {
                 if (_ekHideTimer) { clearTimeout(_ekHideTimer); _ekHideTimer = null; }
                 bar.classList.add('visible');
-                // Position at the bottom of the VISUAL viewport (what the
-                // user actually sees).  Use 'top' instead of 'bottom' so
-                // the bar follows the visual viewport when the browser
-                // auto-scrolls to keep a focused panel in view (e.g. the
-                // lower panel in split mode).
-                const barH = bar.offsetHeight;
-                bar.style.bottom = 'auto';
-                bar.style.top = (vv.offsetTop + vv.height - barH) + 'px';
+                // Position just above the keyboard.  With resizes-visual the
+                // layout viewport stays full-screen; position:fixed bottom
+                // measured from there reliably places us above the keyboard.
+                bar.style.top = '';
+                bar.style.bottom = (window.innerHeight - vv.offsetTop - vv.height) + 'px';
                 _applyEkState();
             } else if (bar.classList.contains('visible')) {
                 // Delay hide — keyboard may reopen immediately on panel switch
@@ -3832,6 +3959,8 @@
                 if (info.version) {
                     const vEl = document.querySelector('.about-version');
                     if (vEl) vEl.textContent = 'v' + info.version;
+                    const svEl = document.getElementById('sidebar-version');
+                    if (svEl) svEl.textContent = 'v' + info.version;
                 }
 
                 // Update local server label to real hostname
@@ -4226,6 +4355,7 @@
                     document.getElementById('new-session-dialog').classList.remove('open');
                     await fetchAllSessions();
                     const cid = compoundId(_newSessionServer, name);
+                    closeDrawer();
                     openSession(cid, name);
                 } else {
                     const err = await resp.json();
@@ -4310,6 +4440,7 @@
                 const resp = await fetch(serverUrl(server, `/sessions/${sessionId}/resume`), { method: 'POST' });
                 if (resp.ok) {
                     await fetchAllSessions();
+                    closeDrawer();
                     openSession(cid, sessionId);
                 } else {
                     const err = await resp.json();

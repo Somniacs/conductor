@@ -166,8 +166,8 @@ def run(command, name, detach, use_json):
     size = shutil.get_terminal_size()
     r = httpx.post(
         f"{BASE_URL}/sessions/run",
-        json={"name": name, "command": command, "source": "cli",
-              "rows": size.lines, "cols": size.columns},
+        json={"name": name, "command": command, "cwd": os.getcwd(),
+              "source": "cli", "rows": size.lines, "cols": size.columns},
         headers=_auth_headers(),
         timeout=10,
     )

@@ -2,6 +2,18 @@
 
 All notable changes to Conductor are documented here.
 
+## v0.3.3
+
+- **Combined touch scroll** — vertical and horizontal scrolling work simultaneously on mobile with momentum on both axes; no direction locking; rAF-batched vertical updates for smooth performance
+- **Horizontal scrollbar** — scroll indicator at the bottom of the terminal shows when content is wider than the panel
+- **Sidebar version** — current version shown next to the title in the sidebar
+- **Tap to scroll** — tapping the terminal on mobile scrolls to the cursor position
+- **Fix:** `conductor run` now sends the caller's working directory to the server, so sessions start in the correct directory instead of the server's cwd
+- **Fix:** mobile sidebar drawer now closes when creating or resuming a session (previously only closed when opening an existing one)
+- **Fix:** extra-keys drawer toggle now works reliably on mobile after collapsing
+- **Fix:** custom scrollbar drag now works on mobile (was mouse-only; added touch event support)
+- **Fix:** extra-keys drawer no longer overlaps terminal content; terminal resizes to fit above keyboard and drawer
+
 ## v0.3.2
 
 - **Update notification** — the dashboard checks GitHub for new releases on load and shows a subtle banner at the bottom of the sidebar when an update is available; click to open the release page
