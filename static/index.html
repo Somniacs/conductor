@@ -2834,9 +2834,10 @@
                         panel._scrollSyncInterval = setInterval(syncScrollThumb, 500);
 
                         // --- Horizontal scroll indicator ---
-                        const hTrack = termOuter.querySelector('.xterm-hscroll-proxy');
-                        const hThumb = termOuter.querySelector('.xterm-hscroll-thumb');
-                        const hContainer = termEl; // .panel-terminal
+                        const hOuter = target.closest('.panel-terminal-outer');
+                        const hTrack = hOuter && hOuter.querySelector('.xterm-hscroll-proxy');
+                        const hThumb = hOuter && hOuter.querySelector('.xterm-hscroll-thumb');
+                        const hContainer = target.parentElement; // .panel-terminal
                         if (hTrack && hThumb) {
                             function syncHScrollThumb() {
                                 const sw = hContainer.scrollWidth;
