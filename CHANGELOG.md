@@ -4,21 +4,27 @@ All notable changes to Conductor are documented here.
 
 ## v0.3.3
 
-- **Combined touch scroll** — vertical and horizontal scrolling work simultaneously on mobile with momentum on both axes; no direction locking; rAF-batched vertical updates for smooth performance
+### New features
+
+- **Combined touch scroll** — vertical and horizontal scrolling work simultaneously on mobile with momentum on both axes; no direction locking
 - **Horizontal scrollbar** — scroll indicator at the bottom of the terminal shows when content is wider than the panel
 - **Sidebar version** — current version shown next to the title in the sidebar
 - **Tap to scroll** — tapping the terminal on mobile scrolls to the cursor position
-- **Fix:** `conductor run` now sends the caller's working directory to the server, so sessions start in the correct directory instead of the server's cwd
-- **Fix:** mobile sidebar drawer now closes when creating or resuming a session (previously only closed when opening an existing one)
-- **Fix:** extra-keys drawer toggle now works reliably on mobile after collapsing
-- **Fix:** custom scrollbar drag now works on mobile (was mouse-only; added touch event support)
-- **Fix:** extra-keys drawer no longer overlaps terminal content; terminal resizes to fit above keyboard and drawer
 - **Shift modifier** — Shift button (⇧) on the mobile extra-keys bar enables Shift+Tab, Shift+Arrow, and other modified key sequences (useful for edit mode in Claude/Codex)
 - **Extra-keys layout** — added pipe (|) key; Tab and Shift use Unicode symbols (⇥/⇧); ↑ and ↓ arrows are vertically aligned across rows
-- **Fix:** vertical touch scroll now works reliably when the virtual keyboard is open (added `touch-action: none` to xterm's screen element; removed stale viewport caching)
-- **Fix:** horizontal scrollbar now updates immediately after terminal resize instead of waiting up to 500ms
-- **Fix:** terminal now resizes correctly when the mobile keyboard opens — switched to `interactive-widget=resizes-content` so the layout viewport shrinks with the keyboard; title bar stays visible, scrollbars stay within bounds
-- **Fix:** drag-and-drop overlay no longer triggers on internal element drags (only activates for external file drops)
+
+### Fixes
+
+- `conductor run` now sends the caller's working directory to the server, so sessions start in the correct directory instead of the server's cwd
+- Mobile sidebar drawer now closes when creating or resuming a session (previously only closed when opening an existing one)
+- Extra-keys drawer toggle now works reliably on mobile after collapsing
+- Custom scrollbar drag now works on mobile (was mouse-only; added touch event support)
+- Extra-keys drawer no longer overlaps terminal content; terminal resizes to fit above keyboard and drawer
+- Vertical touch scroll now works reliably when the virtual keyboard is open
+- Horizontal scrollbar now updates immediately after terminal resize instead of waiting up to 500ms
+- Terminal now resizes correctly when the mobile keyboard opens — switched to `interactive-widget=resizes-content` so the layout viewport shrinks with the keyboard; title bar stays visible, scrollbars stay within bounds
+- Drag-and-drop overlay no longer triggers on internal element drags (only activates for external file drops)
+- One-finger touch scroll is now immediate (removed rAF batching that added a frame of input latency); two-finger gestures no longer cause scroll position to jump back on release
 
 ## v0.3.2
 

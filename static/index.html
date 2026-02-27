@@ -2673,10 +2673,10 @@
             // locking.  Capture phase + stopPropagation prevents xterm's own
             // touch handlers from interfering.  Momentum on both axes.
             //
-            // KEY PERF INSIGHT: every vp.scrollTop assignment fires xterm's
-            // internal scroll→_handleScroll→refresh(0,rows-1) chain = full
-            // re-render.  We rAF-batch vertical updates so at most one
-            // scrollTop write happens per frame.
+            // Touch scroll: apply scrollTop directly on each touchmove —
+            // same approach the (smooth) scrollbar drag uses.  rAF batching
+            // added a frame of latency that made one-finger scroll feel laggy.
+            // Momentum uses rAF since it's not input-driven.
             if ('ontouchstart' in window && window.matchMedia('(max-width: 700px)').matches) {
                 let tY = null, tX = null, tMoved = false;
                 let tVelX = 0, tVelY = 0, tTime = 0, tMom = null;
@@ -2684,38 +2684,20 @@
                 const getVp = () => target.querySelector('.xterm-viewport');
                 const hScroller = target.parentElement; // .panel-terminal
 
-                // rAF-batched vertical scroll — accumulate dy, apply once/frame.
-                // Each scrollTop write triggers xterm's _handleScroll → full
-                // re-render.  Batching ensures at most one per frame.
-                let pendingDy = 0;
-                let vScrollRaf = 0;
-
-                function applyVerticalScroll() {
-                    vScrollRaf = 0;
-                    if (pendingDy === 0) return;
-                    const vp = getVp();
-                    if (!vp) { pendingDy = 0; return; }
-                    vp.scrollTop += pendingDy;
-                    pendingDy = 0;
-                }
-
-                function scheduleVScroll(dy) {
-                    pendingDy += dy;
-                    if (!vScrollRaf) vScrollRaf = requestAnimationFrame(applyVerticalScroll);
-                }
-
                 function momTick() {
                     tVelX *= 0.93;
                     tVelY *= 0.93;
                     if (Math.abs(tVelX) < 0.5 && Math.abs(tVelY) < 0.5) { tMom = null; return; }
-                    if (Math.abs(tVelY) >= 0.5) scheduleVScroll(tVelY);
+                    if (Math.abs(tVelY) >= 0.5) {
+                        const vp = getVp();
+                        if (vp) vp.scrollTop += tVelY;
+                    }
                     if (Math.abs(tVelX) >= 0.5) hScroller.scrollLeft += tVelX;
                     tMom = requestAnimationFrame(momTick);
                 }
 
                 target.addEventListener('touchstart', (e) => {
                     if (tMom) { cancelAnimationFrame(tMom); tMom = null; }
-                    if (vScrollRaf) { cancelAnimationFrame(vScrollRaf); vScrollRaf = 0; pendingDy = 0; }
                     if (e.touches.length === 1) {
                         tY = e.touches[0].clientY;
                         tX = e.touches[0].clientX;
@@ -2725,9 +2707,10 @@
                 }, { passive: true, capture: true });
 
                 target.addEventListener('touchmove', (e) => {
-                    if (e.touches.length !== 1 || tY === null) return;
+                    // Always block native scroll (prevents two-finger jump-back)
                     e.preventDefault();
                     e.stopPropagation();
+                    if (e.touches.length !== 1 || tY === null) return;
                     tMoved = true;
                     const dy = tY - e.touches[0].clientY;
                     const dx = tX - e.touches[0].clientX;
@@ -2736,9 +2719,9 @@
                     tY = e.touches[0].clientY;
                     tX = e.touches[0].clientX;
                     if (dt > 0) { tVelY = dy / dt * 16; tVelX = dx / dt * 16; }
-                    // Vertical: rAF-batched (expensive — triggers xterm re-render)
-                    scheduleVScroll(dy);
-                    // Horizontal: immediate (cheap — plain div, no JS listeners)
+                    // Apply immediately — no rAF batching, no input latency
+                    const vp = getVp();
+                    if (vp) vp.scrollTop += dy;
                     hScroller.scrollLeft += dx;
                 }, { passive: false, capture: true });
 
