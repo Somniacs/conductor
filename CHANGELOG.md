@@ -15,6 +15,10 @@ All notable changes to Conductor are documented here.
 - **Fix:** extra-keys drawer no longer overlaps terminal content; terminal resizes to fit above keyboard and drawer
 - **Shift modifier** — Shift button (⇧) on the mobile extra-keys bar enables Shift+Tab, Shift+Arrow, and other modified key sequences (useful for edit mode in Claude/Codex)
 - **Extra-keys layout** — added pipe (|) key; Tab and Shift use Unicode symbols (⇥/⇧); ↑ and ↓ arrows are vertically aligned across rows
+- **Fix:** vertical touch scroll now works reliably when the virtual keyboard is open (added `touch-action: none` to xterm's screen element; removed stale viewport caching)
+- **Fix:** horizontal scrollbar now updates immediately after terminal resize instead of waiting up to 500ms
+- **Fix:** terminal now resizes correctly when the mobile keyboard opens — switched to `interactive-widget=resizes-content` so the layout viewport shrinks with the keyboard; title bar stays visible, scrollbars stay within bounds
+- **Fix:** drag-and-drop overlay no longer triggers on internal element drags (only activates for external file drops)
 
 ## v0.3.2
 
