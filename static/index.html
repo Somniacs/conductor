@@ -1973,6 +1973,19 @@
             };
         }
 
+        /* DEBUG overlay — uncomment _dbg() call in _fitPanelCore to enable
+        let _dbgEl = null;
+        function _dbg(msg) {
+            if (!('ontouchstart' in window)) return;
+            if (!_dbgEl) {
+                _dbgEl = document.createElement('div');
+                _dbgEl.style.cssText = 'position:fixed;top:40px;left:4px;z-index:9999;background:rgba(0,0,0,0.85);color:#0f0;font:11px monospace;padding:4px 8px;pointer-events:none;white-space:pre;max-width:95vw;';
+                document.body.appendChild(_dbgEl);
+            }
+            _dbgEl.textContent = msg;
+        }
+        */
+
         // Core fit logic — can be called directly (synchronous) or via debounce.
         function _fitPanelCore(p) {
             if (!p.fitAddon || !p._termOpened) return;
@@ -1983,6 +1996,27 @@
             // height comes from flex (e.g. keyboard resize on mobile).
             const outerContainer = target.closest('.panel-terminal-outer');
             const availH = outerContainer ? outerContainer.clientHeight : scrollContainer.clientHeight;
+
+            /* DEBUG — uncomment to show fit dimensions on mobile:
+            const _screenEl = target.querySelector('.xterm-screen');
+            const _outerRect = outerContainer ? outerContainer.getBoundingClientRect() : null;
+            const _screenRect = _screenEl ? _screenEl.getBoundingClientRect() : null;
+            let _scrollInfo = '';
+            let _el = target;
+            while (_el && _el !== document.documentElement) {
+                if (_el.scrollTop !== 0) {
+                    _scrollInfo += `${_el.className.split(' ')[0]||_el.tagName}.sT=${Math.round(_el.scrollTop)} `;
+                }
+                _el = _el.parentElement;
+            }
+            if (!_scrollInfo) _scrollInfo = 'none';
+            const _ekVar = getComputedStyle(document.documentElement).getPropertyValue('--extra-keys-height');
+            _dbg(`avail=${availH} rows=${p.terminal?.rows}\n` +
+                `outer: ${_outerRect?Math.round(_outerRect.top)+','+Math.round(_outerRect.bottom):'-'}\n` +
+                `screen: ${_screenRect?Math.round(_screenRect.top)+','+Math.round(_screenRect.bottom):'-'}\n` +
+                `scrolled: ${_scrollInfo}\n` +
+                `ekVar=${_ekVar} innerH=${window.innerHeight}`);
+            */
 
             // Force .panel-terminal to match — its CSS height:100% can fail
             // when ancestor heights come from flex (mobile keyboard resize).
@@ -2680,6 +2714,16 @@
             panel.terminal.open(target);
             panel._termOpened = true;
 
+            // Mobile: prevent .panel-terminal from being scrolled vertically.
+            // Native compositor scroll (touch-action: pan-y) can bubble up
+            // and scroll .panel-terminal (overflow-y:hidden still creates a
+            // scroll container).  Reset scrollTop immediately on any scroll.
+            if ('ontouchstart' in window) {
+                const sc = target.parentElement; // .panel-terminal
+                sc.addEventListener('scroll', () => {
+                    if (sc.scrollTop !== 0) sc.scrollTop = 0;
+                }, { passive: true });
+            }
 
             // Mobile: native compositor scroll.  CSS pointer-events:none on
             // .xterm-screen lets touches fall through to .xterm-viewport,
