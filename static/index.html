@@ -151,9 +151,9 @@
 
         .session-item:hover { background: #1a1a3e; }
         .session-item.open {
-            background: #151535;
+            background: #181845;
             padding-left: 10px;
-            border-left: 2px solid #404080;
+            border-left: 2px solid #6060bb;
         }
         .session-item.focused {
             background: #252560;
@@ -645,6 +645,15 @@
             cursor: row-resize;
         }
 
+        /* Maximized panel: double-click title bar to fill entire area */
+        #panels.panel-maximized .split-container { display: contents; }
+        #panels.panel-maximized .split-handle { display: none; }
+        #panels.panel-maximized .split-pane { display: none; }
+        #panels.panel-maximized .split-pane:has(.panel-maximized-target) {
+            display: flex;
+            flex: 1 !important;
+        }
+
         /* Mobile: when keyboard is open, show only the focused panel */
         @media (max-width: 700px) {
             #panels.keyboard-focused .split-container { display: contents; }
@@ -685,6 +694,9 @@
             overflow: hidden;
             text-overflow: ellipsis;
             white-space: nowrap;
+            cursor: pointer;
+            user-select: none;
+            -webkit-user-select: none;
         }
         .panel-focused .panel-header { background: #1a1a48; border-bottom: 1px solid #4040aa; }
         .panel-focused .panel-header .panel-title { color: #d0d0ff; }
@@ -857,16 +869,12 @@
             overflow-x: auto;
             overflow-y: hidden;
         }
-        @media (max-width: 700px) {
-            .panel-terminal { width: calc(100% - 16px); }
-        }
-
         .terminal-wrapper {
             width: 100%;
             height: 100%;
             /* min-width is set dynamically from JS after measuring char width */
             /* Desktop: block all browser touch gestures (handled in JS).
-               Mobile: overridden to pan-y below for native compositor scroll. */
+               Touch devices: overridden to pan-y via @media (pointer: coarse). */
             touch-action: none;
             /* Prevent browser drag/selection (blue dotted outline) */
             -webkit-user-drag: none;
@@ -883,9 +891,6 @@
             background: #0a0a1a;
             touch-action: none;
         }
-        @media (max-width: 700px) {
-            .xterm-scroll-proxy { width: 16px; }
-        }
         .xterm-scroll-thumb {
             position: absolute;
             right: 1px;
@@ -896,9 +901,6 @@
             transition: background 0.15s;
             cursor: pointer;
             touch-action: none;
-        }
-        @media (max-width: 700px) {
-            .xterm-scroll-thumb { width: 10px; right: 3px; }
         }
         .xterm-scroll-thumb:hover,
         .xterm-scroll-thumb.active {
@@ -939,27 +941,24 @@
         .terminal-wrapper .xterm { height: 100%; }
         /* touch-action is NOT inherited — force it on xterm's touch target.
            Desktop: none (prevents browser gesture interference).
-           Mobile: overridden to pan-y below; pointer-events:none lets touches
-           fall through to .xterm-viewport for native compositor scrolling. */
+           Touch devices: overridden to pan-y via @media (pointer: coarse);
+           pointer-events:none lets touches fall through to .xterm-viewport. */
         .terminal-wrapper .xterm .xterm-screen { touch-action: none; }
-        /* Mobile: native compositor scrolling — let touches fall through
-           .xterm-screen to the scrollable .xterm-viewport underneath. */
-        @media (max-width: 700px) {
+        /* Hide xterm's native vertical scrollbar — we use the proxy overlay instead */
+        .panel-terminal .xterm .xterm-viewport::-webkit-scrollbar { display: none; }
+        .panel-terminal .xterm .xterm-viewport { scrollbar-width: none !important; }
+        /* Touch devices: wider scroll targets and native compositor scroll */
+        @media (pointer: coarse) {
+            .panel-terminal { width: calc(100% - 16px); scrollbar-width: none; }
+            .panel-terminal::-webkit-scrollbar { display: none; }
+            .xterm-scroll-proxy { width: 16px; }
+            .xterm-scroll-thumb { width: 10px; right: 3px; }
             .terminal-wrapper { touch-action: pan-y; }
             .terminal-wrapper .xterm .xterm-screen {
                 touch-action: pan-y;
                 pointer-events: none;
             }
             .terminal-wrapper .xterm .xterm-viewport { touch-action: pan-y; }
-        }
-
-        /* Hide xterm's native vertical scrollbar — we use the proxy overlay instead */
-        .panel-terminal .xterm .xterm-viewport::-webkit-scrollbar { display: none; }
-        .panel-terminal .xterm .xterm-viewport { scrollbar-width: none !important; }
-        /* Mobile: hide native horizontal scrollbar, use custom proxy instead */
-        @media (max-width: 700px) {
-            .panel-terminal::-webkit-scrollbar { display: none; }
-            .panel-terminal { scrollbar-width: none; }
         }
 
 
@@ -2362,8 +2361,44 @@
             }
         }
 
+        // Double-click title bar to maximize/restore a panel
+        let _maximizedPanelId = null;
+        function toggleMaximize(id) {
+            const panelsEl = document.getElementById('panels');
+            if (!panelsEl) return;
+            if (_maximizedPanelId === id) {
+                // Restore
+                _maximizedPanelId = null;
+                panelsEl.classList.remove('panel-maximized');
+                panels.forEach(p => {
+                    if (p.element) p.element.classList.remove('panel-maximized-target');
+                });
+                // Refit all visible panels
+                requestAnimationFrame(() => panels.forEach(p => fitPanel(p)));
+            } else {
+                // Maximize
+                _maximizedPanelId = id;
+                panels.forEach(p => {
+                    if (p.element) p.element.classList.toggle('panel-maximized-target', p.id === id);
+                });
+                panelsEl.classList.add('panel-maximized');
+                const p = panels.find(pp => pp.id === id);
+                if (p) requestAnimationFrame(() => fitPanel(p));
+            }
+        }
+
         function focusSession(id, name, evt) {
             closeDrawer();
+            // Restore split layout if a panel is maximized
+            if (_maximizedPanelId) {
+                const panelsEl = document.getElementById('panels');
+                if (panelsEl) panelsEl.classList.remove('panel-maximized');
+                panels.forEach(p => {
+                    if (p.element) p.element.classList.remove('panel-maximized-target');
+                });
+                _maximizedPanelId = null;
+                requestAnimationFrame(() => panels.forEach(p => fitPanel(p)));
+            }
             const existing = panels.find(p => p.id === id);
             if (existing) {
                 hidePlacementMenu();
@@ -2603,6 +2638,15 @@
             `;
             div.appendChild(termOuter);
 
+            // Double-click title to maximize/restore panel
+            const titleSpan = div.querySelector('.panel-title');
+            if (titleSpan) {
+                titleSpan.addEventListener('dblclick', (e) => {
+                    e.preventDefault();
+                    toggleMaximize(panel.id);
+                });
+            }
+
             // Hidden file input for file upload
             const fileInput = document.createElement('input');
             fileInput.type = 'file';
@@ -2750,7 +2794,7 @@
             // JS, automatic momentum).  We only need to:
             //  1. Stop xterm's internal touchmove handler from double-scrolling
             //  2. Detect taps for focus + scroll-to-bottom
-            if ('ontouchstart' in window && window.matchMedia('(max-width: 700px)').matches) {
+            if ('ontouchstart' in window) {
                 let tapX = 0, tapY = 0, tapMoved = false;
                 const TAP_SLOP = 10;
 
@@ -2917,9 +2961,9 @@
                     panel._scrollSyncInterval = setInterval(syncScrollThumb, 500);
 
                     // --- Horizontal scroll indicator (mobile only) ---
-                    // Desktop uses the styled native scrollbar; mobile hides it
-                    // and uses this custom proxy instead.
-                    if (window.matchMedia('(max-width: 700px)').matches) {
+                    // Desktop uses the styled native scrollbar; touch devices hide it
+                    // and use this custom proxy instead.
+                    if ('ontouchstart' in window) {
                         const hOuter = target.closest('.panel-terminal-outer');
                         const hTrack = hOuter && hOuter.querySelector('.xterm-hscroll-proxy');
                         const hThumb = hOuter && hOuter.querySelector('.xterm-hscroll-thumb');
@@ -3113,7 +3157,8 @@
             if (!bar) return;
             bar.classList.toggle('collapsed', !_ekExpanded);
             if (chevron) chevron.innerHTML = _ekExpanded ? '&#9660;' : '&#9650;';
-            _syncExtraKeysHeight();
+            // Wait for DOM reflow so offsetHeight reflects the new state
+            requestAnimationFrame(() => _syncExtraKeysHeight());
         }
 
         function toggleExtraKeysBar() {
@@ -3200,12 +3245,18 @@
         // shrinks to make room for the extra-keys bar.
         function _syncExtraKeysHeight() {
             const bar = document.getElementById('extra-keys-bar');
-            // When collapsed, the handle overlays the terminal (0 height reserved)
-            // so we don't waste vertical space on mobile.
             const visible = bar && bar.classList.contains('visible');
-            const collapsed = bar && bar.classList.contains('collapsed');
-            const h = (visible && !collapsed) ? bar.offsetHeight : 0;
+            // Always reserve the bar's actual height when visible —
+            // even collapsed, the chevron handle needs space.
+            const h = visible ? bar.offsetHeight : 0;
             document.documentElement.style.setProperty('--extra-keys-height', h + 'px');
+            // When the keyboard is open in desktop mode, body.style.height
+            // is set to a fixed pixel value (overriding the CSS calc).
+            // Update it to account for the current bar height.
+            if (document.body.style.height) {
+                const vh = _vpHeight();
+                document.body.style.height = (vh - h) + 'px';
+            }
             // Refit panels to fill the new available height
             panels.forEach(p => fitPanel(p));
             // Re-sync horizontal scrollbar after layout settles
@@ -3220,48 +3271,86 @@
         // (accounts for address-bar hide/show) and compare against current.
         // Hide is debounced so switching panels doesn't flash the bar away.
         let _ekHideTimer = null;
-        let _maxInnerHeight = window.innerHeight;
-        function _updateExtraKeysPosition() {
-            // Only relevant on touch/mobile devices
-            if (!('ontouchstart' in window)) return;
-            _maxInnerHeight = Math.max(_maxInnerHeight, window.innerHeight);
-            const bar = document.getElementById('extra-keys-bar');
-            if (!bar) return;
-            const keyboardOpen = (_maxInnerHeight - window.innerHeight) > 100;
+        // Use visualViewport.height when available — on tablets in desktop
+        // browser mode, the keyboard overlays the page without resizing
+        // window.innerHeight, but visualViewport.height still shrinks.
+        function _vpHeight() {
+            return window.visualViewport ? window.visualViewport.height : window.innerHeight;
+        }
+        let _maxInnerHeight = _vpHeight();
+        function _updateKeyboardLayout() {
+            // Only relevant on devices with a virtual keyboard
+            if (!_isCoarsePointer) return;
+            const vh = _vpHeight();
+            _maxInnerHeight = Math.max(_maxInnerHeight, vh);
+            const keyboardOpen = (_maxInnerHeight - vh) > 100;
             const panelsEl = document.getElementById('panels');
             if (keyboardOpen) {
                 if (_ekHideTimer) { clearTimeout(_ekHideTimer); _ekHideTimer = null; }
-                bar.classList.add('visible');
-                // With resizes-content the layout viewport shrinks to fit
-                // above the keyboard; position:fixed bottom:0 is correct.
-                bar.style.top = '';
-                bar.style.bottom = '0';
-                // Show only the focused panel on mobile (CSS does the hiding)
+                // On tablets in desktop browser mode the layout viewport may
+                // NOT resize with the keyboard — constrain body height.
+                // Subtract the extra-keys bar height so the bar doesn't
+                // overlay the terminal (mirrors the CSS calc).
+                if (window.innerHeight - vh > 50) {
+                    const barEl = document.getElementById('extra-keys-bar');
+                    const barH = (barEl && barEl.classList.contains('visible') && !barEl.classList.contains('collapsed')) ? barEl.offsetHeight : 0;
+                    document.body.style.height = (vh - barH) + 'px';
+                    document.body.style.overflow = 'hidden';
+                }
+                // Show only the focused panel on narrow screens (CSS does the hiding)
                 if (panelsEl) panelsEl.classList.add('keyboard-focused');
-                _applyEkState();
-            } else if (bar.classList.contains('visible')) {
-                // Delay hide — keyboard may reopen immediately on panel switch
+                _syncExtraKeysHeight();
+            } else {
                 if (!_ekHideTimer) {
                     _ekHideTimer = setTimeout(() => {
                         _ekHideTimer = null;
-                        // Re-check: keyboard might have reopened during the delay
-                        _maxInnerHeight = Math.max(_maxInnerHeight, window.innerHeight);
-                        if ((_maxInnerHeight - window.innerHeight) > 100) return;
-                        bar.classList.remove('visible');
-                        bar.style.top = '';
-                        bar.style.bottom = '0';
-                        // Restore all panels
+                        const vh2 = _vpHeight();
+                        _maxInnerHeight = Math.max(_maxInnerHeight, vh2);
+                        if ((_maxInnerHeight - vh2) > 100) return;
+                        document.body.style.height = '';
+                        document.body.style.overflow = '';
                         if (panelsEl) panelsEl.classList.remove('keyboard-focused');
                         _syncExtraKeysHeight();
                     }, 400);
                 }
             }
         }
-        // Listen for keyboard open/close via window resize (resizes-content
-        // makes innerHeight change) and visualViewport as fallback.
-        window.addEventListener('resize', _updateExtraKeysPosition);
+        // On devices with a coarse primary pointer (phones, tablets), always
+        // show the extra-keys bar — the user has a virtual keyboard and needs
+        // Tab, Esc, Ctrl, arrows, etc.  Touchscreen laptops have pointer:fine
+        // (trackpad is primary) so they won't see this.
+        const _isCoarsePointer = window.matchMedia('(pointer: coarse)').matches;
+        if (_isCoarsePointer) {
+            const bar = document.getElementById('extra-keys-bar');
+            if (bar) {
+                bar.classList.add('visible');
+                bar.style.bottom = '0';
+                _applyEkState();
+                // Wait for the bar to render before measuring its height
+                requestAnimationFrame(() => _syncExtraKeysHeight());
+            }
+        }
+        // Position the extra-keys bar above the virtual keyboard.
+        // In desktop browser mode the layout viewport does NOT shrink, so
+        // position:fixed bottom:0 lands behind the keyboard.  Use the
+        // visualViewport API to compute the actual keyboard offset.
+        function _positionExtraKeys() {
+            const bar = document.getElementById('extra-keys-bar');
+            if (!bar || !bar.classList.contains('visible')) return;
+            const vv = window.visualViewport;
+            if (!vv) return;
+            const kbHeight = window.innerHeight - (vv.offsetTop + vv.height);
+            bar.style.bottom = Math.max(0, Math.round(kbHeight)) + 'px';
+        }
+        // Listen for keyboard open/close to adjust layout (focused panel,
+        // body height) and reposition the extra-keys bar.
+        window.addEventListener('resize', _updateKeyboardLayout);
         if (window.visualViewport) {
-            window.visualViewport.addEventListener('resize', _updateExtraKeysPosition);
+            window.visualViewport.addEventListener('resize', () => {
+                _updateKeyboardLayout();
+                _positionExtraKeys();
+            });
+            window.visualViewport.addEventListener('scroll', _positionExtraKeys);
         }
 
         function toggleThemeMenu(id) {
@@ -3343,6 +3432,12 @@
             delete _panelFitters[panel.id];
             panels.splice(idx, 1);
             removeFromTree(id);
+            // Clear maximize if this panel was maximized
+            if (_maximizedPanelId === id) {
+                _maximizedPanelId = null;
+                const panelsEl = document.getElementById('panels');
+                if (panelsEl) panelsEl.classList.remove('panel-maximized');
+            }
             // Move focus to next remaining panel
             if (focusedPanelId === id) {
                 focusedPanelId = firstLeafId(layoutRoot);

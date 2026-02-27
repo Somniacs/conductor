@@ -2,6 +2,21 @@
 
 All notable changes to Conductor are documented here.
 
+## v0.3.5
+
+### New features
+
+- **Tablet support** — touch scrolling, extra-keys bar, and custom scrollbars now work on tablets (previously only activated below 700px width); uses `pointer: coarse` media query to detect touch devices without affecting touchscreen laptops
+- **Extra keys always visible** — on touch devices the extra-keys bar is always shown; collapse/expand toggle to save space when not needed
+- **Keyboard-aware positioning** — extra-keys bar stays above the virtual keyboard on tablets in desktop browser mode using the Visual Viewport API
+- **Maximize panel** — double-click a session title bar to maximize that panel; double-click again or click any session in the sidebar to restore the split layout
+- **Open panel indicators** — sessions placed in the view show a highlighted left border in the sidebar, so you can tell which sessions are open vs unplaced
+
+### Fixes
+
+- Extra-keys drawer expand/collapse now correctly resizes the terminal in all modes
+- Body height properly accounts for extra-keys bar when the keyboard is open in desktop browser mode
+
 ## v0.3.4
 
 ### New features
