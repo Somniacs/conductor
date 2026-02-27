@@ -835,7 +835,7 @@
         }
         .ek-attach-btn:active { background: #2a2a5a; color: #e0e0ff; }
         .ek-attach-btn svg { pointer-events: none; }
-        .extra-keys-row button.ek-nav { font-size: 16px; padding: 14px 0; }
+
         .extra-keys-row button.modifier-active {
             background: #3a3a7a;
             color: #ffffff;
@@ -1746,18 +1746,18 @@
                         <button onpointerdown="sendKey('-')" style="flex:.6">&#8211;</button>
                         <button onpointerdown="sendKey('|')" style="flex:.6">|</button>
                         <button onpointerdown="sendKey('Home')">HOME</button>
-                        <button onpointerdown="sendKey('ArrowUp')" class="ek-nav">&uarr;</button>
+                        <button onpointerdown="sendKey('ArrowUp')">&uarr;</button>
                         <button onpointerdown="sendKey('End')">END</button>
                         <button onpointerdown="sendKey('PageUp')">PGUP</button>
                     </div>
                     <div class="extra-keys-row">
-                        <button onpointerdown="sendKey('Tab')" class="ek-nav" style="flex:.6">&#x21E5;</button>
-                        <button onpointerdown="toggleModifier('shift')" id="ek-shift" class="ek-nav" style="flex:.6">&#x21E7;</button>
+                        <button onpointerdown="sendKey('Tab')" style="flex:.6">&#x21E5;</button>
+                        <button onpointerdown="toggleModifier('shift')" id="ek-shift" style="flex:.6">&#x21E7;</button>
                         <button onpointerdown="toggleModifier('ctrl')" id="ek-ctrl">CTRL</button>
                         <button onpointerdown="toggleModifier('alt')" id="ek-alt" style="flex:.6">ALT</button>
-                        <button onpointerdown="sendKey('ArrowLeft')" class="ek-nav">&larr;</button>
-                        <button onpointerdown="sendKey('ArrowDown')" class="ek-nav">&darr;</button>
-                        <button onpointerdown="sendKey('ArrowRight')" class="ek-nav">&rarr;</button>
+                        <button onpointerdown="sendKey('ArrowLeft')">&larr;</button>
+                        <button onpointerdown="sendKey('ArrowDown')">&darr;</button>
+                        <button onpointerdown="sendKey('ArrowRight')">&rarr;</button>
                         <button onpointerdown="sendKey('PageDown')">PGDN</button>
                     </div>
                 </div>
