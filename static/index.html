@@ -3271,6 +3271,7 @@
         // (accounts for address-bar hide/show) and compare against current.
         // Hide is debounced so switching panels doesn't flash the bar away.
         let _ekHideTimer = null;
+        const _isCoarsePointer = window.matchMedia('(pointer: coarse)').matches;
         // Use visualViewport.height when available — on tablets in desktop
         // browser mode, the keyboard overlays the page without resizing
         // window.innerHeight, but visualViewport.height still shrinks.
@@ -3278,58 +3279,29 @@
             return window.visualViewport ? window.visualViewport.height : window.innerHeight;
         }
         let _maxInnerHeight = _vpHeight();
-        function _updateKeyboardLayout() {
-            // Only relevant on devices with a virtual keyboard
-            if (!_isCoarsePointer) return;
-            const vh = _vpHeight();
-            _maxInnerHeight = Math.max(_maxInnerHeight, vh);
-            const keyboardOpen = (_maxInnerHeight - vh) > 100;
-            const panelsEl = document.getElementById('panels');
-            if (keyboardOpen) {
-                if (_ekHideTimer) { clearTimeout(_ekHideTimer); _ekHideTimer = null; }
-                // On tablets in desktop browser mode the layout viewport may
-                // NOT resize with the keyboard — constrain body height.
-                // Subtract the extra-keys bar height so the bar doesn't
-                // overlay the terminal (mirrors the CSS calc).
-                if (window.innerHeight - vh > 50) {
-                    const barEl = document.getElementById('extra-keys-bar');
-                    const barH = (barEl && barEl.classList.contains('visible') && !barEl.classList.contains('collapsed')) ? barEl.offsetHeight : 0;
-                    document.body.style.height = (vh - barH) + 'px';
-                    document.body.style.overflow = 'hidden';
-                }
-                // Show only the focused panel on narrow screens (CSS does the hiding)
-                if (panelsEl) panelsEl.classList.add('keyboard-focused');
-                _syncExtraKeysHeight();
-            } else {
-                if (!_ekHideTimer) {
-                    _ekHideTimer = setTimeout(() => {
-                        _ekHideTimer = null;
-                        const vh2 = _vpHeight();
-                        _maxInnerHeight = Math.max(_maxInnerHeight, vh2);
-                        if ((_maxInnerHeight - vh2) > 100) return;
-                        document.body.style.height = '';
-                        document.body.style.overflow = '';
-                        if (panelsEl) panelsEl.classList.remove('keyboard-focused');
-                        _syncExtraKeysHeight();
-                    }, 400);
-                }
-            }
-        }
-        // On devices with a coarse primary pointer (phones, tablets), always
-        // show the extra-keys bar — the user has a virtual keyboard and needs
-        // Tab, Esc, Ctrl, arrows, etc.  Touchscreen laptops have pointer:fine
-        // (trackpad is primary) so they won't see this.
-        const _isCoarsePointer = window.matchMedia('(pointer: coarse)').matches;
-        if (_isCoarsePointer) {
+
+        function _showExtraKeys() {
             const bar = document.getElementById('extra-keys-bar');
-            if (bar) {
-                bar.classList.add('visible');
-                bar.style.bottom = '0';
-                _applyEkState();
-                // Wait for the bar to render before measuring its height
-                requestAnimationFrame(() => _syncExtraKeysHeight());
-            }
+            if (!bar || bar.classList.contains('visible')) return;
+            if (_ekHideTimer) { clearTimeout(_ekHideTimer); _ekHideTimer = null; }
+            bar.classList.add('visible');
+            bar.style.bottom = '0';
+            _applyEkState();
+            requestAnimationFrame(() => _syncExtraKeysHeight());
         }
+
+        function _hideExtraKeys() {
+            const bar = document.getElementById('extra-keys-bar');
+            if (!bar || !bar.classList.contains('visible')) return;
+            bar.classList.remove('visible');
+            bar.style.bottom = '0';
+            document.body.style.height = '';
+            document.body.style.overflow = '';
+            const panelsEl = document.getElementById('panels');
+            if (panelsEl) panelsEl.classList.remove('keyboard-focused');
+            _syncExtraKeysHeight();
+        }
+
         // Position the extra-keys bar above the virtual keyboard.
         // In desktop browser mode the layout viewport does NOT shrink, so
         // position:fixed bottom:0 lands behind the keyboard.  Use the
@@ -3342,8 +3314,42 @@
             const kbHeight = window.innerHeight - (vv.offsetTop + vv.height);
             bar.style.bottom = Math.max(0, Math.round(kbHeight)) + 'px';
         }
-        // Listen for keyboard open/close to adjust layout (focused panel,
-        // body height) and reposition the extra-keys bar.
+
+        function _updateKeyboardLayout() {
+            if (!_isCoarsePointer) return;
+            const vh = _vpHeight();
+            _maxInnerHeight = Math.max(_maxInnerHeight, vh);
+            const keyboardOpen = (_maxInnerHeight - vh) > 100;
+            const panelsEl = document.getElementById('panels');
+            if (keyboardOpen) {
+                if (_ekHideTimer) { clearTimeout(_ekHideTimer); _ekHideTimer = null; }
+                _showExtraKeys();
+                _positionExtraKeys();
+                // On tablets in desktop browser mode the layout viewport may
+                // NOT resize — constrain body height to visual viewport
+                // minus the extra-keys bar.
+                if (window.innerHeight - vh > 50) {
+                    const barEl = document.getElementById('extra-keys-bar');
+                    const barH = barEl ? barEl.offsetHeight : 0;
+                    document.body.style.height = (vh - barH) + 'px';
+                    document.body.style.overflow = 'hidden';
+                }
+                if (panelsEl) panelsEl.classList.add('keyboard-focused');
+                _syncExtraKeysHeight();
+            } else {
+                if (!_ekHideTimer) {
+                    _ekHideTimer = setTimeout(() => {
+                        _ekHideTimer = null;
+                        const vh2 = _vpHeight();
+                        _maxInnerHeight = Math.max(_maxInnerHeight, vh2);
+                        if ((_maxInnerHeight - vh2) > 100) return;
+                        _hideExtraKeys();
+                    }, 400);
+                }
+            }
+        }
+
+        // Listen for keyboard open/close via viewport resize.
         window.addEventListener('resize', _updateKeyboardLayout);
         if (window.visualViewport) {
             window.visualViewport.addEventListener('resize', () => {
@@ -3351,6 +3357,35 @@
                 _positionExtraKeys();
             });
             window.visualViewport.addEventListener('scroll', _positionExtraKeys);
+        }
+        // Fallback: on some tablets in desktop browser mode, the viewport
+        // may not resize when the keyboard opens.  Detect focus on xterm's
+        // hidden textarea and show the extra-keys bar after a short delay
+        // (giving the viewport time to resize if it will).
+        if (_isCoarsePointer) {
+            document.addEventListener('focusin', (e) => {
+                if (e.target && e.target.classList && e.target.classList.contains('xterm-helper-textarea')) {
+                    setTimeout(() => {
+                        const bar = document.getElementById('extra-keys-bar');
+                        if (bar && !bar.classList.contains('visible')) {
+                            _showExtraKeys();
+                            _positionExtraKeys();
+                        }
+                    }, 400);
+                }
+            });
+            document.addEventListener('focusout', (e) => {
+                if (e.target && e.target.classList && e.target.classList.contains('xterm-helper-textarea')) {
+                    setTimeout(() => {
+                        const active = document.activeElement;
+                        if (active && active.classList && active.classList.contains('xterm-helper-textarea')) return;
+                        const vh = _vpHeight();
+                        _maxInnerHeight = Math.max(_maxInnerHeight, vh);
+                        if ((_maxInnerHeight - vh) > 100) return; // keyboard still open
+                        _hideExtraKeys();
+                    }, 600);
+                }
+            });
         }
 
         function toggleThemeMenu(id) {
