@@ -2048,13 +2048,24 @@
                 // renderer directly to avoid an intermediate resize that
                 // would reflow the buffer and drift the cursor.
 
-                // 1. Get cell dimensions from the renderer
+                // 1. Get cell dimensions from the renderer.
+                //    Prefer actual (device) height over CSS height — on mobile
+                //    with small fonts, sub-pixel rounding can cause the CSS
+                //    cell height to undercount, allocating one extra row that
+                //    overflows the visible area (cursor one line too low).
                 let cellWidth = 8, cellHeight = 14;
                 try {
                     const d = p.terminal._core._renderService.dimensions;
                     if (d && d.css && d.css.cell) {
                         if (d.css.cell.width > 0) cellWidth = d.css.cell.width;
                         if (d.css.cell.height > 0) cellHeight = d.css.cell.height;
+                    }
+                    // Use actual rendered height if available (accounts for
+                    // DPI scaling and font hinting differences)
+                    const dpr = window.devicePixelRatio || 1;
+                    if (d && d.device && d.device.cell && d.device.cell.height > 0) {
+                        const actualH = d.device.cell.height / dpr;
+                        if (actualH > cellHeight) cellHeight = actualH;
                     }
                 } catch (e) {
                     if (p.terminal.cols > 0 && target.clientWidth > 0) {
