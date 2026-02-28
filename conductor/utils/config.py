@@ -35,6 +35,7 @@ LOG_DIR = CONDUCTOR_DIR / "logs"
 UPLOADS_DIR = CONDUCTOR_DIR / "uploads"
 PID_FILE = CONDUCTOR_DIR / "server.pid"
 USER_CONFIG_FILE = CONDUCTOR_DIR / "config.yaml"
+WORKTREES_FILE = CONDUCTOR_DIR / "worktrees.json"
 
 # ── Defaults (overridden by ~/.conductor/config.yaml if it exists) ──────────
 

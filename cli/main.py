@@ -128,18 +128,21 @@ def serve(host, port):
 @click.argument("command")
 @click.argument("name", required=False)
 @click.option("-d", "--detach", is_flag=True, help="Run in background (don't attach to terminal)")
+@click.option("-w", "--worktree", is_flag=True, help="Create an isolated git worktree for this session")
 @click.option("--json", "use_json", is_flag=True, help="Output JSON (implies --detach)")
-def run(command, name, detach, use_json):
+def run(command, name, detach, worktree, use_json):
     """Run a command in a new Conductor session.
 
     By default, attaches to the session so you see output in your terminal.
     Use -d/--detach to run in the background.
+    Use -w/--worktree to create an isolated git worktree for the session.
 
     Usage: conductor run COMMAND [NAME]
 
     Examples:
         conductor run claude research
         conductor run -d claude coding
+        conductor run -w claude feature-auth
         conductor run "python train.py" training
     """
     if use_json:
@@ -147,6 +150,19 @@ def run(command, name, detach, use_json):
 
     if name is None:
         name = command.split()[0]
+
+    # Validate git repo if --worktree is requested
+    if worktree:
+        import subprocess as _sp
+        try:
+            _sp.run(["git", "rev-parse", "--show-toplevel"],
+                     capture_output=True, text=True, check=True, timeout=5)
+        except Exception:
+            if use_json:
+                click.echo(json.dumps({"error": "Not a git repository (--worktree requires a git repo)"}))
+            else:
+                click.echo("Error: --worktree requires the current directory to be a git repository.", err=True)
+            sys.exit(1)
 
     if not server_running():
         if not use_json:
@@ -164,10 +180,16 @@ def run(command, name, detach, use_json):
     # from the start — avoids a resize race where the agent renders its
     # startup screen at 80 cols before the CLI sends a resize.
     size = shutil.get_terminal_size()
+    payload = {
+        "name": name, "command": command, "cwd": os.getcwd(),
+        "source": "cli", "rows": size.lines, "cols": size.columns,
+    }
+    if worktree:
+        payload["worktree"] = True
+
     r = httpx.post(
         f"{BASE_URL}/sessions/run",
-        json={"name": name, "command": command, "cwd": os.getcwd(),
-              "source": "cli", "rows": size.lines, "cols": size.columns},
+        json=payload,
         headers=_auth_headers(),
         timeout=10,
     )
@@ -178,9 +200,16 @@ def run(command, name, detach, use_json):
             click.echo(json.dumps(data, indent=2))
         elif detach:
             click.echo(f"Session '{data['name']}' started (pid: {data['pid']})")
+            if data.get("worktree"):
+                click.echo(f"Worktree: {data['worktree']['worktree_path']}")
+                click.echo(f"Branch:   {data['worktree']['branch']}")
             click.echo(f"Dashboard: {BASE_URL}")
         else:
-            click.echo(f"Session '{data['name']}' started. Attaching... (Ctrl+] to detach)")
+            if data.get("worktree"):
+                click.echo(f"Session '{data['name']}' started in worktree.")
+                click.echo(f"  Branch: {data['worktree']['branch']}")
+                click.echo(f"  Path:   {data['worktree']['worktree_path']}")
+            click.echo(f"Attaching... (Ctrl+] to detach)")
             _resize_session(data["name"])
             _attach_session(data["name"])
     elif r.status_code == 409:
@@ -591,6 +620,175 @@ def open():
 
     click.echo(f"Opening {BASE_URL}")
     webbrowser.open(BASE_URL)
+
+
+## ---------------------------------------------------------------------------
+# Worktree subcommands
+# ---------------------------------------------------------------------------
+
+@cli.group("worktree")
+def worktree_group():
+    """Manage git worktrees for isolated agent sessions."""
+
+
+@worktree_group.command("list")
+@click.option("--json", "use_json", is_flag=True, help="Output raw JSON")
+def worktree_list(use_json):
+    """List all managed worktrees."""
+    if not server_running():
+        if use_json:
+            click.echo("[]")
+        else:
+            click.echo("Server not running.", err=True)
+        sys.exit(1)
+
+    r = httpx.get(f"{BASE_URL}/worktrees", headers=_auth_headers(), timeout=5)
+    worktrees = r.json()
+
+    if use_json:
+        click.echo(json.dumps(worktrees, indent=2))
+        return
+
+    if not worktrees:
+        click.echo("No managed worktrees.")
+        return
+
+    click.echo(f"{'NAME':<20} {'STATUS':<12} {'BRANCH':<30} {'COMMITS':<8} {'PATH'}")
+    click.echo("-" * 100)
+    for wt in worktrees:
+        click.echo(
+            f"{wt['name']:<20} {wt['status']:<12} {wt['branch']:<30} "
+            f"{wt.get('commits_ahead', 0):<8} {wt['worktree_path']}"
+        )
+
+
+@worktree_group.command("discard")
+@click.argument("name")
+@click.option("--force", "-f", is_flag=True, help="Force discard even if there are unmerged changes")
+@click.option("--yes", "-y", is_flag=True, help="Skip confirmation")
+def worktree_discard(name, force, yes):
+    """Discard a worktree and delete its branch."""
+    if not server_running():
+        click.echo("Server not running.", err=True)
+        sys.exit(1)
+
+    if not yes:
+        click.echo(f"This will permanently delete the worktree for '{name}' and its branch.")
+        if not click.confirm("Continue?"):
+            click.echo("Aborted.")
+            return
+
+    r = httpx.delete(
+        f"{BASE_URL}/worktrees/{name}",
+        params={"force": str(force).lower()},
+        headers=_auth_headers(),
+        timeout=10,
+    )
+    if r.status_code == 200:
+        click.echo(f"Worktree '{name}' discarded.")
+    else:
+        click.echo(f"Error: {r.json().get('detail', r.text)}", err=True)
+        sys.exit(1)
+
+
+@worktree_group.command("merge")
+@click.argument("name")
+@click.option("--strategy", "-s", type=click.Choice(["squash", "merge", "rebase"]),
+              default="squash", help="Merge strategy (default: squash)")
+@click.option("--message", "-m", default=None, help="Custom commit message")
+@click.option("--preview", is_flag=True, help="Preview the merge without doing it")
+def worktree_merge(name, strategy, message, preview):
+    """Merge a worktree branch back into its base branch."""
+    if not server_running():
+        click.echo("Server not running.", err=True)
+        sys.exit(1)
+
+    if preview:
+        r = httpx.post(
+            f"{BASE_URL}/worktrees/{name}/merge/preview",
+            headers=_auth_headers(),
+            timeout=10,
+        )
+        if r.status_code != 200:
+            click.echo(f"Error: {r.json().get('detail', r.text)}", err=True)
+            sys.exit(1)
+
+        data = r.json()
+        click.echo(f"Merge preview for '{name}':")
+        click.echo(f"  Can merge:      {data['can_merge']}")
+        click.echo(f"  Commits ahead:  {data['commits_ahead']}")
+        click.echo(f"  Commits behind: {data['commits_behind']}")
+        if data.get("conflict_files"):
+            click.echo(f"  Conflicts:      {len(data['conflict_files'])}")
+            for f in data["conflict_files"]:
+                click.echo(f"    - {f}")
+        if data.get("changed_files"):
+            click.echo(f"  Changed files:  {len(data['changed_files'])}")
+            for f in data["changed_files"][:20]:
+                click.echo(f"    {f['status']:>1} {f['path']}")
+            if len(data["changed_files"]) > 20:
+                click.echo(f"    ... and {len(data['changed_files']) - 20} more")
+        if data.get("message"):
+            click.echo(f"  {data['message']}")
+        return
+
+    payload = {"strategy": strategy}
+    if message:
+        payload["message"] = message
+
+    r = httpx.post(
+        f"{BASE_URL}/worktrees/{name}/merge",
+        json=payload,
+        headers=_auth_headers(),
+        timeout=30,
+    )
+    data = r.json()
+
+    if r.status_code == 200 and data.get("success"):
+        click.echo(f"Merged '{name}' into {data['target_branch']} ({data['strategy']} strategy)")
+        click.echo(f"  {data['commits_merged']} commit(s) merged")
+        click.echo(f"  Worktree and branch cleaned up")
+    else:
+        click.echo(f"Merge failed: {data.get('message', 'Unknown error')}", err=True)
+        if data.get("conflict_files"):
+            click.echo("Conflicting files:")
+            for f in data["conflict_files"]:
+                click.echo(f"  - {f}")
+        sys.exit(1)
+
+
+@worktree_group.command("gc")
+@click.option("--dry-run", is_flag=True, help="Show what would be removed without doing it")
+@click.option("--max-age", type=float, default=7.0, help="Remove worktrees older than N days (default: 7)")
+@click.option("--yes", "-y", is_flag=True, help="Skip confirmation")
+def worktree_gc(dry_run, max_age, yes):
+    """Garbage-collect stale and orphaned worktrees."""
+    if not server_running():
+        click.echo("Server not running.", err=True)
+        sys.exit(1)
+
+    r = httpx.post(
+        f"{BASE_URL}/worktrees/gc",
+        json={"dry_run": dry_run or not yes, "max_age_days": max_age},
+        headers=_auth_headers(),
+        timeout=30,
+    )
+    if r.status_code != 200:
+        click.echo(f"Error: {r.json().get('detail', r.text)}", err=True)
+        sys.exit(1)
+
+    actions = r.json()
+    if not actions:
+        click.echo("Nothing to clean up.")
+        return
+
+    for action in actions:
+        click.echo(f"  {action['action']}: {action['name']} ({action['reason']})")
+
+    if dry_run or not yes:
+        click.echo(f"\n{len(actions)} worktree(s) would be removed. Use --yes to confirm.")
+    else:
+        click.echo(f"\n{len(actions)} worktree(s) cleaned up.")
 
 
 @cli.command()

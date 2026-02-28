@@ -56,11 +56,13 @@ class Session:
                  resume_pattern: str | None = None,
                  resume_flag: str | None = None,
                  resume_command: str | None = None,
-                 stop_sequence: list[str] | None = None):
+                 stop_sequence: list[str] | None = None,
+                 worktree: dict | None = None):
         self.id = session_id or name
         self.name = name
         self.command = command
         self.cwd = cwd
+        self.worktree: dict | None = worktree  # WorktreeInfo as dict (if worktree-backed)
         self.pty = PTYProcess(command, cwd=cwd, env=env)
         self.buffer = bytearray()
         self.subscribers: Set[asyncio.Queue] = set()
@@ -353,4 +355,6 @@ class Session:
             d["resume_flag"] = self.resume_flag
         if self.resume_command:
             d["resume_command"] = self.resume_command
+        if self.worktree:
+            d["worktree"] = self.worktree
         return d

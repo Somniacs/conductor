@@ -70,6 +70,21 @@ class BearerAuthMiddleware(BaseHTTPMiddleware):
 async def lifespan(app: FastAPI):
     ensure_dirs()
     PID_FILE.write_text(str(os.getpid()))
+
+    # Reconcile worktree state (crash recovery)
+    try:
+        import asyncio
+        loop = asyncio.get_event_loop()
+        result = await loop.run_in_executor(
+            None, registry.worktree_manager.reconcile
+        )
+        if any(result.values()):
+            import logging
+            log = logging.getLogger("conductor.worktrees")
+            log.info("Worktree reconcile: %s", result)
+    except Exception:
+        pass
+
     yield
     await registry.cleanup_all()
     PID_FILE.unlink(missing_ok=True)

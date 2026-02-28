@@ -96,6 +96,7 @@ class RunRequest(BaseModel):
     env: dict[str, str] | None = None
     rows: int | None = None  # initial PTY size (avoids resize race on startup)
     cols: int | None = None
+    worktree: bool = False  # create an isolated git worktree for this session
 
 
 class InputRequest(BaseModel):
@@ -399,7 +400,8 @@ async def create_session(req: RunRequest, request: Request):
 
     try:
         session = await registry.create(req.name, req.command, cwd=req.cwd, env=req.env,
-                                        rows=req.rows, cols=req.cols, source=req.source)
+                                        rows=req.rows, cols=req.cols, source=req.source,
+                                        worktree=req.worktree)
         d = session.to_dict()
         d["ws_url"] = _ws_url_for(request, session.id)
         return d
@@ -535,6 +537,163 @@ async def kill_session(session_id: str):
         return {"status": "dismissed"}
 
     raise HTTPException(status_code=404, detail="Session not found")
+
+
+# ---------------------------------------------------------------------------
+# Worktree endpoints
+# ---------------------------------------------------------------------------
+
+@router.get("/git/check")
+async def git_check(path: str):
+    """Check if a directory is a git repo (for dashboard worktree checkbox)."""
+    from conductor.worktrees.manager import WorktreeManager
+    loop = asyncio.get_event_loop()
+    result = await loop.run_in_executor(None, WorktreeManager.check_git_directory, path)
+    return result
+
+
+@router.get("/worktrees")
+async def list_worktrees(repo: str | None = None):
+    """List all managed worktrees, optionally filtered by repo path."""
+    manager = registry.worktree_manager
+    loop = asyncio.get_event_loop()
+    worktrees = await loop.run_in_executor(None, manager.list_worktrees, repo)
+    return [wt.to_dict() for wt in worktrees]
+
+
+@router.get("/worktrees/health")
+async def worktree_health():
+    """Get health warnings for worktrees."""
+    manager = registry.worktree_manager
+    loop = asyncio.get_event_loop()
+    warnings = await loop.run_in_executor(None, manager.get_warnings)
+    return {"warnings": warnings, "count": len(warnings)}
+
+
+@router.get("/worktrees/{name}")
+async def get_worktree(name: str):
+    """Get info for a specific worktree by session name."""
+    manager = registry.worktree_manager
+    worktrees = manager.list_worktrees()
+    for wt in worktrees:
+        if wt.name == name:
+            return wt.to_dict()
+    raise HTTPException(status_code=404, detail=f"Worktree '{name}' not found")
+
+
+@router.get("/worktrees/{name}/diff")
+async def get_worktree_diff(name: str, files: bool = False):
+    """Get the diff for a worktree vs its base commit."""
+    manager = registry.worktree_manager
+    worktrees = manager.list_worktrees()
+    info = None
+    for wt in worktrees:
+        if wt.name == name:
+            info = wt
+            break
+    if not info:
+        raise HTTPException(status_code=404, detail=f"Worktree '{name}' not found")
+
+    loop = asyncio.get_event_loop()
+    result = await loop.run_in_executor(None, manager.get_diff, info, files)
+    if files:
+        return {"files": result}
+    return {"diff": result}
+
+
+class MergeRequest(BaseModel):
+    strategy: str = "squash"
+    message: str | None = None
+
+
+class GCRequest(BaseModel):
+    dry_run: bool = False
+    max_age_days: float = 7.0
+
+
+@router.post("/worktrees/{name}/merge/preview")
+async def preview_merge(name: str):
+    """Preview what merging a worktree would do."""
+    manager = registry.worktree_manager
+    worktrees = manager.list_worktrees()
+    info = None
+    for wt in worktrees:
+        if wt.name == name:
+            info = wt
+            break
+    if not info:
+        raise HTTPException(status_code=404, detail=f"Worktree '{name}' not found")
+
+    loop = asyncio.get_event_loop()
+    preview = await loop.run_in_executor(None, manager.preview_merge, info)
+    return {
+        "can_merge": preview.can_merge,
+        "commits_ahead": preview.commits_ahead,
+        "commits_behind": preview.commits_behind,
+        "conflict_files": preview.conflict_files,
+        "changed_files": preview.changed_files,
+        "message": preview.message,
+    }
+
+
+@router.post("/worktrees/{name}/merge")
+async def merge_worktree(name: str, req: MergeRequest):
+    """Merge a worktree branch back into its base branch."""
+    manager = registry.worktree_manager
+    worktrees = manager.list_worktrees()
+    info = None
+    for wt in worktrees:
+        if wt.name == name:
+            info = wt
+            break
+    if not info:
+        raise HTTPException(status_code=404, detail=f"Worktree '{name}' not found")
+
+    loop = asyncio.get_event_loop()
+    result = await loop.run_in_executor(
+        None, manager.merge, info, req.strategy, req.message
+    )
+    return {
+        "success": result.success,
+        "strategy": result.strategy,
+        "merged_branch": result.merged_branch,
+        "target_branch": result.target_branch,
+        "commits_merged": result.commits_merged,
+        "conflict_files": result.conflict_files,
+        "message": result.message,
+    }
+
+
+@router.delete("/worktrees/{name}")
+async def delete_worktree(name: str, force: bool = False):
+    """Delete a worktree and its branch."""
+    manager = registry.worktree_manager
+    worktrees = manager.list_worktrees()
+    info = None
+    for wt in worktrees:
+        if wt.name == name:
+            info = wt
+            break
+    if not info:
+        raise HTTPException(status_code=404, detail=f"Worktree '{name}' not found")
+
+    try:
+        loop = asyncio.get_event_loop()
+        await loop.run_in_executor(None, manager.remove, info, force)
+        return {"status": "removed", "name": name}
+    except ValueError as e:
+        raise HTTPException(status_code=409, detail=str(e))
+
+
+@router.post("/worktrees/gc")
+async def worktree_gc(req: GCRequest):
+    """Garbage-collect stale worktrees."""
+    manager = registry.worktree_manager
+    loop = asyncio.get_event_loop()
+    actions = await loop.run_in_executor(
+        None, manager.gc, req.max_age_days, req.dry_run
+    )
+    return actions
 
 
 # ---------------------------------------------------------------------------

@@ -15,12 +15,15 @@
 
 import asyncio
 import json
+import logging
 import shlex
 from typing import Dict, Optional
 
 from conductor.sessions.session import Session
 from conductor.utils import config as cfg
 from conductor.utils.config import SESSIONS_DIR, ensure_dirs
+
+log = logging.getLogger(__name__)
 
 
 class SessionRegistry:
@@ -37,8 +40,21 @@ class SessionRegistry:
     def __init__(self):
         self.sessions: Dict[str, Session] = {}
         self.resumable: Dict[str, dict] = {}
+        self._worktree_manager = None  # Lazy-initialized
         ensure_dirs()
         self._load_resumable()
+
+    @property
+    def worktree_manager(self):
+        """Lazy-initialize the WorktreeManager with current active session IDs."""
+        if self._worktree_manager is None:
+            from conductor.worktrees.manager import WorktreeManager
+            self._worktree_manager = WorktreeManager(
+                active_sessions=set(self.sessions.keys())
+            )
+        else:
+            self._worktree_manager.set_active_sessions(set(self.sessions.keys()))
+        return self._worktree_manager
 
     @staticmethod
     def _agent_config_for(command: str) -> dict:
@@ -80,6 +96,17 @@ class SessionRegistry:
         if not session:
             return
 
+        # Finalize worktree (auto-commit) if this session had one
+        if session.worktree:
+            try:
+                from conductor.worktrees.manager import WorktreeInfo
+                wt_info = WorktreeInfo.from_dict(session.worktree)
+                updated = self.worktree_manager.finalize(wt_info)
+                session.worktree = updated.to_dict()
+                log.info("Finalized worktree for session '%s'", session_id)
+            except Exception as e:
+                log.warning("Failed to finalize worktree for '%s': %s", session_id, e)
+
         if session.resume_id:
             # Keep the metadata so the user can resume later.
             meta = session.to_dict()
@@ -90,7 +117,8 @@ class SessionRegistry:
 
     async def create(self, name: str, command: str, cwd: str | None = None,
                      env: dict | None = None, rows: int | None = None,
-                     cols: int | None = None, source: str | None = None) -> Session:
+                     cols: int | None = None, source: str | None = None,
+                     worktree: bool = False) -> Session:
         if name in self.sessions:
             existing = self.sessions[name]
             if existing.status == "running":
@@ -103,17 +131,34 @@ class SessionRegistry:
 
         agent_cfg = self._agent_config_for(command)
 
+        # Create worktree if requested
+        worktree_info = None
+        session_cwd = cwd
+        if worktree and cwd:
+            try:
+                wt_info = self.worktree_manager.create(
+                    session_name=name,
+                    session_id=name,
+                    repo_path=cwd,
+                )
+                worktree_info = wt_info.to_dict()
+                session_cwd = wt_info.worktree_path
+                log.info("Created worktree for session '%s' at %s", name, session_cwd)
+            except Exception as e:
+                raise ValueError(f"Failed to create worktree: {e}")
+
         session = Session(
             name=name,
             command=command,
             session_id=name,
-            cwd=cwd,
+            cwd=session_cwd,
             on_exit=self._on_session_exit,
             env=env,
             resume_pattern=agent_cfg.get("resume_pattern"),
             resume_flag=agent_cfg.get("resume_flag"),
             resume_command=agent_cfg.get("resume_command"),
             stop_sequence=agent_cfg.get("stop_sequence"),
+            worktree=worktree_info,
         )
         await session.start(rows=rows or 24, cols=cols or 80)
         # Record initial size so the web client knows the PTY dimensions.
@@ -170,9 +215,35 @@ class SessionRegistry:
             command += f" {flag} {meta['resume_id']}"
 
         cwd = meta.get("cwd")
+        worktree_data = meta.get("worktree")
+
+        # If the session had a worktree, verify it still exists and resume there
+        if worktree_data:
+            from pathlib import Path
+            wt_path = worktree_data.get("worktree_path", "")
+            if wt_path and Path(wt_path).exists():
+                cwd = wt_path
+                # Mark worktree as active again
+                worktree_data["status"] = "active"
+            else:
+                log.warning("Worktree path missing for resume: %s", wt_path)
+                worktree_data = None
+
         self._delete_metadata(session_id)
 
-        return await self.create(meta["name"], command, cwd=cwd)
+        # Create the resumed session (don't create a new worktree — reuse existing)
+        session = await self.create(meta["name"], command, cwd=cwd)
+
+        # Re-attach the worktree info
+        if worktree_data:
+            session.worktree = worktree_data
+            self._save_metadata(session)
+            from conductor.worktrees import state as wt_state
+            wt_state.update_worktree(
+                worktree_data["repo_path"], meta["name"], worktree_data
+            )
+
+        return session
 
     def get(self, session_id: str) -> Optional[Session]:
         return self.sessions.get(session_id)
