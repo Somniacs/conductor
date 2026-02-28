@@ -15,6 +15,7 @@ All notable changes to Conductor are documented here.
 
 - Extra-keys drawer expand/collapse now correctly resizes the terminal in all modes
 - Body height properly accounts for extra-keys bar when the keyboard is open in desktop browser mode
+- Fixed cursor appearing one line too low on mobile — uses actual rendered cell height to prevent sub-pixel rounding from allocating an extra row
 
 ## v0.3.4
 
