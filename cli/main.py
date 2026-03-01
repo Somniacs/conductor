@@ -444,11 +444,16 @@ def list_sessions(use_json):
 @cli.command()
 @click.argument("name")
 @click.option("-d", "--detach", is_flag=True, help="Resume in background (don't attach)")
-def resume(name, detach):
+@click.option("-t", "--token", default=None, help="External resume token (e.g. UUID from claude --resume)")
+def resume(name, detach, token):
     """Resume an exited session.
 
     Restarts a session that exited with a resume token (e.g. Claude Code's
     --resume <id>). Attaches to the new session by default.
+
+    Use --token to resume an external Claude session inside Conductor:
+
+        conductor resume my-session --token <UUID>
 
     Press Ctrl+] to detach without stopping the session.
     """
@@ -459,11 +464,29 @@ def resume(name, detach):
             sys.exit(1)
         click.echo(f"Server started on {BASE_URL}")
 
-    r = httpx.post(
-        f"{BASE_URL}/sessions/{name}/resume",
-        headers=_auth_headers(),
-        timeout=10,
-    )
+    if token:
+        # External resume: create a new session with claude --resume <token>
+        size = shutil.get_terminal_size()
+        payload = {
+            "name": name,
+            "command": f"claude --resume {token}",
+            "cwd": os.getcwd(),
+            "source": "cli",
+            "rows": size.lines,
+            "cols": size.columns,
+        }
+        r = httpx.post(
+            f"{BASE_URL}/sessions/run",
+            json=payload,
+            headers=_auth_headers(),
+            timeout=10,
+        )
+    else:
+        r = httpx.post(
+            f"{BASE_URL}/sessions/{name}/resume",
+            headers=_auth_headers(),
+            timeout=10,
+        )
 
     if r.status_code == 200:
         data = r.json()

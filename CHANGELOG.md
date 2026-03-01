@@ -32,6 +32,7 @@ All notable changes to Conductor are documented here.
 - **CLI resume** — `conductor resume <name>` resumes an exited session from the terminal, attaching automatically (use `-d` to resume in background)
 - **Restart/shutdown safety** — `conductor restart` and `conductor shutdown` now warn about active sessions before killing them; pass `-f` to skip
 - **Resume auto-start** — `conductor resume` now auto-starts the server daemon if it isn't running, matching `conductor run` and `conductor open`
+- **External resume** — `conductor resume <name> --token <UUID>` brings an external Claude session into Conductor; start Claude in any terminal, exit, copy the UUID from its `--resume` output, then resume it inside Conductor for remote access from your phone or dashboard
 
 ### Fixes
 

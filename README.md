@@ -409,6 +409,7 @@ The web dashboard provides:
 | `conductor run --json COMMAND [NAME]` | Start session and print JSON (implies detach) |
 | `conductor attach NAME` | Attach to a running session |
 | `conductor resume NAME` | Resume an exited session (relaunch with resume token) |
+| `conductor resume NAME -t TOKEN` | Resume an external Claude session inside Conductor |
 | `conductor list` | List active sessions |
 | `conductor list --json` | List sessions as JSON |
 | `conductor status` | Show server status |
