@@ -522,18 +522,24 @@ class WorktreeManager:
         Returns:
             MergeResult with success/failure info
         """
-        if info.session_id in self._active_sessions:
-            return MergeResult(
-                success=False,
-                strategy=strategy,
-                merged_branch=info.branch,
-                target_branch=info.base_branch,
-                message=f"Cannot merge: session '{info.name}' is still active",
-            )
-
         repo = info.repo_path
         branch = info.branch
         target = info.base_branch
+        wt_path = info.worktree_path
+
+        # Auto-commit any uncommitted changes so they're included in the merge
+        if Path(wt_path).exists():
+            try:
+                status = _git_output("status", "--porcelain", cwd=wt_path)
+                if status.strip():
+                    log.info("Auto-committing before merge in %s", info.name)
+                    _git("add", "-A", cwd=wt_path)
+                    _git("commit", "-m",
+                         f"conductor: auto-commit before merge ({info.name})",
+                         "--allow-empty-message",
+                         cwd=wt_path, check=False)
+            except Exception as e:
+                log.warning("Failed to auto-commit before merge in %s: %s", info.name, e)
 
         # Count commits to merge
         commits_ahead = self._count_commits_ahead(info)

@@ -140,6 +140,7 @@ class SessionResponse(BaseModel):
     resume_flag: str | None = None
     resume_command: str | None = None
     ws_url: str | None = None
+    worktree: dict | None = None
 
 
 class StatusResponse(BaseModel):
@@ -598,6 +599,34 @@ async def get_worktree_diff(name: str, files: bool = False):
     if files:
         return {"files": result}
     return {"diff": result}
+
+
+@router.post("/worktrees/{name}/finalize")
+async def finalize_worktree(name: str):
+    """Explicitly finalize a worktree — auto-commit changes and mark as finalized."""
+
+    manager = registry.worktree_manager
+    worktrees = manager.list_worktrees()
+    info = None
+    for wt in worktrees:
+        if wt.name == name:
+            info = wt
+            break
+    if not info:
+        raise HTTPException(status_code=404, detail=f"Worktree '{name}' not found")
+
+    if info.status == "finalized":
+        return info.to_dict()
+
+    loop = asyncio.get_event_loop()
+    updated = await loop.run_in_executor(None, manager.finalize, info)
+
+    # Update the resumable metadata with finalized worktree
+    if name in registry.resumable:
+        registry.resumable[name]["worktree"] = updated.to_dict()
+        registry._save_metadata_dict(registry.resumable[name])
+
+    return updated.to_dict()
 
 
 class MergeRequest(BaseModel):

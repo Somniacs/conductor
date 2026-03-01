@@ -96,16 +96,8 @@ class SessionRegistry:
         if not session:
             return
 
-        # Finalize worktree (auto-commit) if this session had one
-        if session.worktree:
-            try:
-                from conductor.worktrees.manager import WorktreeInfo
-                wt_info = WorktreeInfo.from_dict(session.worktree)
-                updated = self.worktree_manager.finalize(wt_info)
-                session.worktree = updated.to_dict()
-                log.info("Finalized worktree for session '%s'", session_id)
-            except Exception as e:
-                log.warning("Failed to finalize worktree for '%s': %s", session_id, e)
+        # Worktree stays active on exit — user must explicitly finalize.
+        # No auto-commit here; the worktree is just a working directory.
 
         if session.resume_id or session.worktree:
             # Keep the metadata so the user can resume or merge the worktree.
@@ -197,22 +189,32 @@ class SessionRegistry:
                         pass
                 live.pty.close()
 
-        if not meta or not meta.get("resume_id"):
+        if not meta:
             raise ValueError(f"No resumable session '{session_id}'")
 
-        # Command-based resume (e.g. "codex resume --last") — use as-is.
-        if meta.get("resume_command"):
-            command = meta["resume_command"]
+        has_resume_id = bool(meta.get("resume_id"))
+        has_worktree = bool(meta.get("worktree"))
+
+        if not has_resume_id and not has_worktree:
+            raise ValueError(f"No resumable session '{session_id}'")
+
+        if has_resume_id:
+            # Command-based resume (e.g. "codex resume --last") — use as-is.
+            if meta.get("resume_command"):
+                command = meta["resume_command"]
+            else:
+                # Token-based resume — append flag + captured ID to original command.
+                flag = meta.get("resume_flag", "--resume")
+                # Strip any previous resume flag+id from the command to avoid
+                # accumulation across multiple resumes.
+                import re as _re
+                command = _re.sub(
+                    rf'\s*{_re.escape(flag)}\s+\S+', '', meta["command"]
+                ).rstrip()
+                command += f" {flag} {meta['resume_id']}"
         else:
-            # Token-based resume — append flag + captured ID to original command.
-            flag = meta.get("resume_flag", "--resume")
-            # Strip any previous resume flag+id from the command to avoid
-            # accumulation across multiple resumes.
-            import re as _re
-            command = _re.sub(
-                rf'\s*{_re.escape(flag)}\s+\S+', '', meta["command"]
-            ).rstrip()
-            command += f" {flag} {meta['resume_id']}"
+            # Worktree without resume token — restart original command in the worktree
+            command = meta["command"]
 
         cwd = meta.get("cwd")
         worktree_data = meta.get("worktree")
@@ -256,19 +258,10 @@ class SessionRegistry:
     async def remove(self, session_id: str):
         session = self.sessions.pop(session_id, None)
         if session:
-            # Finalize worktree (auto-commit) before killing
-            if session.worktree:
-                try:
-                    from conductor.worktrees.manager import WorktreeInfo
-                    wt_info = WorktreeInfo.from_dict(session.worktree)
-                    updated = self.worktree_manager.finalize(wt_info)
-                    session.worktree = updated.to_dict()
-                    log.info("Finalized worktree for killed session '%s': commits_ahead=%d", session_id, updated.commits_ahead)
-                except Exception as e:
-                    log.warning("Failed to finalize worktree for '%s': %s", session_id, e)
             await session.kill()
             await session.cleanup()
             if session.worktree:
+                # Keep worktree active — user can restart or explicitly finalize
                 meta = session.to_dict()
                 meta["status"] = "exited"
                 self.resumable[session_id] = meta

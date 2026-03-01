@@ -204,7 +204,9 @@
             background: none; border: none; color: #666;
             cursor: pointer; font-size: 14px; padding: 2px 4px; border-radius: 3px;
         }
-        .session-actions button:hover { color: #ff6666; background: #331111; }
+        .session-actions button:hover { color: #999; }
+        .session-actions button.resume-btn { color: #44dd77; opacity: 0.4; }
+        .session-actions button.resume-btn:hover { color: #44dd77; opacity: 1; }
 
         /* Server group headers in sidebar */
         .server-group-header {
@@ -225,6 +227,7 @@
         }
         .server-dot.connected { background: #44dd77; }
         .server-dot.disconnected { background: #ff4444; }
+        .server-dot.unknown { background: none; border: 1px solid #4a4a6a; }
 
         /* New session dialog */
         .new-session {
@@ -337,7 +340,16 @@
         }
         .worktree-branch-preview.visible { display: block; }
 
-        /* Worktree badge in session item */
+        /* Worktree icon on left side of session item */
+        .session-wt-icon {
+            flex-shrink: 0;
+            color: #6a6aaa;
+            margin-right: 8px;
+            display: flex;
+            align-items: center;
+        }
+        .session-wt-icon svg { width: 18px; height: 18px; }
+        /* Worktree badge (branch name + merge) below session name */
         .session-wt-badge {
             font-size: 9px;
             color: #6a6aaa;
@@ -346,7 +358,6 @@
             gap: 3px;
             margin-top: 1px;
         }
-        .session-wt-badge .branch-icon { font-size: 10px; }
         .session-wt-actions { display: flex; gap: 2px; }
         .session-wt-actions button {
             font-size: 9px;
@@ -1690,6 +1701,28 @@
             animation: upload-spin 0.6s linear infinite;
         }
         @keyframes upload-spin { to { transform: rotate(360deg); } }
+        .upload-progress {
+            margin: 0 0 16px;
+        }
+        .upload-progress-bar {
+            height: 6px;
+            background: #1a1a3e;
+            border-radius: 3px;
+            overflow: hidden;
+            margin-bottom: 6px;
+        }
+        .upload-progress-fill {
+            height: 100%;
+            width: 0;
+            background: #5a7aff;
+            border-radius: 3px;
+            transition: width 0.15s ease;
+        }
+        .upload-progress-text {
+            color: #8080b0;
+            font-size: 11px;
+            text-align: right;
+        }
         .upload-path {
             background: #0e0e20;
             border: 1px solid #2a2a5a;
@@ -1897,6 +1930,22 @@
         </div>
     </div>
 
+    <div class="confirm-overlay" id="busy-dialog">
+        <div class="confirm-box" style="text-align:center;">
+            <p id="busy-msg" style="margin:0 0 4px;"></p>
+            <span class="spinner" style="width:16px;height:16px;border-width:2px;"></span>
+        </div>
+    </div>
+
+    <div class="confirm-overlay" id="alert-dialog">
+        <div class="confirm-box">
+            <p id="alert-msg"></p>
+            <div class="confirm-actions">
+                <button class="confirm-cancel" id="alert-ok">OK</button>
+            </div>
+        </div>
+    </div>
+
     <div class="stop-overlay" id="stop-dialog">
         <div class="stop-box">
             <p id="stop-msg"></p>
@@ -1912,6 +1961,10 @@
         <div class="upload-box">
             <div class="upload-filename" id="upload-filename"></div>
             <div class="upload-status" id="upload-status"><div class="upload-spinner"></div> Uploading&hellip;</div>
+            <div class="upload-progress" id="upload-progress" style="display:none">
+                <div class="upload-progress-bar"><div class="upload-progress-fill" id="upload-progress-fill"></div></div>
+                <div class="upload-progress-text" id="upload-progress-text"></div>
+            </div>
             <div class="upload-path" id="upload-path" style="display:none"></div>
             <div class="upload-error-msg" id="upload-error" style="display:none"></div>
             <div class="upload-actions" id="upload-actions">
@@ -1972,6 +2025,45 @@
         let sessions = [];
         let panels = [];
         let layoutRoot = null;   // binary tree: { type:'leaf', panelId } | { type:'split', direction, children:[a,b], ratio }
+        let _layoutRestored = false;
+
+        function _saveLayout() {
+            try {
+                const state = {
+                    tree: layoutRoot,
+                    focused: focusedPanelId,
+                    panels: panels.map(p => ({ id: p.id, name: p.name })),
+                };
+                localStorage.setItem('conductor_layout', JSON.stringify(state));
+            } catch (e) {}
+        }
+
+        function _restoreLayout() {
+            if (_layoutRestored) return;
+            _layoutRestored = true;
+            try {
+                const raw = localStorage.getItem('conductor_layout');
+                if (!raw) return;
+                const state = JSON.parse(raw);
+                if (!state.panels || !state.panels.length) return;
+                // Only restore panels whose sessions still exist
+                const alive = state.panels.filter(p => {
+                    const sid = p.id.includes('::') ? p.id.split('::')[1] : p.id;
+                    return sessions.some(s => s._compoundId === p.id && s.status === 'running');
+                });
+                if (!alive.length) return;
+                alive.forEach(p => openSession(p.id, p.name));
+                // Restore the tree structure if all panels match
+                if (state.tree && alive.length === state.panels.length) {
+                    layoutRoot = state.tree;
+                    layoutPanels();
+                }
+                if (state.focused && panels.find(p => p.id === state.focused)) {
+                    setFocus(state.focused);
+                }
+            } catch (e) {}
+        }
+
         let _pendingSessionId = null;
         let _pendingSessionName = null;
         let allowedCommands = [];
@@ -2353,6 +2445,9 @@
                     populateCommandSelect();
                     browseTo('~', serverKey);
                 }
+                if (serverKey === 'local' && cfg.upload_warn_size) {
+                    _uploadWarnSize = cfg.upload_warn_size;
+                }
             } catch (e) {}
         }
 
@@ -2454,6 +2549,7 @@
             for (const key of Object.keys(_serverSessions)) {
                 allSessions.push(..._serverSessions[key]);
             }
+
             sessions = allSessions;
 
             // Close panels whose session no longer exists on the server.
@@ -2486,8 +2582,7 @@
             html = '';
             for (const key of serverOrder) {
                 const label = getServerLabel(key);
-                const connected = serverConnected[key] !== false;
-                const dotClass = connected ? 'connected' : 'disconnected';
+                const dotClass = serverConnected[key] === true ? 'connected' : serverConnected[key] === false ? 'disconnected' : 'unknown';
                 html += `<div class="server-group-header">
                     <span class="server-dot ${dotClass}"></span>
                     <span>${escHtml(label)}</span>
@@ -2511,7 +2606,7 @@
             const isOpen = panels.some(p => p.id === cid);
             const isFocused = focusedPanelId === cid;
             const appLabel = getCommandLabel(s.command);
-            const isResumable = s.status === 'exited' && s.resume_id;
+            const isResumable = s.status === 'exited' && (s.resume_id || s.worktree);
             const isStopping = s.status === 'stopping';
             const isResuming = _resumingSession === cid;
             // Escape single quotes in compound ID for onclick
@@ -2520,51 +2615,58 @@
 
             let actions;
             if (isResuming || isStopping) {
-                // Session is resuming or shutting down — no action buttons
                 actions = '';
             } else if (isResumable) {
+                // Exited session — play to resume, × to dismiss (or discard worktree)
+                const dismissAction = s.worktree
+                    ? `discardWorktree('${cidEsc}','${nameEsc}')`
+                    : `dismissSession('${cidEsc}')`;
+                const dismissTitle = s.worktree ? 'Discard worktree' : 'Dismiss';
                 actions = `
-                    <button onclick="event.stopPropagation();resumeSession('${cidEsc}')" title="Resume session" style="color:#44dd77;">&#9654;</button>
-                    <button onclick="event.stopPropagation();dismissSession('${cidEsc}')" title="Dismiss">&times;</button>
+                    <button class="resume-btn" onclick="event.stopPropagation();resumeSession('${cidEsc}')" title="Resume session">&#9654;</button>
+                    <button onclick="event.stopPropagation();${dismissAction}" title="${dismissTitle}">&times;</button>
                 `;
-            } else {
+            } else if (s.status === 'running') {
                 actions = `<button onclick="event.stopPropagation();killSession('${cidEsc}')" title="Stop">&times;</button>`;
+            } else {
+                actions = '';
             }
 
-            const statusBadge = isResuming
-                ? '<span class="session-status resuming" style="font-size:9px;margin-left:4px;"><span class="spinner"></span>resuming</span>'
-                : isStopping
-                    ? '<span class="session-status stopping" style="font-size:9px;margin-left:4px;"><span class="spinner"></span>stopping</span>'
-                    : isResumable
-                        ? '<span class="session-status exited" style="font-size:9px;margin-left:4px;">resumable</span>'
-                        : '';
+            // Exited/resumable, stopping, and resuming sessions are not clickable
+            const clickable = !isStopping && !isResuming && !isResumable;
 
-            // Stopping, resuming, and resumable sessions are not clickable
-            const clickable = !isStopping && !isResumable && !isResuming;
-
-            // Worktree badge
+            // Worktree icon + badge
+            const _branchSvg = `<svg viewBox="0 0 16 16" fill="currentColor"><path d="M5 3.25a.75.75 0 1 1-1.5 0 .75.75 0 0 1 1.5 0Zm0 9.5a.75.75 0 1 1-1.5 0 .75.75 0 0 1 1.5 0Zm7.5-9.5a.75.75 0 1 1-1.5 0 .75.75 0 0 1 1.5 0ZM4.25 5.5a1.75 1.75 0 1 0-.25-3.48V1.75a.75.75 0 0 0-1.5 0v.27a1.75 1.75 0 1 0-.25 3.48v4.5a1.75 1.75 0 1 0 1.5 0v-4.5a1.75 1.75 0 0 0 .5 0Zm7 0a1.75 1.75 0 1 0-1-.04v2.29a2.25 2.25 0 0 1-2.25 2.25H6.5a.75.75 0 0 0 0 1.5h1.5A3.75 3.75 0 0 0 11.75 7.75V5.46a1.75 1.75 0 0 0-.5.04Z"/></svg>`;
+            let wtIcon = '';
             let wtBadge = '';
+            let subtitle = escHtml(appLabel);
             if (s.worktree) {
                 const branch = s.worktree.branch || '';
                 const shortBranch = branch.replace('conductor/', '');
                 const ahead = s.worktree.commits_ahead || 0;
-                const wtStatus = s.worktree.status || 'active';
                 const aheadText = ahead > 0 ? ` +${ahead}` : '';
-                wtBadge = `<div class="session-wt-badge"><span class="branch-icon">&#9095;</span>${escHtml(shortBranch)}${aheadText}</div>`;
+                const wtTooltipParts = [`Branch: ${branch}`];
+                if (ahead > 0) wtTooltipParts.push(`${ahead} commit${ahead > 1 ? 's' : ''} ahead`);
+                if (s.worktree.base_branch) wtTooltipParts.push(`Base: ${s.worktree.base_branch}`);
+                const wtTooltip = wtTooltipParts.join('\n');
+                wtIcon = `<div class="session-wt-icon" title="${escHtml(wtTooltip)}">${_branchSvg}</div>`;
+                // Show branch in subtitle only if it differs from session name
+                const branchLabel = shortBranch !== s.name ? `${escHtml(shortBranch)}${aheadText} &middot; ` : (aheadText ? `${aheadText.trim()} &middot; ` : '');
+                subtitle = `${branchLabel}${escHtml(appLabel)}`;
 
-                // Add merge/discard buttons for finalized worktrees (not active sessions)
-                if (wtStatus === 'finalized' && !isResuming && !isStopping) {
-                    const mergeBtn = `<button class="merge-btn" onclick="event.stopPropagation();showMergeDialog('${cidEsc}','${nameEsc}')" title="Merge">merge</button>`;
-                    const discardBtn = `<button class="discard-btn" onclick="event.stopPropagation();discardWorktree('${cidEsc}','${nameEsc}')" title="Discard">discard</button>`;
-                    wtBadge += `<div class="session-wt-actions">${mergeBtn}${discardBtn}</div>`;
+                // Merge button
+                if (!isResuming && !isStopping) {
+                    const mergeBtn = `<button class="merge-btn" onclick="event.stopPropagation();showMergeDialog('${cidEsc}','${nameEsc}')" title="Merge worktree into base branch">merge</button>`;
+                    wtBadge = `<div class="session-wt-actions">${mergeBtn}</div>`;
                 }
             }
 
             return `
                 <div class="session-item ${isFocused ? 'focused' : isOpen ? 'open' : ''}" ${clickable ? `onclick="focusSession('${cidEsc}', '${nameEsc}', event)"` : ''}>
+                    ${wtIcon}
                     <div class="session-name">
-                        <div>${escHtml(s.name)}${statusBadge}</div>
-                        <div style="font-size:10px;color:#7878a0;font-weight:400;">${escHtml(appLabel)}</div>
+                        <div>${escHtml(s.name)}</div>
+                        <div style="font-size:10px;color:#7878a0;font-weight:400;">${subtitle}</div>
                         ${wtBadge}
                     </div>
                     <div class="session-actions">
@@ -3395,6 +3497,7 @@
                         <div class="icon">&#9837;</div>
                         <div>Select a session or create a new one</div>
                     </div>`;
+                _saveLayout();
                 renderSessionList();
                 return;
             }
@@ -3402,6 +3505,7 @@
             const dom = renderNode(layoutRoot);
             container.appendChild(dom);
 
+            _saveLayout();
             renderSessionList();
 
             // Double-RAF: first frame lets the browser compute flex layout
@@ -3856,8 +3960,9 @@
                 focusedPanelId = firstLeafId(layoutRoot);
             }
             layoutPanels();
-            if (panels.length === 0) openDrawer();
+            if (panels.length === 0 && !_suppressDrawerOpen) openDrawer();
         }
+        let _suppressDrawerOpen = false;
 
         // --- Drag handle for resizable splits ---
         function initDragHandle(handle, container, direction, treeNode) {
@@ -3944,7 +4049,7 @@
         }
 
         // --- File Upload ---
-        const _MAX_UPLOAD_SIZE = 10 * 1024 * 1024;
+        let _uploadWarnSize = 20 * 1024 * 1024;  // updated from /config
 
         let _uploadToast = null;
         let _uploadToastTimer = null;
@@ -3971,6 +4076,9 @@
         function showUploadDialog(filename) {
             document.getElementById('upload-filename').textContent = filename;
             document.getElementById('upload-status').style.display = '';
+            document.getElementById('upload-progress').style.display = '';
+            document.getElementById('upload-progress-fill').style.width = '0';
+            document.getElementById('upload-progress-text').textContent = '';
             document.getElementById('upload-path').style.display = 'none';
             document.getElementById('upload-error').style.display = 'none';
             document.getElementById('upload-actions').innerHTML = '<button onclick="cancelUpload()">Cancel</button>';
@@ -3980,6 +4088,7 @@
         function showUploadSuccess(path) {
             _uploadResultPath = path;
             document.getElementById('upload-status').style.display = 'none';
+            document.getElementById('upload-progress').style.display = 'none';
             document.getElementById('upload-path').style.display = '';
             document.getElementById('upload-path').textContent = path;
             document.getElementById('upload-actions').innerHTML =
@@ -3990,6 +4099,7 @@
 
         function showUploadError(msg) {
             document.getElementById('upload-status').style.display = 'none';
+            document.getElementById('upload-progress').style.display = 'none';
             document.getElementById('upload-error').style.display = '';
             document.getElementById('upload-error').textContent = msg;
             document.getElementById('upload-actions').innerHTML = '<button onclick="closeUploadDialog()">Close</button>';
@@ -4002,7 +4112,11 @@
         }
 
         function cancelUpload() {
-            if (_uploadAbort) { _uploadAbort.abort(); _uploadAbort = null; }
+            if (_uploadAbort) {
+                if (_uploadAbort instanceof XMLHttpRequest) _uploadAbort.abort();
+                else if (_uploadAbort.abort) _uploadAbort.abort();
+                _uploadAbort = null;
+            }
             closeUploadDialog();
         }
 
@@ -4022,35 +4136,62 @@
         }
 
         async function uploadFileToSession(panel, blob) {
-            if (blob.size > _MAX_UPLOAD_SIZE) {
-                showUploadToast('File too large (max 10 MB)', 'error');
-                return;
-            }
-            _uploadPanel = panel;
-            _uploadAbort = new AbortController();
             const name = blob.name || 'file';
             const sizeMB = (blob.size / 1024 / 1024).toFixed(1);
-            showUploadDialog(name + ' (' + sizeMB + ' MB)');
-            try {
-                const headers = { 'Content-Type': blob.type || 'application/octet-stream' };
-                if (blob.name) headers['X-Filename'] = blob.name;
-                const resp = await fetch(serverUrl(panel.server, `/sessions/${panel.sessionId}/upload`), {
-                    method: 'POST',
-                    headers,
-                    body: blob,
-                    signal: _uploadAbort.signal,
-                });
-                if (!resp.ok) {
-                    const err = await resp.json().catch(() => ({ detail: resp.statusText }));
-                    showUploadError(err.detail || 'Upload failed');
-                    return;
-                }
-                const data = await resp.json();
-                showUploadSuccess(data.path);
-            } catch (e) {
-                if (e.name === 'AbortError') return;
-                showUploadError('Upload failed: ' + e.message);
+            const warnMB = (_uploadWarnSize / 1024 / 1024).toFixed(0);
+
+            // Configurable warning threshold — no hard limit
+            if (blob.size > _uploadWarnSize) {
+                const ok = await showConfirm(
+                    `"${name}" is ${sizeMB} MB, which exceeds the ${warnMB} MB warning threshold. Upload anyway?`,
+                    'Upload'
+                );
+                if (!ok) return;
             }
+
+            _uploadPanel = panel;
+            showUploadDialog(name + ' (' + sizeMB + ' MB)');
+
+            const xhr = new XMLHttpRequest();
+            _uploadAbort = xhr;
+
+            xhr.upload.onprogress = (e) => {
+                if (e.lengthComputable) {
+                    const pct = Math.round((e.loaded / e.total) * 100);
+                    const loadedMB = (e.loaded / 1024 / 1024).toFixed(1);
+                    const totalMB = (e.total / 1024 / 1024).toFixed(1);
+                    document.getElementById('upload-progress-fill').style.width = pct + '%';
+                    document.getElementById('upload-progress-text').textContent =
+                        `${loadedMB} / ${totalMB} MB (${pct}%)`;
+                }
+            };
+
+            xhr.onload = () => {
+                if (xhr.status >= 200 && xhr.status < 300) {
+                    try {
+                        const data = JSON.parse(xhr.responseText);
+                        showUploadSuccess(data.path);
+                    } catch {
+                        showUploadError('Invalid server response');
+                    }
+                } else {
+                    try {
+                        const err = JSON.parse(xhr.responseText);
+                        showUploadError(err.detail || 'Upload failed');
+                    } catch {
+                        showUploadError('Upload failed (' + xhr.status + ')');
+                    }
+                }
+            };
+
+            xhr.onerror = () => showUploadError('Upload failed: network error');
+            xhr.onabort = () => {};  // user cancelled — dialog already closed
+
+            const url = serverUrl(panel.server, `/sessions/${panel.sessionId}/upload`);
+            xhr.open('POST', url, true);
+            xhr.setRequestHeader('Content-Type', blob.type || 'application/octet-stream');
+            if (blob.name) xhr.setRequestHeader('X-Filename', blob.name);
+            xhr.send(blob);
         }
 
         // Paste handler — intercept file paste, let text paste through
@@ -4084,6 +4225,7 @@
                     panel.terminal.reset();
                 }
                 panel._bufferReplay = true;
+
                 panel._dimensionsReady = false;
 
                 // Fetch PTY dimensions from the session — host terminal is the authority.
@@ -4165,7 +4307,6 @@
                     try {
                         const resp = await fetch(serverUrl(panel.server, `/sessions/${panel.sessionId}`));
                         if (resp.status === 404) {
-                            // Session gone — close the panel
                             closePanel(panel.id);
                             fetchAllSessions();
                             return;
@@ -4351,8 +4492,8 @@
             html += '<div class="settings-row"><label>Buffer size (MB)</label>';
             html += `<input type="number" min="1" max="100" value="${Math.round((d.buffer_max_bytes || 1000000) / (1024*1024))}" onchange="_settingsData.buffer_max_bytes = Math.round(this.value * 1024 * 1024)">`;
             html += '</div>';
-            html += '<div class="settings-row"><label>Max upload (MB)</label>';
-            html += `<input type="number" min="1" max="500" value="${Math.round((d.max_upload_size || 10485760) / (1024*1024))}" onchange="_settingsData.max_upload_size = Math.round(this.value * 1024 * 1024)">`;
+            html += '<div class="settings-row"><label>Upload warning (MB)</label>';
+            html += `<input type="number" min="1" max="500" value="${Math.round((d.upload_warn_size || 20971520) / (1024*1024))}" onchange="_settingsData.upload_warn_size = Math.round(this.value * 1024 * 1024)">`;
             html += '</div>';
             html += '<div class="settings-row"><label>Stop timeout (s)</label>';
             html += `<input type="number" min="5" max="300" value="${d.graceful_stop_timeout || 30}" onchange="_settingsData.graceful_stop_timeout = parseInt(this.value)">`;
@@ -4471,15 +4612,15 @@
                     await _refreshConfig();
                 } else {
                     const err = await resp.json().catch(() => ({}));
-                    alert('Failed to save: ' + (err.detail || resp.statusText));
+                    showAlert('Failed to save: ' + (err.detail || resp.statusText));
                 }
             } catch (e) {
-                alert('Failed to save settings: ' + e.message);
+                showAlert('Failed to save settings: ' + e.message);
             }
         }
 
         async function resetSettings() {
-            if (!confirm('Reset all settings to built-in defaults?')) return;
+            if (!await showConfirm('Reset all settings to built-in defaults?', 'Reset')) return;
             try {
                 const resp = await fetch('/admin/settings/reset', { method: 'POST' });
                 if (resp.ok) {
@@ -4487,10 +4628,10 @@
                     await _refreshConfig();
                 } else {
                     const err = await resp.json().catch(() => ({}));
-                    alert('Failed to reset: ' + (err.detail || resp.statusText));
+                    showAlert('Failed to reset: ' + (err.detail || resp.statusText));
                 }
             } catch (e) {
-                alert('Failed to reset settings: ' + e.message);
+                showAlert('Failed to reset settings: ' + e.message);
             }
         }
 
@@ -4510,6 +4651,9 @@
                 if (_newSessionServer === 'local') {
                     allowedCommands = data.allowed_commands || [];
                     populateCommandSelect();
+                }
+                if (data.upload_warn_size) {
+                    _uploadWarnSize = data.upload_warn_size;
                 }
             } catch (e) {}
         }
@@ -4726,8 +4870,7 @@
         function renderServersDialog() {
             const list = document.getElementById('servers-list');
             list.innerHTML = servers.map(s => {
-                const connected = serverConnected[s.key] !== false;
-                const dotClass = connected ? 'connected' : 'disconnected';
+                const dotClass = serverConnected[s.key] === true ? 'connected' : serverConnected[s.key] === false ? 'disconnected' : 'unknown';
                 const removeBtn = s.key !== 'local' ?
                     `<button onclick="removeServer('${s.key.replace(/'/g, "\\'")}');renderServersDialog();fetchTailscalePeers()" title="Remove">&times;</button>` : '';
                 const urlText = s.url || '(local)';
@@ -5074,6 +5217,9 @@
                 if (useWorktree) body.worktree = true;
             }
 
+            // Close dialog and show busy spinner
+            document.getElementById('new-session-dialog').classList.remove('open');
+            showBusy(`Starting "${name}"…`);
             try {
                 const resp = await fetch(serverUrl(_newSessionServer, '/sessions/run'), {
                     method: 'POST',
@@ -5081,21 +5227,27 @@
                     body: JSON.stringify(body),
                 });
                 if (resp.ok) {
+                    const created = await resp.json();
                     document.getElementById('new-name').value = '';
                     document.getElementById('new-resume-token').value = '';
                     document.getElementById('new-worktree').checked = false;
-                    document.getElementById('new-session-dialog').classList.remove('open');
                     _gitCheckState = null;
+                    _suppressDrawerOpen = true;
+                    const ids = panels.map(p => p.id);
+                    ids.forEach(id => closePanel(id));
+                    _suppressDrawerOpen = false;
                     await fetchAllSessions();
-                    const cid = compoundId(_newSessionServer, name);
-                    closeDrawer();
-                    openSession(cid, name);
+                    const cid = compoundId(_newSessionServer, created.id);
+                    openSession(cid, created.name);
                 } else {
                     const err = await resp.json();
-                    alert(err.detail || 'Failed to create session');
+                    showAlert(err.detail || 'Failed to create session');
                 }
             } catch (e) {
-                alert('Server unreachable');
+                console.error('createSession error:', e);
+                showAlert('Failed to create session');
+            } finally {
+                hideBusy();
             }
         }
 
@@ -5225,15 +5377,26 @@
                 });
                 if (!resp.ok) {
                     closeMergeDialog();
-                    alert('Failed to load merge preview');
+                    showAlert('Failed to load merge preview');
                     return;
                 }
                 const preview = await resp.json();
 
-                // Nothing to merge — show brief message and close
+                // Nothing to merge — show message inside the dialog
                 if (!preview.can_merge) {
-                    closeMergeDialog();
-                    alert(preview.message || 'Nothing to merge');
+                    const overlay = document.getElementById('merge-overlay');
+                    if (overlay && overlay.style.display === 'flex') {
+                        const inner = overlay.querySelector('.overlay-inner') || overlay.firstElementChild;
+                        if (inner) inner.innerHTML = `
+                            <div class="merge-dialog">
+                                <h3>Merge "${escHtml(sessionName)}"</h3>
+                                <p style="color:#a0a0d0;font-size:13px;margin:16px 0;">${escHtml(preview.message || 'Nothing to merge')}</p>
+                                <div class="merge-actions">
+                                    <button onclick="closeMergeDialog()" style="background:#1a1a3a;border:1px solid #2a2a5a;color:#a0a0d0;">Close</button>
+                                </div>
+                            </div>
+                        `;
+                    }
                     return;
                 }
 
@@ -5274,7 +5437,7 @@
                 }
             } catch (e) {
                 closeMergeDialog();
-                alert('Failed to connect to server');
+                showAlert('Failed to connect to server');
             }
         }
 
@@ -5299,16 +5462,16 @@
                 if (result.success) {
                     await fetchAllSessions();
                 } else {
-                    alert('Merge failed: ' + (result.message || 'Unknown error'));
+                    showAlert('Merge failed: ' + (result.message || 'Unknown error'));
                 }
             } catch (e) {
-                alert('Server unreachable');
+                showAlert('Server unreachable');
             }
         }
 
         async function discardWorktree(cid, name) {
             const serverKey = cid.includes('::') ? cid.split('::')[0] : 'local';
-            const confirmed = await showConfirm(`Discard worktree for "${name}"? This deletes the branch and all changes.`);
+            const confirmed = await showConfirm(`Discard worktree for "${name}"? This deletes the branch and all changes.`, 'Discard');
             if (!confirmed) return;
             try {
                 const resp = await fetch(serverUrl(serverKey, `/worktrees/${encodeURIComponent(name)}?force=true`), {
@@ -5318,10 +5481,10 @@
                     await fetchAllSessions();
                 } else {
                     const err = await resp.json();
-                    alert(err.detail || 'Failed to discard worktree');
+                    showAlert(err.detail || 'Failed to discard worktree');
                 }
             } catch (e) {
-                alert('Server unreachable');
+                showAlert('Server unreachable');
             }
         }
 
@@ -5343,13 +5506,14 @@
             if (overlay) overlay.style.display = 'none';
         }
 
-        function showConfirm(message) {
+        function showConfirm(message, okLabel) {
             return new Promise(resolve => {
                 const overlay = document.getElementById('confirm-dialog');
                 document.getElementById('confirm-msg').textContent = message;
-                overlay.classList.add('open');
                 const yes = document.getElementById('confirm-yes');
                 const no = document.getElementById('confirm-no');
+                yes.textContent = okLabel || 'Confirm';
+                overlay.classList.add('open');
                 function cleanup(result) {
                     overlay.classList.remove('open');
                     yes.replaceWith(yes.cloneNode(true));
@@ -5359,6 +5523,38 @@
                 yes.addEventListener('click', () => cleanup(true), { once: true });
                 no.addEventListener('click', () => cleanup(false), { once: true });
                 overlay.addEventListener('click', (e) => { if (e.target === overlay) cleanup(false); }, { once: true });
+            });
+        }
+
+        let _busyTimeout = null;
+        function showBusy(message, timeoutMs = 10000) {
+            document.getElementById('busy-msg').textContent = message;
+            document.getElementById('busy-dialog').classList.add('open');
+            clearTimeout(_busyTimeout);
+            _busyTimeout = setTimeout(() => {
+                hideBusy();
+                showAlert('Operation timed out');
+            }, timeoutMs);
+        }
+        function hideBusy() {
+            clearTimeout(_busyTimeout);
+            _busyTimeout = null;
+            document.getElementById('busy-dialog').classList.remove('open');
+        }
+
+        function showAlert(message) {
+            return new Promise(resolve => {
+                const overlay = document.getElementById('alert-dialog');
+                document.getElementById('alert-msg').textContent = message;
+                overlay.classList.add('open');
+                const ok = document.getElementById('alert-ok');
+                function cleanup() {
+                    overlay.classList.remove('open');
+                    ok.replaceWith(ok.cloneNode(true));
+                    resolve();
+                }
+                document.getElementById('alert-ok').addEventListener('click', cleanup, { once: true });
+                overlay.addEventListener('click', (e) => { if (e.target === overlay) cleanup(); }, { once: true });
             });
         }
 
@@ -5392,41 +5588,62 @@
             if (!choice) return;
             try {
                 if (choice === 'graceful') {
+                    showBusy(`Stopping "${label}"…`);
                     await fetch(serverUrl(server, `/sessions/${sessionId}/stop`), {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({ mode: 'graceful' }),
                     });
-                    // Keep the panel open so the user sees the shutdown.
-                    // ws.onclose will close it when the session actually exits.
+                    // Poll until session exits or disappears (max ~15s)
+                    for (let i = 0; i < 30; i++) {
+                        await new Promise(r => setTimeout(r, 500));
+                        try {
+                            const resp = await fetch(serverUrl(server, `/sessions/${sessionId}`));
+                            if (resp.status === 404) break;
+                            const info = await resp.json();
+                            if (info.status === 'exited' || info.status === 'killed') break;
+                        } catch (e) { break; }
+                    }
+                    closePanel(cid);
+                    hideBusy();
                 } else {
+                    showBusy(`Stopping "${label}"…`);
                     await fetch(serverUrl(server, `/sessions/${sessionId}`), { method: 'DELETE' });
                     closePanel(cid);
+                    hideBusy();
                 }
                 await fetchAllSessions();
-            } catch (e) {}
+            } catch (e) {
+                hideBusy();
+            }
         }
 
         let _resumingSession = null;  // guard against double-click
         async function resumeSession(cid) {
             if (_resumingSession === cid) return;
             _resumingSession = cid;
-            renderSessionList();  // show spinner immediately
+            const session = sessions.find(s => s._compoundId === cid);
+            const label = session ? session.name : cid;
+            showBusy(`Resuming "${label}"…`);
             const { server, sessionId } = parseCompoundId(cid);
             try {
                 const resp = await fetch(serverUrl(server, `/sessions/${sessionId}/resume`), { method: 'POST' });
                 if (resp.ok) {
                     await fetchAllSessions();
+                    _suppressDrawerOpen = true;
+                    while (panels.length) closePanel(panels[0].id);
+                    _suppressDrawerOpen = false;
                     closeDrawer();
                     openSession(cid, sessionId);
                 } else {
                     const err = await resp.json();
-                    alert(err.detail || 'Failed to resume session');
+                    showAlert(err.detail || 'Failed to resume session');
                 }
             } catch (e) {
-                alert('Server unreachable');
+                showAlert('Server unreachable');
             } finally {
                 _resumingSession = null;
+                hideBusy();
                 renderSessionList();
             }
         }
@@ -5435,7 +5652,7 @@
             const { server, sessionId } = parseCompoundId(cid);
             const session = sessions.find(s => s._compoundId === cid);
             const label = session ? session.name : 'this session';
-            if (!await showConfirm(`Dismiss "${label}"? The resume token will be lost.`)) return;
+            if (!await showConfirm(`Dismiss "${label}"? The resume token will be lost.`, 'Dismiss')) return;
             try {
                 await fetch(serverUrl(server, `/sessions/${sessionId}`), { method: 'DELETE' });
                 await fetchAllSessions();
@@ -5560,7 +5777,20 @@
         servers.filter(s => s.enabled).forEach(s => fetchConfig(s.key));
 
         // Start polling sessions from all servers
-        fetchAllSessions();
+        const _hasSavedLayout = (() => {
+            try {
+                const raw = localStorage.getItem('conductor_layout');
+                if (!raw) return false;
+                const state = JSON.parse(raw);
+                return state.panels && state.panels.length > 0;
+            } catch (e) { return false; }
+        })();
+        if (_hasSavedLayout) showBusy('Restoring session…');
+        fetchAllSessions().then(() => {
+            _restoreLayout();
+        }).catch(() => {}).finally(() => {
+            if (_hasSavedLayout) hideBusy();
+        });
         setInterval(fetchAllSessions, 1500);
 
         // --- Update check ---

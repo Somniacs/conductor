@@ -2,6 +2,27 @@
 
 All notable changes to Conductor are documented here.
 
+## v0.3.8
+
+### Resume support
+
+- **Resume from dashboard** — New/Resume toggle in the new-session dialog; in resume mode, paste an external resume token (e.g. from Claude's `--resume` output) to pick up the conversation inside Conductor. Command-based agents (Codex, Copilot) show their resume command automatically — no token needed
+- **Multi-agent resume** — `conductor resume --token` and dashboard resume now work with any agent via the `--command` flag (defaults to claude); reads `resume_flag` from server config per agent
+- **Command-first dialog** — new-session dialog now shows the command picker before the session name, matching the CLI argument order
+
+### File uploads
+
+- **Upload progress bar** — file uploads now show a real-time progress bar with loaded/total MB and percentage (uses XMLHttpRequest for progress events)
+- **Configurable upload warning** — no hard upload size limit; files over the configured threshold (default 20 MB) prompt for confirmation instead of blocking. Threshold is adjustable in Settings ("Upload warning")
+
+### Dashboard UI
+
+- **Auto merge prompt** — when a worktree session finishes (agent exits or session is killed), the merge dialog opens automatically so the user is immediately prompted to merge or discard — no risk of forgetting about finalized sessions
+- **Custom dialogs** — all notifications and confirmations use themed in-app dialogs; no browser-native alert/confirm popups anywhere
+- **Worktree branch icon** — worktree badge uses an inline SVG git-branch icon instead of a Unicode character
+- **Server connection state** — server dots show an unfilled/unknown state on page load; only colored green or red once the connection is confirmed
+- **Worktree tooltip** — hover over a worktree badge to see status, branch name, commits ahead, and base branch
+
 ## v0.3.7
 
 ### Git worktree isolation
@@ -14,10 +35,8 @@ All notable changes to Conductor are documented here.
 
 ### File uploads
 
-- **Upload progress bar** — file uploads now show a real-time progress bar with loaded/total MB and percentage
 - **Desktop drag-and-drop upload** — drag files directly onto a terminal panel to upload; also supports clipboard paste (Ctrl+V) and the panel header attachment button
 - **Desktop upload button** — paperclip icon in the panel header for file uploads on desktop (touch devices use the existing extra-keys button)
-- **Configurable upload warning** — no hard upload size limit; files over the configured threshold (default 20 MB) prompt for confirmation. Threshold is adjustable in Settings ("Upload warning")
 
 ### Dashboard UI
 
@@ -26,15 +45,13 @@ All notable changes to Conductor are documented here.
 - **Panel overflow menu** — header actions (theme, upload, font size, maximize) collapsed into a "⋯" menu; only the close button remains in the header bar
 - **Move panel** — rearrange panels in the layout via directional arrows (← → ↑ ↓) in the overflow menu
 - **Cleaner resumable sessions** — removed redundant red "resumable" badge from sidebar; the green play button is sufficient
-- **Resume from dashboard** — New/Resume toggle in the new-session dialog; in resume mode, paste an external resume token (e.g. from Claude's `--resume` output) to pick up the conversation inside Conductor. Command-based agents (Codex, Copilot) show their resume command automatically — no token needed
-- **Command-first dialog** — new-session dialog now shows the command picker before the session name, matching the CLI argument order
 
 ### CLI
 
 - **CLI resume** — `conductor resume <name>` resumes an exited session from the terminal, attaching automatically (use `-d` to resume in background)
 - **Restart/shutdown safety** — `conductor restart` and `conductor shutdown` now warn about active sessions before killing them; pass `-f` to skip
 - **Resume auto-start** — `conductor resume` now auto-starts the server daemon if it isn't running, matching `conductor run` and `conductor open`
-- **External resume** — `conductor resume <name> --token <UUID>` brings an external agent session into Conductor; works with any agent (`--command` flag, defaults to claude)
+- **External resume** — `conductor resume <name> --token <UUID>` brings an external Claude session into Conductor; start Claude in any terminal, exit, copy the UUID from its `--resume` output, then resume it inside Conductor
 
 ### Fixes
 
