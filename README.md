@@ -423,7 +423,7 @@ The web dashboard provides:
 | `conductor open` | Open the dashboard in the default browser |
 | `conductor qr` | Show QR code (terminal + opens SVG in browser) |
 
-`conductor run` auto-starts the server as a background daemon if it isn't already running. If no name is given, the command name is used. Press `Ctrl+]` to detach from a session without stopping it.
+`conductor run`, `conductor resume`, and `conductor open` auto-start the server as a background daemon if it isn't already running. If no name is given, the command name is used. Press `Ctrl+]` to detach from a session without stopping it.
 
 ## API
 
