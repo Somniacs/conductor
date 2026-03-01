@@ -34,6 +34,7 @@ All notable changes to Conductor are documented here.
 
 ### Fixes
 
+- Fixed browser-created sessions ("+New" in UI) showing the cursor ~2 lines below its actual position — replaced `fitAddon.fit()` with unified manual cell measurement matching the working CLI code path; also affected desktop when resizing the sidebar
 - Fixed extra-keys bar staying visible after cancelling the file picker on mobile/tablet
 - Fixed upload dialog overflowing on small phone screens
 - Queue overflow in subscriber broadcast now logs a warning instead of silently dropping output

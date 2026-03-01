@@ -469,11 +469,11 @@ Check if the server is running and get connection details:
 ```bash
 # CLI
 conductor status --json
-# → {"ok": true, "version": "0.3.0", "base_url": "http://127.0.0.1:7777", ...}
+# → {"ok": true, "version": "0.3.7", "base_url": "http://127.0.0.1:7777", ...}
 
 # HTTP
 curl http://127.0.0.1:7777/health
-# → {"ok": true, "version": "0.3.0"}
+# → {"ok": true, "version": "0.3.7"}
 ```
 
 The full OpenAPI spec is at `http://127.0.0.1:7777/openapi.json`.
