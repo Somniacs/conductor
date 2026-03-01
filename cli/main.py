@@ -443,6 +443,44 @@ def list_sessions(use_json):
 
 @cli.command()
 @click.argument("name")
+@click.option("-d", "--detach", is_flag=True, help="Resume in background (don't attach)")
+def resume(name, detach):
+    """Resume an exited session.
+
+    Restarts a session that exited with a resume token (e.g. Claude Code's
+    --resume <id>). Attaches to the new session by default.
+
+    Press Ctrl+] to detach without stopping the session.
+    """
+    if not server_running():
+        click.echo("Server not running.", err=True)
+        sys.exit(1)
+
+    r = httpx.post(
+        f"{BASE_URL}/sessions/{name}/resume",
+        headers=_auth_headers(),
+        timeout=10,
+    )
+
+    if r.status_code == 200:
+        data = r.json()
+        if detach:
+            click.echo(f"Session '{data['name']}' resumed (pid: {data['pid']})")
+        else:
+            click.echo(f"Attaching... (Ctrl+] to detach)")
+            _resize_session(data["name"])
+            _attach_session(data["name"])
+    elif r.status_code == 404:
+        click.echo(f"Session '{name}' not found or not resumable.", err=True)
+        sys.exit(1)
+    else:
+        detail = r.json().get("detail", r.text) if r.headers.get("content-type", "").startswith("application/json") else r.text
+        click.echo(f"Error: {detail}", err=True)
+        sys.exit(1)
+
+
+@cli.command()
+@click.argument("name")
 def stop(name):
     """Stop a running session."""
     if not server_running():
@@ -547,6 +585,31 @@ def _find_server_pid() -> int | None:
     return None
 
 
+def _warn_active_sessions() -> bool:
+    """Check for running sessions and prompt for confirmation.
+
+    Returns True if the caller should proceed, False to abort.
+    """
+    try:
+        r = httpx.get(f"{BASE_URL}/sessions", headers=_auth_headers(), timeout=5)
+        sessions = r.json()
+    except Exception:
+        return True  # Can't reach server — nothing to warn about
+
+    running = [s for s in sessions if s.get("status") == "running"]
+    if not running:
+        return True
+
+    count = len(running)
+    click.echo(f"\n  ⚠ {count} active session{'s' if count != 1 else ''} will be killed:")
+    for s in running:
+        label = s.get("name", s.get("id", "?"))
+        cmd = s.get("command", "")
+        click.echo(f"    • {label} ({cmd})" if cmd else f"    • {label}")
+    click.echo()
+    return click.confirm("  Continue?", default=False)
+
+
 def stop_server() -> bool:
     """Stop the server daemon. Returns True if it was stopped."""
     pid = _find_server_pid()
@@ -568,10 +631,15 @@ def stop_server() -> bool:
 
 
 @cli.command()
-def shutdown():
+@click.option("--force", "-f", is_flag=True, help="Skip active-session warning")
+def shutdown(force):
     """Stop the Conductor server and all sessions."""
     if not server_running():
         click.echo("Server not running.")
+        return
+
+    if not force and not _warn_active_sessions():
+        click.echo("Aborted.")
         return
 
     click.echo("Shutting down server...")
@@ -586,11 +654,15 @@ def shutdown():
 
 
 @cli.command()
-def restart():
-    """Restart the Conductor server (keeps sessions)."""
+@click.option("--force", "-f", is_flag=True, help="Skip active-session warning")
+def restart(force):
+    """Restart the Conductor server (kills all sessions)."""
     if not server_running():
         click.echo("Server not running. Starting...")
     else:
+        if not force and not _warn_active_sessions():
+            click.echo("Aborted.")
+            return
         click.echo("Stopping server...")
         stop_server()
         # Wait for it to die

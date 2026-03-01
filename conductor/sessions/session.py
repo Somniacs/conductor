@@ -14,6 +14,7 @@
 """PTY-backed terminal session with buffering and WebSocket broadcast."""
 
 import asyncio
+import logging
 import os
 import re
 import sys
@@ -44,6 +45,8 @@ import shutil
 from conductor.proxy.pty_wrapper import PTYProcess
 from conductor.utils import config as cfg
 from conductor.utils.config import UPLOADS_DIR
+
+logger = logging.getLogger(__name__)
 
 _IS_WIN = sys.platform == "win32"
 
@@ -82,6 +85,7 @@ class Session:
         self._monitor_task: asyncio.Task | None = None
         self._on_exit = on_exit
         self._reader_thread: threading.Thread | None = None
+        self._queue_overflow_warned: bool = False
 
     async def start(self, rows: int = 24, cols: int = 80):
         self.pty.spawn(rows=rows, cols=cols)
@@ -151,7 +155,9 @@ class Session:
             try:
                 queue.put_nowait(data)
             except asyncio.QueueFull:
-                pass
+                if not self._queue_overflow_warned:
+                    logger.warning("Subscriber queue full for session %s — dropping output", self.name)
+                    self._queue_overflow_warned = True
 
     def _broadcast_close(self):
         """Send None sentinel to all subscribers to signal session end."""

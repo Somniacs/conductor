@@ -107,8 +107,8 @@ class SessionRegistry:
             except Exception as e:
                 log.warning("Failed to finalize worktree for '%s': %s", session_id, e)
 
-        if session.resume_id:
-            # Keep the metadata so the user can resume later.
+        if session.resume_id or session.worktree:
+            # Keep the metadata so the user can resume or merge the worktree.
             meta = session.to_dict()
             self.resumable[session_id] = meta
             self._save_metadata_dict(meta)
@@ -256,9 +256,25 @@ class SessionRegistry:
     async def remove(self, session_id: str):
         session = self.sessions.pop(session_id, None)
         if session:
+            # Finalize worktree (auto-commit) before killing
+            if session.worktree:
+                try:
+                    from conductor.worktrees.manager import WorktreeInfo
+                    wt_info = WorktreeInfo.from_dict(session.worktree)
+                    updated = self.worktree_manager.finalize(wt_info)
+                    session.worktree = updated.to_dict()
+                    log.info("Finalized worktree for killed session '%s': commits_ahead=%d", session_id, updated.commits_ahead)
+                except Exception as e:
+                    log.warning("Failed to finalize worktree for '%s': %s", session_id, e)
             await session.kill()
             await session.cleanup()
-            self._delete_metadata(session_id)
+            if session.worktree:
+                meta = session.to_dict()
+                meta["status"] = "exited"
+                self.resumable[session_id] = meta
+                self._save_metadata_dict(meta)
+            else:
+                self._delete_metadata(session_id)
 
     def graceful_stop(self, session_id: str):
         """Send SIGINT to the session for a graceful shutdown.

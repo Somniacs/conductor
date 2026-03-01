@@ -13,3 +13,6 @@ venv/
 CLAUDE.md
 .claude/
 .ai/
+
+# Conductor worktrees
+/.conductor-worktrees/

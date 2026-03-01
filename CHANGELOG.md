@@ -2,6 +2,42 @@
 
 All notable changes to Conductor are documented here.
 
+## v0.3.7
+
+### Git worktree isolation
+
+- **Worktree sessions** — run any agent (Claude Code, Aider, Codex, Goose, Copilot, etc.) in an isolated git worktree so each session gets its own branch and working copy — no conflicts between parallel agents or your own work. Auto-commits on exit, merge back with squash/merge/rebase strategies
+- **Worktree CLI** — `conductor run -w` to start a worktree session; `conductor worktree list|merge|discard|gc` to manage them
+- **Worktree dashboard** — worktree toggle in new-session dialog, color-coded badge pill (green = active, blue = finalized, red = orphaned, orange = stale) with branch name and commit count. Finalized sessions persist in the sidebar until merged or discarded
+- **Worktree diff view** — "diff" button on active and finalized worktrees opens a syntax-highlighted unified diff dialog (additions in green, deletions in red, file headers in amber, hunks in blue)
+- **Worktree finalize button** — "finalize" button on active worktree sessions gracefully stops the agent, auto-commits changes, and keeps the session in the sidebar for merge/discard
+
+### File uploads
+
+- **Upload progress bar** — file uploads now show a real-time progress bar with loaded/total MB and percentage
+- **Desktop drag-and-drop upload** — drag files directly onto a terminal panel to upload; also supports clipboard paste (Ctrl+V) and the panel header attachment button
+- **Desktop upload button** — paperclip icon in the panel header for file uploads on desktop (touch devices use the existing extra-keys button)
+- **Configurable upload warning** — no hard upload size limit; files over the configured threshold (default 20 MB) prompt for confirmation. Threshold is adjustable in Settings ("Upload warning")
+
+### Dashboard UI
+
+- **Machine icons** — sidebar server group headers now show a monitor icon for clearer visual distinction from session items
+- **Empty state action** — the "Select a session or create a new one" screen now includes a "+ New Session" button to create a session directly
+- **Panel overflow menu** — header actions (theme, upload, font size, maximize) collapsed into a "⋯" menu; only the close button remains in the header bar
+- **Move panel** — rearrange panels in the layout via directional arrows (← → ↑ ↓) in the overflow menu
+- **Cleaner resumable sessions** — removed redundant red "resumable" badge from sidebar; the green play button is sufficient
+
+### CLI
+
+- **CLI resume** — `conductor resume <name>` resumes an exited session from the terminal, attaching automatically (use `-d` to resume in background)
+- **Restart/shutdown safety** — `conductor restart` and `conductor shutdown` now warn about active sessions before killing them; pass `-f` to skip
+
+### Fixes
+
+- Fixed extra-keys bar staying visible after cancelling the file picker on mobile/tablet
+- Fixed upload dialog overflowing on small phone screens
+- Queue overflow in subscriber broadcast now logs a warning instead of silently dropping output
+
 ## v0.3.6
 
 ### Fixes

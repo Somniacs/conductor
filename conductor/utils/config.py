@@ -40,7 +40,7 @@ WORKTREES_FILE = CONDUCTOR_DIR / "worktrees.json"
 # ── Defaults (overridden by ~/.conductor/config.yaml if it exists) ──────────
 
 BUFFER_MAX_BYTES = 1_000_000  # 1MB rolling buffer
-MAX_UPLOAD_SIZE = 10 * 1024 * 1024  # 10 MB
+UPLOAD_WARN_SIZE = 20 * 1024 * 1024  # 20 MB — frontend shows confirmation above this
 GRACEFUL_STOP_TIMEOUT = 30  # seconds before force-kill
 ALLOWED_IMAGE_TYPES = {"image/png", "image/jpeg", "image/gif", "image/webp", "image/bmp"}
 
@@ -105,7 +105,7 @@ def get_config_version() -> int:
 
 def load_user_config():
     """Load ~/.conductor/config.yaml and merge over defaults."""
-    global ALLOWED_COMMANDS, DEFAULT_DIRECTORIES, BUFFER_MAX_BYTES, MAX_UPLOAD_SIZE, GRACEFUL_STOP_TIMEOUT
+    global ALLOWED_COMMANDS, DEFAULT_DIRECTORIES, BUFFER_MAX_BYTES, UPLOAD_WARN_SIZE, GRACEFUL_STOP_TIMEOUT
 
     if not USER_CONFIG_FILE.exists():
         return
@@ -121,15 +121,15 @@ def load_user_config():
         DEFAULT_DIRECTORIES = data["default_directories"]
     if "buffer_max_bytes" in data and isinstance(data["buffer_max_bytes"], int):
         BUFFER_MAX_BYTES = data["buffer_max_bytes"]
-    if "max_upload_size" in data and isinstance(data["max_upload_size"], int):
-        MAX_UPLOAD_SIZE = data["max_upload_size"]
+    if "upload_warn_size" in data and isinstance(data["upload_warn_size"], int):
+        UPLOAD_WARN_SIZE = data["upload_warn_size"]
     if "graceful_stop_timeout" in data and isinstance(data["graceful_stop_timeout"], (int, float)):
         GRACEFUL_STOP_TIMEOUT = data["graceful_stop_timeout"]
 
 
 def save_user_config(data: dict):
     """Write settings to ~/.conductor/config.yaml and update in-memory values."""
-    global ALLOWED_COMMANDS, DEFAULT_DIRECTORIES, BUFFER_MAX_BYTES, MAX_UPLOAD_SIZE, GRACEFUL_STOP_TIMEOUT, _config_version
+    global ALLOWED_COMMANDS, DEFAULT_DIRECTORIES, BUFFER_MAX_BYTES, UPLOAD_WARN_SIZE, GRACEFUL_STOP_TIMEOUT, _config_version
 
     if "allowed_commands" in data and isinstance(data["allowed_commands"], list):
         ALLOWED_COMMANDS = data["allowed_commands"]
@@ -137,8 +137,8 @@ def save_user_config(data: dict):
         DEFAULT_DIRECTORIES = data["default_directories"]
     if "buffer_max_bytes" in data and isinstance(data["buffer_max_bytes"], int):
         BUFFER_MAX_BYTES = data["buffer_max_bytes"]
-    if "max_upload_size" in data and isinstance(data["max_upload_size"], int):
-        MAX_UPLOAD_SIZE = data["max_upload_size"]
+    if "upload_warn_size" in data and isinstance(data["upload_warn_size"], int):
+        UPLOAD_WARN_SIZE = data["upload_warn_size"]
     if "graceful_stop_timeout" in data and isinstance(data["graceful_stop_timeout"], (int, float)):
         GRACEFUL_STOP_TIMEOUT = data["graceful_stop_timeout"]
 
@@ -146,7 +146,7 @@ def save_user_config(data: dict):
         "allowed_commands": ALLOWED_COMMANDS,
         "default_directories": DEFAULT_DIRECTORIES,
         "buffer_max_bytes": BUFFER_MAX_BYTES,
-        "max_upload_size": MAX_UPLOAD_SIZE,
+        "upload_warn_size": UPLOAD_WARN_SIZE,
         "graceful_stop_timeout": GRACEFUL_STOP_TIMEOUT,
     }
 
@@ -161,19 +161,19 @@ def get_editable_settings() -> dict:
         "allowed_commands": ALLOWED_COMMANDS,
         "default_directories": DEFAULT_DIRECTORIES,
         "buffer_max_bytes": BUFFER_MAX_BYTES,
-        "max_upload_size": MAX_UPLOAD_SIZE,
+        "upload_warn_size": UPLOAD_WARN_SIZE,
         "graceful_stop_timeout": GRACEFUL_STOP_TIMEOUT,
     }
 
 
 def reset_to_defaults():
     """Reset all settings to built-in defaults and remove config.yaml."""
-    global ALLOWED_COMMANDS, DEFAULT_DIRECTORIES, BUFFER_MAX_BYTES, MAX_UPLOAD_SIZE, GRACEFUL_STOP_TIMEOUT, _config_version
+    global ALLOWED_COMMANDS, DEFAULT_DIRECTORIES, BUFFER_MAX_BYTES, UPLOAD_WARN_SIZE, GRACEFUL_STOP_TIMEOUT, _config_version
 
     ALLOWED_COMMANDS = list(_DEFAULT_ALLOWED_COMMANDS)
     DEFAULT_DIRECTORIES = list(_DEFAULT_DIRECTORIES)
     BUFFER_MAX_BYTES = 1_000_000
-    MAX_UPLOAD_SIZE = 10 * 1024 * 1024
+    UPLOAD_WARN_SIZE = 20 * 1024 * 1024
     GRACEFUL_STOP_TIMEOUT = 30
 
     if USER_CONFIG_FILE.exists():

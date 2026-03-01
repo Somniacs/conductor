@@ -201,6 +201,42 @@ Open the dashboard in your browser — locally at `http://127.0.0.1:7777`, or fr
 
 Want the dashboard always available? See [Auto-Start on Boot](docs/autostart.md) for systemd, launchd, and Task Scheduler setup.
 
+### Git worktree isolation
+
+When AI agents write code, they change files in your working directory — which can conflict with your own uncommitted work or other running agents. Conductor solves this with **git worktree isolation**: each session gets its own branch and working copy, so agents never step on each other or on your work. This works with any agent — Claude Code, Aider, Codex, Goose, Copilot, or any custom command.
+
+```bash
+# Start a session in an isolated worktree
+conductor run -w claude refactor-auth
+
+# Start another — both run in parallel on separate branches
+conductor run -w claude add-tests
+```
+
+Each worktree session:
+- Gets a fresh branch based on your current HEAD
+- Runs in its own directory (under `.conductor-worktrees/` in the repo)
+- Auto-commits changes when the session exits
+- Shows branch name and commit count in the dashboard sidebar
+
+When a session finishes, you decide what to do with the changes:
+
+```bash
+# See all worktrees and their status
+conductor worktree list
+
+# Merge changes back (squash, merge, or rebase)
+conductor worktree merge refactor-auth --strategy squash
+
+# Or discard if you don't want the changes
+conductor worktree discard add-tests
+
+# Clean up stale worktrees
+conductor worktree gc
+```
+
+You can also manage worktrees directly from the dashboard. The sidebar shows a color-coded badge for each worktree session: green while running, blue when finalized and ready to merge. While the agent is running, click **diff** to preview changes so far, or **finalize** to stop the agent and commit its work. Finalized sessions stay in the sidebar with **diff**, **merge**, and **discard** buttons until you decide what to do. Enable worktree mode by toggling the worktree switch in the new-session dialog (only appears in git repositories).
+
 ### Multi-machine setup
 
 Conductor supports connecting to multiple machines from a single dashboard. Each machine runs its own independent Conductor server. The dashboard in your browser connects to all of them directly — no central hub or proxy needed.
@@ -248,7 +284,7 @@ Added machines are saved in your browser's localStorage. Refresh the page or clo
 
 ### Session resume
 
-When an agent exits and prints a resume token — like Claude Code's `--resume <session-id>` — Conductor captures it from the terminal output automatically. The session stays in the sidebar as **resumable** with a play button. Click it and Conductor starts a new session with the original command plus the resume flag, picking up where you left off.
+When an agent exits and prints a resume token — like Claude Code's `--resume <session-id>` — Conductor captures it from the terminal output automatically. The session stays in the sidebar as **resumable** with a play button. Click it (or run `conductor resume <name>` from the terminal) and Conductor starts a new session with the original command plus the resume flag, picking up where you left off.
 
 Agents that manage their own session history — like Codex (`codex resume`) and Copilot (`copilot --resume`) — are always marked as resumable when they exit. Clicking the play button launches the agent's built-in resume command.
 
@@ -349,9 +385,10 @@ The web dashboard provides:
 - **Font size controls** — per-panel `+` / `−` buttons, adaptive defaults for desktop and mobile
 - **Idle notifications** — browser notification when a session is waiting for input (when tab not visible)
 - **Link Device** — QR code in the hamburger menu for opening the dashboard on another device
-- **Settings panel** — manage allowed commands, directories, buffer size, upload limits, and stop timeout from the dashboard (localhost only). Changes persist and propagate to all clients automatically
+- **Git worktree isolation** — run any agent in an isolated git worktree; each gets its own branch and working copy, so parallel agents never conflict with each other or your work. Auto-commits on exit, merge back with squash/merge/rebase. Dashboard shows a color-coded badge pill (green = active, blue = finalized, red = orphaned, orange = stale) with branch name and commit count. Active sessions show diff and finalize buttons; finalized worktrees get diff, merge, and discard. Sessions persist in the sidebar until merged or discarded
+- **Settings panel** — manage allowed commands, directories, buffer size, upload warning threshold, and stop timeout from the dashboard (localhost only). Changes persist and propagate to all clients automatically
 - **Server management** — add/remove servers, Tailscale device picker, QR scanner, connection status
-- **File upload** — paste (Ctrl+V), drag-and-drop, or use the attachment button to upload any file (images, PDFs, code, text, etc.); shows an upload dialog with progress, then lets you insert the file path into the terminal or copy it to clipboard. Uploaded files are auto-cleaned when the session ends
+- **File upload** — drag and drop files onto the terminal (desktop), paste from clipboard (Ctrl+V), or tap the attachment button (mobile) to upload any file (images, PDFs, code, text, etc.); shows an upload dialog with progress, then lets you insert the file path into the terminal or copy it to clipboard. Uploaded files are auto-cleaned when the session ends
 - **Mobile extra keys** — on-screen toolbar with ESC, TAB, arrows, CTRL, ALT, Page Up/Down, Home/End, and attachment button; appears above the virtual keyboard on touch devices, with collapsible drawer (state persisted)
 - **Mobile touch scroll** — smooth native one-finger scrolling with hardware-accelerated momentum
 - **Collapsible sidebar** — chevron toggle, auto-reopens when all panels close
@@ -367,14 +404,20 @@ The web dashboard provides:
 | `conductor serve` | Start the server (foreground) |
 | `conductor serve --host 0.0.0.0 --port 8888` | Custom host/port |
 | `conductor run COMMAND [NAME]` | Start session and attach (see output in terminal) |
+| `conductor run -w COMMAND [NAME]` | Start session in an isolated git worktree |
 | `conductor run -d COMMAND [NAME]` | Start session in background (detached) |
 | `conductor run --json COMMAND [NAME]` | Start session and print JSON (implies detach) |
 | `conductor attach NAME` | Attach to a running session |
+| `conductor resume NAME` | Resume an exited session (relaunch with resume token) |
 | `conductor list` | List active sessions |
 | `conductor list --json` | List sessions as JSON |
 | `conductor status` | Show server status |
 | `conductor status --json` | Show server status as JSON |
 | `conductor stop NAME` | Stop a session |
+| `conductor worktree list` | List all worktrees and their status |
+| `conductor worktree merge NAME` | Merge a worktree back (default: squash) |
+| `conductor worktree discard NAME` | Discard a worktree and its branch |
+| `conductor worktree gc` | Clean up stale worktrees |
 | `conductor shutdown` | Stop the server and all sessions |
 | `conductor restart` | Restart the server (picks up config changes) |
 | `conductor open` | Open the dashboard in the default browser |
@@ -400,6 +443,14 @@ Default port `7777`. All endpoints relative to your host. OpenAPI spec at `/open
 | `DELETE` | `/sessions/{id}` | Kill session (or dismiss a resumable session) |
 | `WS` | `/sessions/{id}/stream` | Bidirectional WebSocket — output out, keystrokes in |
 | `WS` | `/sessions/{id}/stream?typed=true` | Typed JSON WebSocket for agents |
+| `GET` | `/worktrees` | List all worktrees |
+| `GET` | `/worktrees/{name}/diff` | Unified diff for a worktree vs base |
+| `POST` | `/worktrees/{name}/merge/preview` | Preview merge (conflicts, changed files) |
+| `POST` | `/worktrees/{name}/merge` | Merge worktree (`{"strategy": "squash\|merge\|rebase"}`) |
+| `DELETE` | `/worktrees/{name}` | Discard worktree and branch |
+| `POST` | `/worktrees/gc` | Clean up stale/orphaned worktrees |
+| `GET` | `/worktrees/health` | Worktree health warnings |
+| `GET` | `/git/check?path=...` | Check if path is a git repo (for worktree toggle) |
 | `GET` | `/info` | Server identity (hostname, port, Tailscale IP/name) |
 | `GET` | `/tailscale/peers` | Online Tailscale peers for device picker |
 | `GET` | `/config` | Allowed commands and default directories |
@@ -516,6 +567,7 @@ conductor/
 │   ├── sessions/
 │   │   ├── session.py        # Session — PTY, buffer, subscribers
 │   │   └── registry.py       # In-memory session registry
+│   ├── worktrees/            # Git worktree lifecycle management
 │   ├── proxy/pty_wrapper.py  # PTY spawn and I/O
 │   └── utils/config.py       # Paths, ports, allowed commands
 ├── cli/main.py               # Click CLI

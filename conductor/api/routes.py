@@ -292,6 +292,7 @@ async def get_config():
     return {
         "allowed_commands": safe,
         "default_directories": cfg.DEFAULT_DIRECTORIES,
+        "upload_warn_size": cfg.UPLOAD_WARN_SIZE,
         "config_version": cfg.get_config_version(),
     }
 
@@ -457,8 +458,6 @@ async def upload_file(session_id: str, request: Request):
     body = await request.body()
     if not body:
         raise HTTPException(status_code=400, detail="Empty request body")
-    if len(body) > cfg.MAX_UPLOAD_SIZE:
-        raise HTTPException(status_code=413, detail=f"File too large (max {cfg.MAX_UPLOAD_SIZE // (1024*1024)} MB)")
 
     content_type = (request.headers.get("content-type") or "").split(";")[0].strip()
 
@@ -653,6 +652,8 @@ async def merge_worktree(name: str, req: MergeRequest):
     result = await loop.run_in_executor(
         None, manager.merge, info, req.strategy, req.message
     )
+    if result.success:
+        registry.dismiss_resumable(name)
     return {
         "success": result.success,
         "strategy": result.strategy,
@@ -680,6 +681,7 @@ async def delete_worktree(name: str, force: bool = False):
     try:
         loop = asyncio.get_event_loop()
         await loop.run_in_executor(None, manager.remove, info, force)
+        registry.dismiss_resumable(name)
         return {"status": "removed", "name": name}
     except ValueError as e:
         raise HTTPException(status_code=409, detail=str(e))

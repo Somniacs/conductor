@@ -296,13 +296,14 @@ class WorktreeManager:
         if status.strip():
             # Auto-commit everything
             try:
+                log.info("Auto-committing in %s:\n%s", info.name, status.strip())
                 _git("add", "-A", cwd=wt_path)
                 _git("commit", "-m",
                      f"conductor: auto-commit on session exit ({info.name})",
                      "--allow-empty-message",
                      cwd=wt_path, check=False)
                 info.has_changes = False
-                log.info("Auto-committed changes in worktree %s", info.name)
+                log.info("Auto-commit complete for worktree %s", info.name)
             except Exception as e:
                 log.warning("Failed to auto-commit in %s: %s", info.name, e)
                 info.has_changes = True
@@ -409,11 +410,14 @@ class WorktreeManager:
                 except Exception as e:
                     log.warning("Failed to remove worktree directory %s: %s", wt_path, e)
 
-        # Delete the branch
-        try:
-            _git("branch", "-D", info.branch, cwd=info.repo_path, check=False)
-        except Exception:
-            pass
+        # Delete the branch — try safe delete first to preserve unmerged work
+        r = _git("branch", "-d", info.branch, cwd=info.repo_path, check=False)
+        if r.returncode != 0:
+            if force:
+                _git("branch", "-D", info.branch, cwd=info.repo_path, check=False)
+            else:
+                log.info("Keeping branch %s (unmerged commits still recoverable)",
+                         info.branch)
 
         # Remove from state
         wt_state.remove_worktree(info.repo_path, info.name)
@@ -601,9 +605,33 @@ class WorktreeManager:
                         message=f"Unknown strategy: {strategy}",
                     )
 
+                # Check if target branch is currently checked out in main repo
+                sync_worktree = False
+                try:
+                    current = _git_output(
+                        "rev-parse", "--abbrev-ref", "HEAD", cwd=repo
+                    )
+                    sync_worktree = current == target
+                except Exception:
+                    pass
+
+                # Stash any uncommitted work before we touch the working tree
+                stashed = False
+                if sync_worktree:
+                    r = _git("stash", "push", "-m",
+                             "conductor-merge-autostash",
+                             cwd=repo, check=False)
+                    stashed = "No local changes" not in (r.stdout or "")
+
                 # Update the target branch ref in the main repo
                 merge_commit = _git_output("rev-parse", "HEAD", cwd=str(tmp_wt_dir))
                 _git("update-ref", f"refs/heads/{target}", merge_commit, cwd=repo)
+
+                # Sync working tree to match the new ref, then restore stash
+                if sync_worktree:
+                    _git("reset", "--hard", "HEAD", cwd=repo, check=False)
+                    if stashed:
+                        _git("stash", "pop", cwd=repo, check=False)
 
             finally:
                 # Clean up temp worktree
@@ -638,6 +666,9 @@ class WorktreeManager:
     def get_diff(self, info: WorktreeInfo, files_only: bool = False) -> str | list[dict]:
         """Get the diff for a worktree branch vs its base.
 
+        For finalized worktrees, compares committed branch state vs base.
+        For active worktrees, also includes uncommitted and untracked changes.
+
         Args:
             info: WorktreeInfo
             files_only: If True, return list of {path, status, additions, deletions}
@@ -649,11 +680,22 @@ class WorktreeManager:
         base = info.base_commit
         branch = info.branch
 
+        # Active worktrees: diff working tree (including uncommitted changes)
+        # against the base commit, run from the worktree directory.
+        active = (info.status == "active"
+                  and info.worktree_path
+                  and Path(info.worktree_path).is_dir())
+
         if files_only:
             try:
-                output = _git_output(
-                    "diff", "--numstat", f"{base}...{branch}", cwd=repo
-                )
+                if active:
+                    output = _git_output(
+                        "diff", "--numstat", base, cwd=info.worktree_path
+                    )
+                else:
+                    output = _git_output(
+                        "diff", "--numstat", f"{base}...{branch}", cwd=repo
+                    )
                 files = []
                 for line in output.strip().split("\n"):
                     if not line.strip():
@@ -667,12 +709,59 @@ class WorktreeManager:
                             "additions": adds,
                             "deletions": dels,
                         })
+                # For active worktrees, also include untracked files
+                if active:
+                    untracked = _git_output(
+                        "ls-files", "--others", "--exclude-standard",
+                        cwd=info.worktree_path
+                    )
+                    for f in untracked.split("\n"):
+                        f = f.strip()
+                        if not f:
+                            continue
+                        fpath = Path(info.worktree_path) / f
+                        lines = fpath.read_text(errors="replace").count("\n")
+                        files.append({
+                            "path": f,
+                            "additions": lines,
+                            "deletions": 0,
+                        })
                 return files
             except Exception:
                 return []
         else:
             try:
-                return _git_output("diff", f"{base}...{branch}", cwd=repo)
+                if active:
+                    # Diff tracked files (committed + uncommitted) vs base
+                    diff = _git_output("diff", base, cwd=info.worktree_path)
+                    # Append untracked (new) files as diff hunks
+                    untracked = _git_output(
+                        "ls-files", "--others", "--exclude-standard",
+                        cwd=info.worktree_path
+                    )
+                    for f in untracked.split("\n"):
+                        f = f.strip()
+                        if not f:
+                            continue
+                        fpath = Path(info.worktree_path) / f
+                        try:
+                            content = fpath.read_text(errors="replace")
+                        except Exception:
+                            continue
+                        lines = content.split("\n")
+                        hdr = (f"diff --git a/{f} b/{f}\n"
+                               f"new file mode 100644\n"
+                               f"--- /dev/null\n"
+                               f"+++ b/{f}\n"
+                               f"@@ -0,0 +1,{len(lines)} @@\n")
+                        hdr += "\n".join(f"+{l}" for l in lines)
+                        if diff:
+                            diff += "\n" + hdr
+                        else:
+                            diff = hdr
+                    return diff
+                else:
+                    return _git_output("diff", f"{base}...{branch}", cwd=repo)
             except Exception:
                 return ""
 
@@ -836,18 +925,22 @@ class WorktreeManager:
 
     @staticmethod
     def _ensure_gitignore(repo_root: str) -> None:
-        """Ensure .conductor-worktrees/ is in the repo's .gitignore."""
-        gitignore = Path(repo_root) / ".gitignore"
+        """Ensure .conductor-worktrees/ is excluded from git.
+
+        Uses .git/info/exclude (local, never committed) instead of the
+        repo's .gitignore to avoid polluting the tracked working tree.
+        """
+        exclude = Path(repo_root) / ".git" / "info" / "exclude"
         entry = f"/{_WORKTREE_DIR_NAME}/"
 
-        if gitignore.exists():
-            content = gitignore.read_text()
+        if exclude.exists():
+            content = exclude.read_text()
             if entry in content or _WORKTREE_DIR_NAME in content:
                 return
-            # Append to existing .gitignore
             if not content.endswith("\n"):
                 content += "\n"
             content += f"\n# Conductor worktrees\n{entry}\n"
-            gitignore.write_text(content)
+            exclude.write_text(content)
         else:
-            gitignore.write_text(f"# Conductor worktrees\n{entry}\n")
+            exclude.parent.mkdir(parents=True, exist_ok=True)
+            exclude.write_text(f"# Conductor worktrees\n{entry}\n")

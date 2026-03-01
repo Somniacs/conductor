@@ -801,8 +801,7 @@
         }
         .panel-header button:hover { color: #c0c0e0; }
         .panel-header button.close-btn:hover { color: #ff6666; }
-        .panel-header .font-btn { font-size: 13px; font-weight: 600; }
-        .panel-header .theme-btn { padding: 3px 6px; display: flex; align-items: center; }
+        .panel-header .panel-menu-btn { font-size: 14px; letter-spacing: 2px; }
         .theme-ring {
             display: inline-block;
             width: 12px; height: 12px;
@@ -849,6 +848,58 @@
             outline: 2px solid;
             outline-offset: 1px;
         }
+
+        .panel-menu {
+            display: none;
+            position: absolute;
+            top: 100%;
+            right: 0;
+            margin-top: 2px;
+            background: #16163a;
+            border: 1px solid #2a2a5a;
+            border-radius: 6px;
+            min-width: 150px;
+            box-shadow: 0 4px 16px rgba(0,0,0,0.4);
+            z-index: 500;
+            overflow: hidden;
+        }
+        .panel-menu.open { display: block; }
+        .panel-menu a {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 6px 12px;
+            font-size: 12px;
+            color: #c0c0e0;
+            text-decoration: none;
+            cursor: pointer;
+        }
+        .panel-menu a:hover { background: #1e1e4e; }
+        .panel-menu .menu-sep { height: 1px; background: #2a2a5a; margin: 2px 0; }
+        @media (pointer: coarse) { .panel-menu .pm-upload { display: none; } }
+
+        .pm-move-row {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            padding: 4px 12px 6px;
+            font-size: 12px;
+            color: #c0c0e0;
+        }
+        .pm-move-label { margin-right: auto; }
+        .pm-move-btn {
+            background: #1e1e4e;
+            border: 1px solid #2a2a5a;
+            border-radius: 4px;
+            color: #c0c0e0;
+            font-size: 13px;
+            width: 26px; height: 24px;
+            cursor: pointer;
+            display: flex; align-items: center; justify-content: center;
+            padding: 0; line-height: 1;
+        }
+        .pm-move-btn:hover:not(:disabled) { background: #2a2a6a; }
+        .pm-move-btn:disabled { opacity: 0.3; cursor: default; }
 
         .extra-keys-bar {
             position: fixed;
@@ -2080,7 +2131,7 @@
             };
         }
 
-        /* DEBUG overlay — uncomment _dbg() call in _fitPanelCore to enable
+        // DEBUG overlay — live terminal metrics on touch devices
         let _dbgEl = null;
         function _dbg(msg) {
             if (!('ontouchstart' in window)) return;
@@ -2091,7 +2142,27 @@
             }
             _dbgEl.textContent = msg;
         }
-        */
+        // Poll focused panel metrics every 500ms
+        if ('ontouchstart' in window) {
+            let _dbgBackend = '?×?';
+            setInterval(async () => {
+                const fp = panels.find(p => p.id === focusedPanelId);
+                if (!fp || !fp.terminal) { _dbg('no panel'); return; }
+                const b = fp.terminal.buffer?.active;
+                if (!b) return;
+                // Fetch backend dims
+                try {
+                    const r = await fetch(serverUrl(fp.server, `/sessions/${fp.sessionId}`));
+                    const info = await r.json();
+                    _dbgBackend = `${info.rows}×${info.cols}`;
+                } catch(e){}
+                _dbg(
+                    `[${fp.name}] term=${fp.terminal.rows}×${fp.terminal.cols}\n` +
+                    `backend=${_dbgBackend}\n` +
+                    `cursor y=${b.cursorY} baseY=${b.baseY} bufLen=${b.length}`
+                );
+            }, 500);
+        }
 
         // Core fit logic — can be called directly (synchronous) or via debounce.
         function _fitPanelCore(p) {
@@ -2704,6 +2775,59 @@
             return firstLeafId(node.children[0]);
         }
 
+        // --- Move panel within layout tree ---
+        function _canMovePanelInner(node, panelId, axis, fromIdx) {
+            if (!node || node.type === 'leaf') return false;
+            if (_canMovePanelInner(node.children[0], panelId, axis, fromIdx)) return true;
+            if (_canMovePanelInner(node.children[1], panelId, axis, fromIdx)) return true;
+            if (node.direction !== axis) return false;
+            return _subtreeContains(node.children[fromIdx], panelId);
+        }
+
+        function _subtreeContains(node, panelId) {
+            if (!node) return false;
+            if (node.type === 'leaf') return node.panelId === panelId;
+            return _subtreeContains(node.children[0], panelId) || _subtreeContains(node.children[1], panelId);
+        }
+
+        function canMovePanel(panelId, direction) {
+            const axis = (direction === 'left' || direction === 'right') ? 'horizontal' : 'vertical';
+            const fromIdx = (direction === 'left' || direction === 'up') ? 1 : 0;
+            return _canMovePanelInner(layoutRoot, panelId, axis, fromIdx);
+        }
+
+        function _doMovePanel(node, panelId, axis, fromIdx) {
+            if (!node || node.type === 'leaf') return false;
+            if (_doMovePanel(node.children[0], panelId, axis, fromIdx)) return true;
+            if (_doMovePanel(node.children[1], panelId, axis, fromIdx)) return true;
+            if (node.direction !== axis) return false;
+            if (_subtreeContains(node.children[fromIdx], panelId)) {
+                const tmp = node.children[0];
+                node.children[0] = node.children[1];
+                node.children[1] = tmp;
+                return true;
+            }
+            return false;
+        }
+
+        function movePanel(panelId, direction) {
+            const axis = (direction === 'left' || direction === 'right') ? 'horizontal' : 'vertical';
+            const fromIdx = (direction === 'left' || direction === 'up') ? 1 : 0;
+            if (!_doMovePanel(layoutRoot, panelId, axis, fromIdx)) return;
+            closePanelMenus();
+            layoutPanels();
+            setFocus(panelId);
+        }
+
+        function _refreshMoveButtons(panelId) {
+            const menu = document.getElementById(`panel-menu-${panelId}`);
+            if (!menu) return;
+            menu.querySelectorAll('.pm-move-btn').forEach(btn => {
+                const dir = btn.dataset.dir;
+                btn.disabled = !canMovePanel(panelId, dir);
+            });
+        }
+
         const MIN_COLS = 80;
 
         // Build the panel DOM + terminal ONCE. This is only called when a session is first opened.
@@ -2755,16 +2879,35 @@
                 <div class="panel-header">
                     <span class="panel-title">${escHtml(panel.name)}${serverLabel}</span>
                     <div class="panel-header-actions" style="position:relative;">
-                        <button class="theme-btn" id="theme-btn-${escHtml(panel.id)}" onclick="toggleThemeMenu('${pid}')" title="Color scheme"><span class="theme-ring" style="background:${THEMES['default'].dot};border-color:${contrastGrey(THEMES['default'].dot)}"></span></button>
+                        <button class="panel-menu-btn" onclick="togglePanelMenu('${pid}')" title="Menu">&ctdot;</button>
+                        <div class="panel-menu" id="panel-menu-${escHtml(panel.id)}">
+                            <a onclick="event.stopPropagation();toggleThemeMenu('${pid}')"><span class="theme-ring" style="background:${THEMES['default'].dot};border-color:${contrastGrey(THEMES['default'].dot)}"></span> Theme</a>
+                            <a class="pm-upload" onclick="event.stopPropagation();triggerUpload();closePanelMenus()">&#x1F4CE; Upload file</a>
+                            <div class="menu-sep"></div>
+                            <a onclick="event.stopPropagation();changeFontSize('${pid}',-1);closePanelMenus()">&#8722; Smaller</a>
+                            <a onclick="event.stopPropagation();changeFontSize('${pid}',1);closePanelMenus()">+ Bigger</a>
+                            <div class="menu-sep"></div>
+                            <a class="pm-maximize" onclick="event.stopPropagation();toggleMaximize('${pid}');closePanelMenus()">${_maximizedPanelId === panel.id ? '&#x25F3; Restore layout' : '&#x25A1; Maximize'}</a>
+                            <div class="menu-sep"></div>
+                            <div class="pm-move-row">
+                                <span class="pm-move-label">Move</span>
+                                <button class="pm-move-btn" data-dir="left" onclick="event.stopPropagation();movePanel('${pid}','left')" title="Move left">&#x2190;</button>
+                                <button class="pm-move-btn" data-dir="right" onclick="event.stopPropagation();movePanel('${pid}','right')" title="Move right">&#x2192;</button>
+                                <button class="pm-move-btn" data-dir="up" onclick="event.stopPropagation();movePanel('${pid}','up')" title="Move up">&#x2191;</button>
+                                <button class="pm-move-btn" data-dir="down" onclick="event.stopPropagation();movePanel('${pid}','down')" title="Move down">&#x2193;</button>
+                            </div>
+                        </div>
                         <div class="theme-menu" id="theme-menu-${escHtml(panel.id)}">
                             ${THEME_ORDER.map(k => `<a onclick="event.stopPropagation();setTheme('${pid}','${k}')" data-theme="${k}" data-cursor="${THEMES[k].cursor}"><span class="theme-dot" style="background:${THEMES[k].dot};border-color:${contrastGrey(THEMES[k].dot)}"></span>${THEMES[k].label}</a>`).join('')}
                         </div>
-                        <button class="font-btn" onclick="changeFontSize('${pid}', -1)" title="Smaller">&#8722;</button>
-                        <button class="font-btn" onclick="changeFontSize('${pid}', 1)" title="Bigger">+</button>
                         <button class="close-btn" onclick="closePanel('${pid}')">&times;</button>
                     </div>
                 </div>
             `;
+            // Prevent header buttons from stealing focus (keeps mobile keyboard open)
+            const hdrActions = div.querySelector('.panel-header-actions');
+            if (hdrActions) hdrActions.addEventListener('mousedown', e => e.preventDefault());
+
             div.appendChild(termOuter);
 
             // Double-click title to maximize/restore panel
@@ -2886,9 +3029,13 @@
                 }
             });
 
-            // Clicking anywhere on the panel sets focus
-            div.addEventListener('mousedown', () => setFocus(panel.id));
-            div.addEventListener('touchstart', () => setFocus(panel.id), { passive: true });
+            // Clicking anywhere on the panel sets focus (but not from header buttons)
+            div.addEventListener('mousedown', (e) => {
+                if (!e.target.closest('.panel-header-actions')) setFocus(panel.id);
+            });
+            div.addEventListener('touchstart', (e) => {
+                if (!e.target.closest('.panel-header-actions')) setFocus(panel.id);
+            }, { passive: true });
         }
 
         // Ensure the xterm terminal is opened into its container and sized correctly.
@@ -3159,10 +3306,15 @@
                 // and resize xterm.js to match (host terminal is the authority).
                 if (!panel.ws) connectWebSocket(panel);
 
-                // Watch the scroll container (not the wrapper) for size changes
+                // Watch the flex-sized outer container for size changes.
+                // .panel-terminal gets an explicit pixel height from _fitPanelCore
+                // (to fix mobile keyboard sizing), so it stops tracking its parent.
+                // .panel-terminal-outer follows flex naturally and triggers refits
+                // when the split divider is dragged or window is resized.
                 if (typeof ResizeObserver !== 'undefined') {
+                    const outerObs = panel._termEl.parentElement; // .panel-terminal-outer
                     panel._resizeObserver = new ResizeObserver(() => fitPanel(panel));
-                    panel._resizeObserver.observe(panel._termEl);
+                    panel._resizeObserver.observe(outerObs);
                 }
             }
         }
@@ -3517,6 +3669,26 @@
             });
         }
 
+        function togglePanelMenu(id) {
+            const menu = document.getElementById(`panel-menu-${id}`);
+            if (!menu) return;
+            // Close all other panel menus
+            document.querySelectorAll('.panel-menu.open').forEach(m => {
+                if (m !== menu) m.classList.remove('open');
+            });
+            // Update maximize/restore label before showing
+            const maxItem = menu.querySelector('.pm-maximize');
+            if (maxItem) {
+                maxItem.innerHTML = _maximizedPanelId === id ? '&#x25F3; Restore layout' : '&#x25A1; Maximize';
+            }
+            _refreshMoveButtons(id);
+            menu.classList.toggle('open');
+        }
+
+        function closePanelMenus() {
+            document.querySelectorAll('.panel-menu.open').forEach(m => m.classList.remove('open'));
+        }
+
         function toggleThemeMenu(id) {
             const menu = document.getElementById(`theme-menu-${id}`);
             // Close all other theme menus first
@@ -3556,10 +3728,10 @@
             panel.terminal.options.theme = themeObj;
             // Also update the panel background to match
             panel.element.style.background = t.background;
-            // Update the theme button ring to reflect active theme
-            const btn = document.getElementById(`theme-btn-${id}`);
-            if (btn) {
-                const ring = btn.querySelector('.theme-ring');
+            // Update the theme ring in the panel menu to reflect active theme
+            const pmenu = document.getElementById(`panel-menu-${id}`);
+            if (pmenu) {
+                const ring = pmenu.querySelector('.theme-ring');
                 if (ring) {
                     ring.style.background = t.dot;
                     ring.style.borderColor = contrastGrey(t.dot);
@@ -3578,10 +3750,13 @@
             }
         }
 
-        // Close theme menus when clicking elsewhere
+        // Close menus when clicking elsewhere
         document.addEventListener('click', (e) => {
-            if (!e.target.closest('.theme-menu') && !e.target.closest('.theme-btn')) {
+            if (!e.target.closest('.theme-menu') && !e.target.closest('.panel-menu')) {
                 document.querySelectorAll('.theme-menu.open').forEach(m => m.classList.remove('open'));
+            }
+            if (!e.target.closest('.panel-menu') && !e.target.closest('.panel-menu-btn')) {
+                closePanelMenus();
             }
         });
 
@@ -4889,18 +5064,38 @@
             const serverKey = cid.includes('::') ? cid.split('::')[0] : 'local';
             const sessionName = name;
 
-            // Fetch merge preview
+            // Show dialog immediately with spinner
+            showOverlayDialog(`
+                <div class="merge-dialog">
+                    <h3>Merge "${escHtml(sessionName)}"</h3>
+                    <div style="display:flex;align-items:center;justify-content:center;gap:8px;padding:24px 0;color:#7878a0;font-size:12px;">
+                        <span class="spinner"></span> Loading merge preview...
+                    </div>
+                    <div class="merge-actions">
+                        <button onclick="closeMergeDialog()" style="background:#1a1a3a;border:1px solid #2a2a5a;color:#a0a0d0;">Cancel</button>
+                    </div>
+                </div>
+            `);
+
+            // Fetch merge preview in the background
             try {
                 const resp = await fetch(serverUrl(serverKey, `/worktrees/${encodeURIComponent(sessionName)}/merge/preview`), {
                     method: 'POST',
                 });
                 if (!resp.ok) {
+                    closeMergeDialog();
                     alert('Failed to load merge preview');
                     return;
                 }
                 const preview = await resp.json();
 
-                // Build merge dialog
+                // Nothing to merge — show brief message and close
+                if (!preview.can_merge) {
+                    closeMergeDialog();
+                    alert(preview.message || 'Nothing to merge');
+                    return;
+                }
+
                 const conflictHtml = preview.conflict_files.length > 0
                     ? `<div class="conflict-warning">
                         <strong>${preview.conflict_files.length} conflict(s)</strong>
@@ -4924,14 +5119,20 @@
                         </div>
                         <div class="merge-actions">
                             <button onclick="closeMergeDialog()" style="background:#1a1a3a;border:1px solid #2a2a5a;color:#a0a0d0;">Cancel</button>
-                            <button id="merge-confirm-btn" onclick="executeMerge('${cid.replace(/'/g, "\\'")}','${sessionName.replace(/'/g, "\\'")}')" style="background:#2a5a2a;border:1px solid #3a7a3a;color:#44dd77;" ${!preview.can_merge ? 'disabled' : ''}>
-                                ${preview.can_merge ? 'Merge' : 'Cannot merge'}
+                            <button id="merge-confirm-btn" onclick="executeMerge('${cid.replace(/'/g, "\\'")}','${sessionName.replace(/'/g, "\\'")}')" style="background:#2a5a2a;border:1px solid #3a7a3a;color:#44dd77;">
+                                Merge
                             </button>
                         </div>
                     </div>
                 `;
-                showOverlayDialog(content);
+                // Replace spinner with full content (if dialog still open)
+                const overlay = document.getElementById('merge-overlay');
+                if (overlay && overlay.style.display === 'flex') {
+                    const inner = overlay.querySelector('.overlay-inner') || overlay.firstElementChild;
+                    if (inner) inner.innerHTML = content;
+                }
             } catch (e) {
+                closeMergeDialog();
                 alert('Failed to connect to server');
             }
         }
