@@ -2259,6 +2259,8 @@
                 }
             } else {
                 // Browser-only session — reset any CLI-owned dimensions
+                const prevRows = p.terminal.rows;
+                const prevCols = p.terminal.cols;
                 target.style.minWidth = '';
                 target.style.width = '';
                 target.style.height = '';
@@ -2286,7 +2288,28 @@
                 if (p.terminal.cols < MIN_COLS) {
                     p.terminal.resize(MIN_COLS, p.terminal.rows);
                 }
+
                 syncResizeToPTY(p);
+
+                // Layout changes (panel added/removed) cause xterm.js
+                // buffer reflow that corrupts the cursor position.
+                // The CLI's SIGWINCH response is diff-based (Ink) and
+                // can't fix the corrupted state.  Force a WebSocket
+                // reconnect: ws.onopen does terminal.reset() + buffer
+                // replay, rendering into a clean terminal.  Only fires
+                // once per layout change — keyboard open/close does NOT
+                // set the flag, so no reconnect on focus tap.
+                const layoutChanged = p._layoutChanged;
+                p._layoutChanged = false;   // consume unconditionally
+                const sizeDecreased = (p.terminal.rows < prevRows || p.terminal.cols < prevCols)
+                                       && prevRows > 0;
+                if (layoutChanged && sizeDecreased
+                    && p.ws && p.ws.readyState === WebSocket.OPEN) {
+                    const oldWs = p.ws;
+                    oldWs.onclose = null;   // suppress auto-reconnect
+                    oldWs.close();
+                    connectWebSocket(p);    // ws.onopen → reset + clean replay
+                }
             }
 
             // Sync scroll proxies to match the actual panel height.
@@ -3343,6 +3366,16 @@
 
             renderSessionList();
 
+            // Mark all panels — xterm.js reflow on resize corrupts the
+            // cursor position.  _fitPanelCore uses _layoutChanged to
+            // trigger a WS reconnect, and ws.onopen uses
+            // _needsCleanReplay to discard the old-dimension buffer
+            // and request a fresh CLI repaint via SIGWINCH.
+            panels.forEach(p => {
+                p._layoutChanged = true;
+                p._needsCleanReplay = true;
+            });
+
             // Open terminals that haven't been opened yet + refit all
             requestAnimationFrame(() => {
                 panels.forEach(p => ensureTerminalOpen(p));
@@ -4033,11 +4066,33 @@
                 // must not be written until the terminal has the correct size.
                 _fitPanelCore(panel);
 
-                // Now that dimensions are correct, allow buffered data to flush.
-                panel._dimensionsReady = true;
-                if (writeBuf.length && !writeRaf) writeRaf = requestAnimationFrame(flushWrites);
+                const needsClean = panel._needsCleanReplay;
+                panel._needsCleanReplay = false;
 
-                setTimeout(() => { panel._bufferReplay = false; }, 1500);
+                if (needsClean) {
+                    // Layout change: the buffer contains data at old PTY
+                    // dimensions whose ANSI cursor positioning corrupts
+                    // xterm.js state on reflow.  Discard it, reset the
+                    // terminal, then trigger a fresh SIGWINCH so the CLI
+                    // does a full repaint into a clean terminal.
+                    setTimeout(() => {
+                        panel._bufferReplay = false;
+                        if (writeRaf) { cancelAnimationFrame(writeRaf); writeRaf = null; }
+                        writeBuf = [];
+                        if (panel.terminal) panel.terminal.reset();
+                        panel._dimensionsReady = true;
+                        // Re-send current size → ioctl TIOCSWINSZ → SIGWINCH
+                        // even though PTY is already at this size.
+                        syncResizeToPTY(panel);
+                    }, 500);
+                } else {
+                    // Normal: flush buffer replay after SIGWINCH delay.
+                    setTimeout(() => {
+                        panel._dimensionsReady = true;
+                        if (writeBuf.length && !writeRaf) writeRaf = requestAnimationFrame(flushWrites);
+                    }, 500);
+                    setTimeout(() => { panel._bufferReplay = false; }, 1500);
+                }
             };
 
             // Batch incoming WebSocket data and flush once per animation frame
