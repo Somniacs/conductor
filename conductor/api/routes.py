@@ -604,6 +604,10 @@ async def get_worktree_diff(name: str, files: bool = False):
 @router.post("/worktrees/{name}/finalize")
 async def finalize_worktree(name: str):
     """Explicitly finalize a worktree — auto-commit changes and mark as finalized."""
+    # Must not be running — stop first
+    session = registry.get(name)
+    if session and session.status == "running":
+        raise HTTPException(status_code=409, detail="Session is still running. Stop it first.")
 
     manager = registry.worktree_manager
     worktrees = manager.list_worktrees()
@@ -681,8 +685,12 @@ async def merge_worktree(name: str, req: MergeRequest):
     result = await loop.run_in_executor(
         None, manager.merge, info, req.strategy, req.message
     )
-    if result.success:
-        registry.dismiss_resumable(name)
+    # Sync updated worktree info (base_commit, commits_ahead) into resumable
+    if result.success and name in registry.resumable:
+        meta = registry.resumable[name]
+        if meta.get("worktree"):
+            meta["worktree"]["base_commit"] = info.base_commit
+            meta["worktree"]["commits_ahead"] = 0
     return {
         "success": result.success,
         "strategy": result.strategy,

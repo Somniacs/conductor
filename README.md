@@ -216,10 +216,10 @@ conductor run -w claude add-tests
 Each worktree session:
 - Gets a fresh branch based on your current HEAD
 - Runs in its own directory (under `.conductor-worktrees/` in the repo)
-- Auto-commits changes when the session exits
+- Auto-commits changes when the session stops or before a merge
 - Shows branch name and commit count in the dashboard sidebar
 
-When a session finishes, you decide what to do with the changes:
+The worktree lifecycle is simple: **work → merge → repeat → delete**.
 
 ```bash
 # See all worktrees and their status
@@ -235,7 +235,15 @@ conductor worktree discard add-tests
 conductor worktree gc
 ```
 
-You can also manage worktrees directly from the dashboard. The sidebar shows a color-coded badge for each worktree session: green while running, blue when finalized and ready to merge. While the agent is running, click **diff** to preview changes so far, or **finalize** to stop the agent and commit its work. Finalized sessions stay in the sidebar with **diff**, **merge**, and **discard** buttons until you decide what to do. Enable worktree mode by toggling the worktree switch in the new-session dialog (only appears in git repositories).
+**Merging is non-destructive.** When you merge, the worktree stays alive. You can resume the session, make more changes, and merge again — as many times as needed. The merge button only appears when there are new commits to merge. When you're fully done, delete the worktree with the × button.
+
+You can also manage worktrees directly from the dashboard. The sidebar shows a git-branch icon for worktree sessions with the branch name and commit count. Stopped worktree sessions show three buttons:
+
+- **▶ Resume** — reopen the session and keep working
+- **↻ Merge** — opens a merge dialog with diff preview, conflict detection, and strategy picker (squash/merge/rebase). Click "Show diff" for a fullscreen diff viewer with file sidebar, keyboard navigation, and font zoom
+- **× Delete** — remove the worktree and its branch
+
+Enable worktree mode by toggling the worktree switch in the new-session dialog (only appears in git repositories).
 
 ### Multi-machine setup
 
@@ -385,7 +393,8 @@ The web dashboard provides:
 - **Font size controls** — per-panel `+` / `−` buttons, adaptive defaults for desktop and mobile
 - **Idle notifications** — browser notification when a session is waiting for input (when tab not visible)
 - **Link Device** — QR code in the hamburger menu for opening the dashboard on another device
-- **Git worktree isolation** — run any agent in an isolated git worktree; each gets its own branch and working copy, so parallel agents never conflict with each other or your work. Auto-commits on exit, merge back with squash/merge/rebase. Dashboard shows a color-coded badge pill (green = active, blue = finalized, red = orphaned, orange = stale) with branch name and commit count. Active sessions show diff and finalize buttons; finalized worktrees get diff, merge, and discard. Sessions persist in the sidebar until merged or discarded
+- **Git worktree isolation** — run any agent in an isolated git worktree; each gets its own branch and working copy, so parallel agents never conflict with each other or your work. Auto-commits before merge, non-destructive merge cycle (work → merge → resume → merge again → delete when done). Merge dialog with conflict detection, strategy picker (squash/merge/rebase), and fullscreen diff viewer with file sidebar, keyboard navigation (j/k, ↑/↓), and font zoom (+/−). Merge button only appears when there are commits to merge
+- **Layout persistence** — open panels, split layout, and focus are saved to localStorage and restored on page reload; only panels with running sessions are restored
 - **Settings panel** — manage allowed commands, directories, buffer size, upload warning threshold, and stop timeout from the dashboard (localhost only). Changes persist and propagate to all clients automatically
 - **Server management** — add/remove servers, Tailscale device picker, QR scanner, connection status
 - **File upload** — drag and drop files onto the terminal (desktop), paste from clipboard (Ctrl+V), or tap the attachment button (mobile) to upload any file (images, PDFs, code, text, etc.); shows an upload dialog with progress, then lets you insert the file path into the terminal or copy it to clipboard. Uploaded files are auto-cleaned when the session ends

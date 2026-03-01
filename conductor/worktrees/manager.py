@@ -522,12 +522,22 @@ class WorktreeManager:
         Returns:
             MergeResult with success/failure info
         """
+        # Block merge while session is still running
+        if info.session_id in self._active_sessions:
+            return MergeResult(
+                success=False,
+                strategy=strategy,
+                merged_branch=info.branch,
+                target_branch=info.base_branch,
+                message=f"Cannot merge: session '{info.name}' is still running. Stop it first.",
+            )
+
         repo = info.repo_path
         branch = info.branch
         target = info.base_branch
         wt_path = info.worktree_path
 
-        # Auto-commit any uncommitted changes so they're included in the merge
+        # Auto-commit any uncommitted changes before merging
         if Path(wt_path).exists():
             try:
                 status = _git_output("status", "--porcelain", cwd=wt_path)
@@ -652,8 +662,16 @@ class WorktreeManager:
                 message=f"Git error: {e.stderr or e.stdout or str(e)}",
             )
 
-        # Success — clean up the session worktree and branch
-        self.remove(info, force=True)
+        # Success — advance base_commit to worktree branch HEAD so
+        # _count_commits_ahead returns 0 (squash creates a different commit
+        # on target, so comparing against target HEAD would still show ahead)
+        try:
+            new_base = _git_output("rev-parse", branch, cwd=repo)
+            info.base_commit = new_base
+            info.commits_ahead = 0
+            wt_state.update_worktree(repo, info.name, info.to_dict())
+        except Exception as e:
+            log.warning("Failed to update base_commit after merge: %s", e)
 
         log.info("Merged worktree %s into %s (strategy: %s, %d commits)",
                  info.name, target, strategy, commits_ahead)

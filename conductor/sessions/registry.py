@@ -252,7 +252,19 @@ class SessionRegistry:
 
     def list_all(self) -> list[dict]:
         live = [s.to_dict() for s in self.sessions.values()]
-        resumable = list(self.resumable.values())
+        # Refresh worktree commits_ahead for resumable sessions
+        resumable = []
+        for meta in self.resumable.values():
+            if meta.get("worktree") and self.worktree_manager:
+                try:
+                    from conductor.worktrees.manager import WorktreeInfo
+                    info = WorktreeInfo.from_dict(meta["worktree"])
+                    ahead = self.worktree_manager._count_commits_ahead(info)
+                    if ahead != meta["worktree"].get("commits_ahead", 0):
+                        meta["worktree"]["commits_ahead"] = ahead
+                except Exception:
+                    pass
+            resumable.append(meta)
         return live + resumable
 
     async def remove(self, session_id: str):

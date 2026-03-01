@@ -18,10 +18,21 @@ All notable changes to Conductor are documented here.
 ### Worktree UX overhaul
 
 - **Worktrees are normal sessions** — worktree sessions now behave exactly like regular sessions: same play/stop buttons, same terminal handling, no special read-only mode
-- **Merge anytime** — merge a worktree into its base branch at any time, even while the session is running; uncommitted changes are auto-committed before merge
+- **Non-destructive merge** — merge a worktree into its base branch, then resume and keep working; merge again as many times as needed. The worktree stays alive until you explicitly delete it
+- **Merge button visibility** — the ↻ merge button only appears when there are actual commits to merge; disappears after a successful merge and reappears when new changes are committed
+- **Merge busy dialog** — blocking spinner during merge operations to prevent interaction while the merge runs
+- **Fullscreen diff viewer** — "Show diff" in the merge dialog opens a dedicated fullscreen overlay with:
+  - File sidebar on the left with per-file addition/deletion counts
+  - ▲/▼ navigation buttons and keyboard shortcuts (↑/↓ or j/k) to jump between files
+  - File position indicator (e.g. "1 / 5")
+  - Font zoom controls (A−/A+) with keyboard shortcuts (+/−), range 8px–24px
+  - Color-coded diff lines: green additions, red deletions, blue hunks, amber file headers
+  - Responsive: sidebar hidden on mobile, header wraps with close button always accessible
+  - Escape to close
 - **No finalize step** — removed the finalize concept; merge and discard are always available directly
 - **Worktree branch icon** — larger git-branch icon on the left side of worktree session items; branch name only shown in subtitle when it differs from the session name
 - **Discard via × button** — the dismiss button on exited worktree sessions triggers discard (with confirmation), matching the normal session pattern
+- **Live commits_ahead** — worktree commit count is refreshed on every session list fetch, so the sidebar always reflects the current git state
 
 ### Dashboard UI
 
@@ -31,6 +42,12 @@ All notable changes to Conductor are documented here.
 - **New session opens full-screen** — creating or resuming a session closes all existing panels and opens the new one as the only terminal
 - **Play button styling** — dimmed green by default, bright on hover; removed redundant spinner badges from sidebar items
 - **Server connection state** — server dots show an unfilled/unknown state on page load; only colored green or red once the connection is confirmed
+
+### Mobile fixes
+
+- **Layout restore on mobile** — saved layout is correctly restored after page reload; sidebar no longer opens on top of restored panels
+- **Drawer no longer pops open** — automated panel cleanup (orphan/stale server removal) no longer triggers the sidebar drawer; drawer only opens from deliberate user actions
+- **Cursor scroll on focus** — tapping into a terminal on mobile now scrolls the cursor into view on the first tap (previously required a second tap due to a resize timing issue during the split-to-single-view transition)
 
 ## v0.3.7
 

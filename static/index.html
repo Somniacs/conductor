@@ -207,6 +207,8 @@
         .session-actions button:hover { color: #999; }
         .session-actions button.resume-btn { color: #44dd77; opacity: 0.4; }
         .session-actions button.resume-btn:hover { color: #44dd77; opacity: 1; }
+        .session-actions button.merge-btn-inline { color: #60a0e0; opacity: 0.4; font-size: 16px; }
+        .session-actions button.merge-btn-inline:hover { color: #80c0ff; opacity: 1; }
 
         /* Server group headers in sidebar */
         .server-group-header {
@@ -399,6 +401,83 @@
         .merge-dialog .merge-actions { display: flex; gap: 8px; justify-content: flex-end; }
         .merge-dialog .merge-actions button {
             padding: 6px 14px; border-radius: 5px; font-size: 12px; cursor: pointer;
+        }
+        .merge-dialog .diff-toggle {
+            font-size: 11px; color: #6a6aaa; cursor: pointer; margin-bottom: 8px;
+        }
+        .merge-dialog .diff-toggle:hover { color: #a0a0d0; }
+
+        /* Fullscreen diff overlay */
+        #diff-overlay {
+            display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+            background: #0a0a18; z-index: 10001; flex-direction: column;
+        }
+        #diff-overlay.open { display: flex; }
+        .diff-header {
+            display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+            padding: 10px 16px; background: #12122a; border-bottom: 1px solid #2a2a5a;
+            flex-shrink: 0;
+        }
+        .diff-header h3 { margin: 0; font-size: 14px; color: #d0d0e8; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .diff-header .diff-stats { font-size: 11px; color: #7878a0; }
+        .diff-header .diff-stats .st-add { color: #44dd77; }
+        .diff-header .diff-stats .st-del { color: #ff6666; }
+        .diff-nav-btn {
+            background: none; border: 1px solid #3a3a6a; color: #a0a0d0;
+            padding: 4px 10px; border-radius: 4px; cursor: pointer; font-size: 12px;
+            min-width: 28px; flex-shrink: 0;
+        }
+        .diff-nav-btn:hover { background: #1a1a3a; color: #d0d0e8; }
+        .diff-nav-btn:disabled { opacity: 0.3; cursor: default; }
+        .diff-nav-btn:disabled:hover { background: none; color: #a0a0d0; }
+        .diff-nav-pos { font-size: 11px; color: #7878a0; min-width: 40px; text-align: center; }
+        .diff-close-btn {
+            background: none; border: 1px solid #3a3a6a; color: #a0a0d0;
+            padding: 4px 8px; border-radius: 4px; cursor: pointer; font-size: 18px;
+            flex-shrink: 0; line-height: 1;
+        }
+        .diff-close-btn:hover { background: #1a1a3a; color: #d0d0e8; }
+        .diff-main {
+            flex: 1; display: flex; overflow: hidden;
+        }
+        /* File sidebar */
+        .diff-sidebar {
+            width: 260px; min-width: 200px; background: #0e0e22;
+            border-right: 1px solid #2a2a5a; overflow-y: auto; flex-shrink: 0;
+        }
+        .diff-sidebar-item {
+            display: flex; align-items: center; gap: 6px;
+            padding: 6px 12px; cursor: pointer; font-size: 11px;
+            color: #8888bb; border-left: 3px solid transparent;
+        }
+        .diff-sidebar-item:hover { background: #14142e; }
+        .diff-sidebar-item.active { background: #1a1a3a; border-left-color: #5588cc; color: #d0d0e8; }
+        .diff-sidebar-item .sb-file { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; direction: rtl; text-align: left; }
+        .diff-sidebar-item .sb-add { color: #44dd77; font-size: 10px; }
+        .diff-sidebar-item .sb-del { color: #ff6666; font-size: 10px; }
+        /* Diff content */
+        .diff-content {
+            flex: 1; overflow: auto; padding: 0;
+            font-family: monospace; font-size: 12px; line-height: 1.5;
+            background: #0a0a18; white-space: pre;
+        }
+        .diff-content .diff-section { margin: 0; }
+        .diff-content .diff-section-header {
+            color: #ddaa44; font-weight: bold; padding: 8px 16px; margin: 0;
+            background: #14142a; border-bottom: 1px solid #2a2a4a;
+            display: flex; align-items: center; gap: 8px;
+            position: sticky; top: 0; z-index: 1;
+        }
+        .diff-content .diff-section-content {
+            padding: 0; background: #0a0a1a; border-bottom: 1px solid #1a1a3a;
+        }
+        .diff-content .diff-line { padding: 0 16px; }
+        .diff-content .diff-add { color: #44dd77; background: rgba(68,221,119,0.05); }
+        .diff-content .diff-del { color: #ff6666; background: rgba(255,102,102,0.05); }
+        .diff-content .diff-hunk { color: #6688cc; background: rgba(102,136,204,0.06); padding: 2px 16px; }
+        .diff-content .diff-ctx { color: #6a6a8a; }
+        @media (max-width: 700px) {
+            .diff-sidebar { display: none; }
         }
 
         /* Confirm dialog */
@@ -1937,6 +2016,28 @@
         </div>
     </div>
 
+    <!-- Fullscreen diff viewer -->
+    <div id="diff-overlay">
+        <div class="diff-header">
+            <h3 id="diff-title">Diff</h3>
+            <button class="diff-close-btn" onclick="closeDiffOverlay()">&times;</button>
+            <div class="diff-toolbar" style="display:flex;align-items:center;gap:6px;width:100%;">
+                <span class="diff-stats" id="diff-stats"></span>
+                <span style="flex:1;"></span>
+                <button class="diff-nav-btn" id="diff-prev" onclick="diffNavPrev()" title="Previous file (↑)">&#9650;</button>
+                <span class="diff-nav-pos" id="diff-nav-pos"></span>
+                <button class="diff-nav-btn" id="diff-next" onclick="diffNavNext()" title="Next file (↓)">&#9660;</button>
+                <span style="border-left:1px solid #2a2a5a;height:20px;margin:0 2px;"></span>
+                <button class="diff-nav-btn" onclick="diffZoom(-1)" title="Zoom out (-)">A&#8722;</button>
+                <button class="diff-nav-btn" onclick="diffZoom(1)" title="Zoom in (+)">A+</button>
+            </div>
+        </div>
+        <div class="diff-main">
+            <div class="diff-sidebar" id="diff-sidebar"></div>
+            <div class="diff-content" id="diff-content"></div>
+        </div>
+    </div>
+
     <div class="confirm-overlay" id="alert-dialog">
         <div class="confirm-box">
             <p id="alert-msg"></p>
@@ -1950,8 +2051,8 @@
         <div class="stop-box">
             <p id="stop-msg"></p>
             <div class="stop-actions">
-                <button class="stop-graceful" id="stop-graceful-btn">Stop &amp; keep resumable</button>
-                <button class="stop-kill" id="stop-kill-btn">Stop permanently</button>
+                <button class="stop-graceful" id="stop-graceful-btn">Stop &amp; keep for later</button>
+                <button class="stop-kill" id="stop-kill-btn">Delete session</button>
                 <button class="stop-cancel" id="stop-cancel-btn">Cancel</button>
             </div>
         </div>
@@ -2061,6 +2162,8 @@
                 if (state.focused && panels.find(p => p.id === state.focused)) {
                     setFocus(state.focused);
                 }
+                // On mobile, close the drawer since we have panels to show
+                closeDrawer();
             } catch (e) {}
         }
 
@@ -2535,7 +2638,11 @@
                     setServerConnectedStatus(srv.key, false);
                     _serverSessions[srv.key] = [];
                     const stalePanels = panels.filter(p => p.server === srv.key).map(p => p.id);
-                    stalePanels.forEach(id => closePanel(id));
+                    if (stalePanels.length) {
+                        _suppressDrawerOpen = true;
+                        stalePanels.forEach(id => closePanel(id));
+                        _suppressDrawerOpen = false;
+                    }
                 }
                 // Rebuild combined list and render after each server responds
                 _rebuildSessionList();
@@ -2553,9 +2660,14 @@
             sessions = allSessions;
 
             // Close panels whose session no longer exists on the server.
+            // Suppress drawer open — this is automated cleanup, not user action.
             const knownIds = new Set(allSessions.map(s => s._compoundId));
             const orphaned = panels.filter(p => !knownIds.has(p.id));
-            orphaned.forEach(p => closePanel(p.id));
+            if (orphaned.length) {
+                _suppressDrawerOpen = true;
+                orphaned.forEach(p => closePanel(p.id));
+                _suppressDrawerOpen = false;
+            }
 
             renderSessionList();
             validateNewSession();
@@ -2617,13 +2729,17 @@
             if (isResuming || isStopping) {
                 actions = '';
             } else if (isResumable) {
-                // Exited session — play to resume, × to dismiss (or discard worktree)
+                // Exited session — play to resume, merge (worktree only), × to dismiss/delete
                 const dismissAction = s.worktree
                     ? `discardWorktree('${cidEsc}','${nameEsc}')`
                     : `dismissSession('${cidEsc}')`;
-                const dismissTitle = s.worktree ? 'Discard worktree' : 'Dismiss';
+                const dismissTitle = s.worktree ? 'Delete worktree' : 'Dismiss';
+                const mergeBtn = s.worktree && (s.worktree.commits_ahead || 0) > 0
+                    ? `<button class="merge-btn-inline" onclick="event.stopPropagation();mergeWorktree('${cidEsc}','${nameEsc}')" title="Merge into base branch">&#8631;</button>`
+                    : '';
                 actions = `
                     <button class="resume-btn" onclick="event.stopPropagation();resumeSession('${cidEsc}')" title="Resume session">&#9654;</button>
+                    ${mergeBtn}
                     <button onclick="event.stopPropagation();${dismissAction}" title="${dismissTitle}">&times;</button>
                 `;
             } else if (s.status === 'running') {
@@ -2654,11 +2770,6 @@
                 const branchLabel = shortBranch !== s.name ? `${escHtml(shortBranch)}${aheadText} &middot; ` : (aheadText ? `${aheadText.trim()} &middot; ` : '');
                 subtitle = `${branchLabel}${escHtml(appLabel)}`;
 
-                // Merge button
-                if (!isResuming && !isStopping) {
-                    const mergeBtn = `<button class="merge-btn" onclick="event.stopPropagation();showMergeDialog('${cidEsc}','${nameEsc}')" title="Merge worktree into base branch">merge</button>`;
-                    wtBadge = `<div class="session-wt-actions">${mergeBtn}</div>`;
-                }
             }
 
             return `
@@ -2686,11 +2797,18 @@
             });
             renderSessionList();
             // If keyboard is open (mobile), the CSS :has(.panel-focused)
-            // just swapped which panel is visible — refit it.
+            // just swapped which panel is visible — refit + scroll cursor.
             const panelsEl = document.getElementById('panels');
             if (panelsEl && panelsEl.classList.contains('keyboard-focused')) {
                 const p = panels.find(pp => pp.id === id);
-                if (p) requestAnimationFrame(() => fitPanel(p));
+                if (p) {
+                    requestAnimationFrame(() => {
+                        requestAnimationFrame(() => {
+                            _fitPanelCore(p);
+                            if (p.terminal) p.terminal.scrollToBottom();
+                        });
+                    });
+                }
             }
         }
 
@@ -2798,7 +2916,13 @@
             }
         });
         document.addEventListener('keydown', (e) => {
-            if (e.key === 'Escape') hidePlacementMenu();
+            if (e.key === 'Escape') { hidePlacementMenu(); closeDiffOverlay(); }
+            if (document.getElementById('diff-overlay').classList.contains('open')) {
+                if (e.key === 'ArrowUp' || e.key === 'k') { e.preventDefault(); diffNavPrev(); }
+                if (e.key === 'ArrowDown' || e.key === 'j') { e.preventDefault(); diffNavNext(); }
+                if (e.key === '+' || e.key === '=') { e.preventDefault(); diffZoom(1); }
+                if (e.key === '-') { e.preventDefault(); diffZoom(-1); }
+            }
         });
 
         // Placement menu status line on hover
@@ -3793,7 +3917,20 @@
                     document.body.style.height = (vh - barH) + 'px';
                     document.body.style.overflow = 'hidden';
                 }
-                if (panelsEl) panelsEl.classList.add('keyboard-focused');
+                if (panelsEl && !panelsEl.classList.contains('keyboard-focused')) {
+                    panelsEl.classList.add('keyboard-focused');
+                    // Layout just changed to single-view — refit focused panel
+                    // after CSS settles, then scroll cursor into view.
+                    const fp = panels.find(pp => pp.id === focusedPanelId);
+                    if (fp) {
+                        requestAnimationFrame(() => {
+                            requestAnimationFrame(() => {
+                                _fitPanelCore(fp);
+                                if (fp.terminal) fp.terminal.scrollToBottom();
+                            });
+                        });
+                    }
+                }
                 _syncExtraKeysHeight();
             } else {
                 if (!_ekHideTimer) {
@@ -5376,8 +5513,19 @@
                     method: 'POST',
                 });
                 if (!resp.ok) {
-                    closeMergeDialog();
-                    showAlert('Failed to load merge preview');
+                    const overlay = document.getElementById('merge-overlay');
+                    if (overlay && overlay.style.display === 'flex') {
+                        const inner = overlay.querySelector('.overlay-inner') || overlay.firstElementChild;
+                        if (inner) inner.innerHTML = `
+                            <div class="merge-dialog">
+                                <h3>Merge "${escHtml(sessionName)}"</h3>
+                                <p style="color:#a0a0d0;font-size:13px;margin:16px 0;">Nothing to merge</p>
+                                <div class="merge-actions">
+                                    <button onclick="closeMergeDialog()" style="background:#1a1a3a;border:1px solid #2a2a5a;color:#a0a0d0;">Close</button>
+                                </div>
+                            </div>
+                        `;
+                    }
                     return;
                 }
                 const preview = await resp.json();
@@ -5415,6 +5563,7 @@
                             <div>${preview.changed_files.length} file(s) changed</div>
                         </div>
                         ${conflictHtml}
+                        <div class="diff-toggle" onclick="toggleMergeDiff('${serverKey}','${sessionName.replace(/'/g, "\\'")}')">&#9654; Show diff</div>
                         <div style="font-size:11px;color:#7878a0;margin-bottom:4px;">Strategy:</div>
                         <div class="strategy-select">
                             <div class="strategy-option selected" data-strategy="squash" onclick="selectMergeStrategy(this)">Squash</div>
@@ -5449,9 +5598,119 @@
             _selectedMergeStrategy = el.dataset.strategy;
         }
 
+        let _diffSections = [];
+        let _diffCurrentIdx = -1;
+
+        async function toggleMergeDiff(serverKey, name) {
+            const overlay = document.getElementById('diff-overlay');
+            const content = document.getElementById('diff-content');
+            const sidebar = document.getElementById('diff-sidebar');
+            document.getElementById('diff-title').textContent = `Diff — ${name}`;
+            document.getElementById('diff-stats').innerHTML = '';
+            document.getElementById('diff-nav-pos').textContent = '';
+            content.innerHTML = '<div style="color:#7878a0;padding:20px;text-align:center;"><span class="spinner"></span> Loading diff...</div>';
+            sidebar.innerHTML = '';
+            _diffSections = [];
+            _diffCurrentIdx = -1;
+            overlay.classList.add('open');
+            try {
+                const resp = await fetch(serverUrl(serverKey, `/worktrees/${encodeURIComponent(name)}/diff`));
+                if (!resp.ok) { content.innerHTML = '<div style="color:#ff6666;padding:20px;">Failed to load diff</div>'; return; }
+                const data = await resp.json();
+                const diff = data.diff || '';
+                if (!diff.trim()) { content.innerHTML = '<div style="color:#7878a0;padding:20px;">No changes</div>'; return; }
+                // Parse diff into file sections
+                const sections = [];
+                let current = null;
+                let totalAdds = 0, totalDels = 0;
+                for (const line of diff.split('\n')) {
+                    if (line.startsWith('diff --git')) {
+                        const m = line.match(/b\/(.+)$/);
+                        current = { file: m ? m[1] : 'unknown', adds: 0, dels: 0, lines: [] };
+                        sections.push(current);
+                        continue;
+                    }
+                    if (!current) continue;
+                    if (line.startsWith('+') && !line.startsWith('+++')) { current.adds++; totalAdds++; }
+                    if (line.startsWith('-') && !line.startsWith('---')) { current.dels++; totalDels++; }
+                    current.lines.push(line);
+                }
+                _diffSections = sections;
+                // Stats
+                document.getElementById('diff-stats').innerHTML =
+                    `${sections.length} file${sections.length !== 1 ? 's' : ''} &middot; <span class="st-add">+${totalAdds}</span> <span class="st-del">-${totalDels}</span>`;
+                // Build sidebar
+                sidebar.innerHTML = sections.map((s, i) => {
+                    const adds = s.adds ? `<span class="sb-add">+${s.adds}</span>` : '';
+                    const dels = s.dels ? `<span class="sb-del">-${s.dels}</span>` : '';
+                    return `<div class="diff-sidebar-item" id="diff-sb-${i}" onclick="diffNavTo(${i})">
+                        <span class="sb-file">${escHtml(s.file)}</span> ${adds} ${dels}
+                    </div>`;
+                }).join('');
+                // Build diff content
+                content.innerHTML = sections.map((s, i) => {
+                    const linesHtml = s.lines.map(line => {
+                        const esc = escHtml(line);
+                        if (line.startsWith('+++') || line.startsWith('---')) return `<div class="diff-line diff-ctx">${esc}</div>`;
+                        if (line.startsWith('@@')) return `<div class="diff-hunk">${esc}</div>`;
+                        if (line.startsWith('+')) return `<div class="diff-line diff-add">${esc}</div>`;
+                        if (line.startsWith('-')) return `<div class="diff-line diff-del">${esc}</div>`;
+                        return `<div class="diff-line diff-ctx">${esc}</div>`;
+                    }).join('');
+                    const adds = s.adds ? `<span style="color:#44dd77;font-weight:normal;font-size:11px;">+${s.adds}</span>` : '';
+                    const dels = s.dels ? `<span style="color:#ff6666;font-weight:normal;font-size:11px;">-${s.dels}</span>` : '';
+                    return `<div class="diff-section" id="diff-sec-${i}">
+                        <div class="diff-section-header">
+                            ${escHtml(s.file)} ${adds} ${dels}
+                        </div>
+                        <div class="diff-section-content">${linesHtml}</div>
+                    </div>`;
+                }).join('');
+                // Auto-select first file
+                if (sections.length > 0) diffNavTo(0);
+            } catch (e) {
+                content.innerHTML = '<div style="color:#ff6666;padding:20px;">Failed to load diff</div>';
+            }
+        }
+
+        function diffNavTo(idx) {
+            if (idx < 0 || idx >= _diffSections.length) return;
+            _diffCurrentIdx = idx;
+            // Update sidebar active state
+            document.querySelectorAll('.diff-sidebar-item').forEach((el, i) => {
+                el.classList.toggle('active', i === idx);
+            });
+            // Scroll to section
+            const sec = document.getElementById(`diff-sec-${idx}`);
+            if (sec) sec.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            // Update nav position
+            document.getElementById('diff-nav-pos').textContent = `${idx + 1} / ${_diffSections.length}`;
+            document.getElementById('diff-prev').disabled = idx === 0;
+            document.getElementById('diff-next').disabled = idx === _diffSections.length - 1;
+        }
+
+        function diffNavPrev() { diffNavTo(_diffCurrentIdx - 1); }
+        function diffNavNext() { diffNavTo(_diffCurrentIdx + 1); }
+
+        let _diffFontSize = 12;
+        function diffZoom(dir) {
+            _diffFontSize = Math.max(8, Math.min(24, _diffFontSize + dir * 2));
+            const content = document.getElementById('diff-content');
+            if (content) content.style.fontSize = _diffFontSize + 'px';
+            const sidebar = document.getElementById('diff-sidebar');
+            if (sidebar) sidebar.style.fontSize = Math.max(9, _diffFontSize - 1) + 'px';
+        }
+
+        function closeDiffOverlay() {
+            document.getElementById('diff-overlay').classList.remove('open');
+            _diffSections = [];
+            _diffCurrentIdx = -1;
+        }
+
         async function executeMerge(cid, name) {
             const serverKey = cid.includes('::') ? cid.split('::')[0] : 'local';
             closeMergeDialog();
+            showBusy(`Merging "${name}"…`);
             try {
                 const resp = await fetch(serverUrl(serverKey, `/worktrees/${encodeURIComponent(name)}/merge`), {
                     method: 'POST',
@@ -5459,31 +5718,39 @@
                     body: JSON.stringify({ strategy: _selectedMergeStrategy }),
                 });
                 const result = await resp.json();
+                hideBusy();
                 if (result.success) {
                     await fetchAllSessions();
                 } else {
                     showAlert('Merge failed: ' + (result.message || 'Unknown error'));
                 }
             } catch (e) {
+                hideBusy();
                 showAlert('Server unreachable');
             }
         }
 
+        function mergeWorktree(cid, name) {
+            showMergeDialog(cid, name);
+        }
+
         async function discardWorktree(cid, name) {
             const serverKey = cid.includes('::') ? cid.split('::')[0] : 'local';
-            const confirmed = await showConfirm(`Discard worktree for "${name}"? This deletes the branch and all changes.`, 'Discard');
+            const { sessionId } = parseCompoundId(cid);
+            const confirmed = await showConfirm(`Delete worktree "${name}"? This deletes the branch and all changes.`, 'Delete');
             if (!confirmed) return;
+            showBusy(`Deleting "${name}"…`);
             try {
-                const resp = await fetch(serverUrl(serverKey, `/worktrees/${encodeURIComponent(name)}?force=true`), {
+                // Delete worktree
+                await fetch(serverUrl(serverKey, `/worktrees/${encodeURIComponent(name)}?force=true`), {
                     method: 'DELETE',
                 });
-                if (resp.ok) {
-                    await fetchAllSessions();
-                } else {
-                    const err = await resp.json();
-                    showAlert(err.detail || 'Failed to discard worktree');
-                }
+                // Dismiss the resumable session entry
+                await fetch(serverUrl(serverKey, `/sessions/${sessionId}`), { method: 'DELETE' }).catch(() => {});
+                hideBusy();
+                await fetchAllSessions();
             } catch (e) {
+                hideBusy();
                 showAlert('Server unreachable');
             }
         }
@@ -5584,37 +5851,50 @@
             const { server, sessionId } = parseCompoundId(cid);
             const session = sessions.find(s => s._compoundId === cid);
             const label = session ? session.name : 'this session';
+            const isWorktree = !!(session && session.worktree);
             const choice = await showStopDialog(`Stop "${label}"?`);
             if (!choice) return;
             try {
                 if (choice === 'graceful') {
+                    // Stop & keep for later
                     showBusy(`Stopping "${label}"…`);
                     await fetch(serverUrl(server, `/sessions/${sessionId}/stop`), {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({ mode: 'graceful' }),
                     });
-                    // Poll until session exits or disappears (max ~15s)
-                    for (let i = 0; i < 30; i++) {
-                        await new Promise(r => setTimeout(r, 500));
-                        try {
-                            const resp = await fetch(serverUrl(server, `/sessions/${sessionId}`));
-                            if (resp.status === 404) break;
-                            const info = await resp.json();
-                            if (info.status === 'exited' || info.status === 'killed') break;
-                        } catch (e) { break; }
+                    await _pollSessionExit(server, sessionId);
+                    closePanel(cid);
+                    hideBusy();
+                    await fetchAllSessions();
+                } else {
+                    // Delete — kill session and clean up worktree if applicable
+                    showBusy(`Deleting "${label}"…`);
+                    await fetch(serverUrl(server, `/sessions/${sessionId}`), { method: 'DELETE' });
+                    if (isWorktree) {
+                        await fetch(serverUrl(server, `/worktrees/${encodeURIComponent(session.name)}?force=true`), {
+                            method: 'DELETE',
+                        });
                     }
                     closePanel(cid);
                     hideBusy();
-                } else {
-                    showBusy(`Stopping "${label}"…`);
-                    await fetch(serverUrl(server, `/sessions/${sessionId}`), { method: 'DELETE' });
-                    closePanel(cid);
-                    hideBusy();
+                    await fetchAllSessions();
                 }
-                await fetchAllSessions();
             } catch (e) {
                 hideBusy();
+            }
+        }
+
+        // Helper: poll until a session exits or disappears (max ~15s)
+        async function _pollSessionExit(server, sessionId) {
+            for (let i = 0; i < 30; i++) {
+                await new Promise(r => setTimeout(r, 500));
+                try {
+                    const resp = await fetch(serverUrl(server, `/sessions/${sessionId}`));
+                    if (resp.status === 404) return;
+                    const info = await resp.json();
+                    if (info.status === 'exited' || info.status === 'killed') return;
+                } catch (e) { return; }
             }
         }
 
@@ -5759,8 +6039,17 @@
         // Load server registry from localStorage
         loadServers();
 
-        // On mobile, open the sidebar drawer on load
-        if (window.innerWidth <= 700) {
+        const _hasSavedLayout = (() => {
+            try {
+                const raw = localStorage.getItem('conductor_layout');
+                if (!raw) return false;
+                const state = JSON.parse(raw);
+                return state.panels && state.panels.length > 0;
+            } catch (e) { return false; }
+        })();
+
+        // On mobile, open the sidebar drawer on load (unless restoring layout)
+        if (window.innerWidth <= 700 && !_hasSavedLayout) {
             document.getElementById('sidebar').classList.add('open');
         }
 
@@ -5775,16 +6064,6 @@
         // Fetch local server info (hostname) and config for all enabled servers
         fetchSelfInfo();
         servers.filter(s => s.enabled).forEach(s => fetchConfig(s.key));
-
-        // Start polling sessions from all servers
-        const _hasSavedLayout = (() => {
-            try {
-                const raw = localStorage.getItem('conductor_layout');
-                if (!raw) return false;
-                const state = JSON.parse(raw);
-                return state.panels && state.panels.length > 0;
-            } catch (e) { return false; }
-        })();
         if (_hasSavedLayout) showBusy('Restoring session…');
         fetchAllSessions().then(() => {
             _restoreLayout();
