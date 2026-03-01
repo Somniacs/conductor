@@ -453,8 +453,11 @@ def resume(name, detach):
     Press Ctrl+] to detach without stopping the session.
     """
     if not server_running():
-        click.echo("Server not running.", err=True)
-        sys.exit(1)
+        click.echo("Server not running. Starting daemon...")
+        if not start_server_daemon():
+            click.echo("Failed to start server. Try: conductor serve", err=True)
+            sys.exit(1)
+        click.echo(f"Server started on {BASE_URL}")
 
     r = httpx.post(
         f"{BASE_URL}/sessions/{name}/resume",

@@ -1000,7 +1000,7 @@
             flex: 1;
             overflow: hidden;
             -webkit-user-drag: none;
-            /* background: red; /* DEBUG — uncomment to visualize terminal bounds */
+            /* background: red; DEBUG — uncomment to visualize terminal bounds */
         }
 
         .panel-terminal {
@@ -2132,108 +2132,70 @@
         }
 
         // DEBUG overlay — live terminal metrics on touch devices
-        let _dbgEl = null;
-        function _dbg(msg) {
-            if (!('ontouchstart' in window)) return;
-            if (!_dbgEl) {
-                _dbgEl = document.createElement('div');
-                _dbgEl.style.cssText = 'position:fixed;top:40px;left:4px;z-index:9999;background:rgba(0,0,0,0.85);color:#0f0;font:11px monospace;padding:4px 8px;pointer-events:none;white-space:pre;max-width:95vw;';
-                document.body.appendChild(_dbgEl);
-            }
-            _dbgEl.textContent = msg;
-        }
+        // let _dbgEl = null;
+        // function _dbg(msg) {
+        //     if (!('ontouchstart' in window)) return;
+        //     if (!_dbgEl) {
+        //         _dbgEl = document.createElement('div');
+        //         _dbgEl.style.cssText = 'position:fixed;top:40px;left:4px;z-index:9999;background:rgba(0,0,0,0.85);color:#0f0;font:11px monospace;padding:4px 8px;pointer-events:none;white-space:pre;max-width:95vw;';
+        //         document.body.appendChild(_dbgEl);
+        //     }
+        //     _dbgEl.textContent = msg;
+        // }
         // Poll focused panel metrics every 500ms
-        if ('ontouchstart' in window) {
-            let _dbgBackend = '?×?';
-            setInterval(async () => {
-                const fp = panels.find(p => p.id === focusedPanelId);
-                if (!fp || !fp.terminal) { _dbg('no panel'); return; }
-                const b = fp.terminal.buffer?.active;
-                if (!b) return;
-                // Fetch backend dims
-                try {
-                    const r = await fetch(serverUrl(fp.server, `/sessions/${fp.sessionId}`));
-                    const info = await r.json();
-                    _dbgBackend = `${info.rows}×${info.cols}`;
-                } catch(e){}
-                _dbg(
-                    `[${fp.name}] term=${fp.terminal.rows}×${fp.terminal.cols}\n` +
-                    `backend=${_dbgBackend}\n` +
-                    `cursor y=${b.cursorY} baseY=${b.baseY} bufLen=${b.length}`
-                );
-            }, 500);
-        }
+        // if ('ontouchstart' in window) {
+        //     let _dbgBackend = '?×?';
+        //     setInterval(async () => {
+        //         const fp = panels.find(p => p.id === focusedPanelId);
+        //         if (!fp || !fp.terminal) { _dbg('no panel'); return; }
+        //         const b = fp.terminal.buffer?.active;
+        //         if (!b) return;
+        //         try {
+        //             const r = await fetch(serverUrl(fp.server, `/sessions/${fp.sessionId}`));
+        //             const info = await r.json();
+        //             _dbgBackend = `${info.rows}×${info.cols}`;
+        //         } catch(e){}
+        //         _dbg(
+        //             `[${fp.name}] term=${fp.terminal.rows}×${fp.terminal.cols}\n` +
+        //             `backend=${_dbgBackend}\n` +
+        //             `cursor y=${b.cursorY} baseY=${b.baseY} bufLen=${b.length}`
+        //         );
+        //     }, 500);
+        // }
 
         // Core fit logic — can be called directly (synchronous) or via debounce.
         function _fitPanelCore(p) {
             if (!p.fitAddon || !p._termOpened) return;
             const target = p._termWrapper || p._termEl;
-            const scrollContainer = target.parentElement; // .panel-terminal
-            // Read available height from the flex-sized outer container —
-            // .panel-terminal's height:100% can fail when the ancestor
-            // height comes from flex (e.g. keyboard resize on mobile).
-            const outerContainer = target.closest('.panel-terminal-outer');
-            const availH = outerContainer ? outerContainer.clientHeight : scrollContainer.clientHeight;
-
-            /* DEBUG — uncomment to show fit dimensions on mobile:
-            const _screenEl = target.querySelector('.xterm-screen');
-            const _outerRect = outerContainer ? outerContainer.getBoundingClientRect() : null;
-            const _screenRect = _screenEl ? _screenEl.getBoundingClientRect() : null;
-            let _scrollInfo = '';
-            let _el = target;
-            while (_el && _el !== document.documentElement) {
-                if (_el.scrollTop !== 0) {
-                    _scrollInfo += `${_el.className.split(' ')[0]||_el.tagName}.sT=${Math.round(_el.scrollTop)} `;
-                }
-                _el = _el.parentElement;
-            }
-            if (!_scrollInfo) _scrollInfo = 'none';
-            const _ekVar = getComputedStyle(document.documentElement).getPropertyValue('--extra-keys-height');
-            _dbg(`avail=${availH} rows=${p.terminal?.rows}\n` +
-                `outer: ${_outerRect?Math.round(_outerRect.top)+','+Math.round(_outerRect.bottom):'-'}\n` +
-                `screen: ${_screenRect?Math.round(_screenRect.top)+','+Math.round(_screenRect.bottom):'-'}\n` +
-                `scrolled: ${_scrollInfo}\n` +
-                `ekVar=${_ekVar} innerH=${window.innerHeight}`);
-            */
-
-            // Force .panel-terminal to match — its CSS height:100% can fail
-            // when ancestor heights come from flex (mobile keyboard resize).
-            if (outerContainer && availH > 0) {
-                scrollContainer.style.height = availH + 'px';
-            }
+            // const scrollContainer = target.parentElement; // .panel-terminal
+            // const outerContainer = target.closest('.panel-terminal-outer');
+            // const availH = outerContainer ? outerContainer.clientHeight : scrollContainer.clientHeight;
+            // const kbOpen = document.getElementById('panels')?.classList.contains('keyboard-focused');
 
             // Use PTY dimensions if known (host terminal is the authority),
             // otherwise fall back to fit addon for browser-only sessions.
             if (p._ptyRows && p._ptyCols) {
                 // CLI terminal owns columns (for correct line wrapping).
-                // Rows always match the visible panel area:
-                //  - growing the panel pulls scrollback into view
-                //  - shrinking pushes lines to scrollback
-                //  - scrollbar only appears when content overflows
+                // Rows always match the visible panel area.
                 //
                 // No fitAddon.fit() — read cell dimensions from xterm's
                 // renderer directly to avoid an intermediate resize that
                 // would reflow the buffer and drift the cursor.
 
-                // 1. Get cell dimensions from the renderer.
-                //    Prefer actual (device) height over CSS height — on mobile
-                //    with small fonts, sub-pixel rounding can cause the CSS
-                //    cell height to undercount, allocating one extra row that
-                //    overflows the visible area (cursor one line too low).
+                // 1. Get cell dimensions from the renderer (CSS height =
+                //    what xterm.js uses for positioning).
                 let cellWidth = 8, cellHeight = 14;
+                // let _cssCellH = 0, _devCellH = 0, _dpr = window.devicePixelRatio || 1;
                 try {
                     const d = p.terminal._core._renderService.dimensions;
                     if (d && d.css && d.css.cell) {
                         if (d.css.cell.width > 0) cellWidth = d.css.cell.width;
                         if (d.css.cell.height > 0) cellHeight = d.css.cell.height;
+                        // _cssCellH = d.css.cell.height;
                     }
-                    // Use actual rendered height if available (accounts for
-                    // DPI scaling and font hinting differences)
-                    const dpr = window.devicePixelRatio || 1;
-                    if (d && d.device && d.device.cell && d.device.cell.height > 0) {
-                        const actualH = d.device.cell.height / dpr;
-                        if (actualH > cellHeight) cellHeight = actualH;
-                    }
+                    // if (d && d.device && d.device.cell && d.device.cell.height > 0) {
+                    //     _devCellH = d.device.cell.height;
+                    // }
                 } catch (e) {
                     if (p.terminal.cols > 0 && target.clientWidth > 0) {
                         cellWidth = target.clientWidth / p.terminal.cols;
@@ -2243,73 +2205,80 @@
                 // 2. Set min-width for PTY columns (horizontal scroll if needed)
                 target.style.minWidth = Math.ceil(p._ptyCols * cellWidth) + 'px';
 
-                // 3. Pin wrapper height to the flex-sized outer container
-                const visH = availH;
-                if (visH > 0) {
-                    target.style.height = visH + 'px';
-                } else {
+                // 3. Calculate rows from available height
+                // Re-read height from the element itself (CSS flex may
+                // give a different value than outerContainer.clientHeight
+                // when explicit heights are cleared).
+                const wrapH = target.clientHeight;
+                if (wrapH <= 0) {
                     requestAnimationFrame(() => _fitPanelCore(p));
                     return;
                 }
+                let visibleRows = Math.max(1, Math.floor(wrapH / cellHeight));
+                // Guard: if rows would overflow by even 1 sub-pixel, drop a row
+                if (visibleRows * cellHeight > wrapH + 0.5) visibleRows = Math.max(1, visibleRows - 1);
 
-                // 4. Rows = visible area.  Single resize, no oscillation.
-                const visibleRows = Math.max(1, Math.floor(visH / cellHeight));
+                // DEBUG — show fit dimensions on mobile
+                // if ('ontouchstart' in window) {
+                //     _dbg(`[fit ${p.name}] wrapH=${wrapH} availH=${availH} visRows=${visibleRows}\n` +
+                //         `cellH: css=${_cssCellH.toFixed(2)} dev=${_devCellH.toFixed(1)}/${_dpr.toFixed(1)}\n` +
+                //         `kbOpen=${kbOpen} panels=${panels.length}`);
+                // }
+
+                // 4. Resize terminal.  Single call, no oscillation.
                 if (p.terminal.cols !== p._ptyCols || p.terminal.rows !== visibleRows) {
                     p.terminal.resize(p._ptyCols, visibleRows);
                 }
             } else {
-                // Browser-only session — reset any CLI-owned dimensions
-                const prevRows = p.terminal.rows;
-                const prevCols = p.terminal.cols;
-                target.style.minWidth = '';
-                target.style.width = '';
-                target.style.height = '';
+                // Browser-only session — use same manual measurement as
+                // the PTY branch.  fitAddon.fit() uses getComputedStyle +
+                // padding/scrollbar offsets that cause ~2-row cursor drift.
 
+                // 1. Get cell dimensions from the renderer
+                let cellWidth = 8, cellHeight = 14;
                 try {
-                    p.fitAddon.fit();
-                } catch (e) { return; }
-
-                // Set min-width for MIN_COLS
-                if (p.terminal.cols > 0 && target.clientWidth > 0) {
-                    const charWidth = target.clientWidth / p.terminal.cols;
-                    target.style.minWidth = Math.ceil(MIN_COLS * charWidth) + 'px';
+                    const d = p.terminal._core._renderService.dimensions;
+                    if (d && d.css && d.css.cell) {
+                        if (d.css.cell.width > 0) cellWidth = d.css.cell.width;
+                        if (d.css.cell.height > 0) cellHeight = d.css.cell.height;
+                    }
+                } catch (e) {
+                    if (p.terminal.cols > 0 && target.clientWidth > 0) {
+                        cellWidth = target.clientWidth / p.terminal.cols;
+                    }
                 }
-                // Pin height to the flex-sized outer container.
-                // Guard against 0 on mobile.
-                const visH2 = availH;
-                if (visH2 > 0) {
-                    target.style.height = visH2 + 'px';
-                } else {
+
+                // 2. Read container dimensions
+                const wrapH = target.clientHeight;
+                const wrapW = target.clientWidth;
+                if (wrapH <= 0 || wrapW <= 0) {
                     requestAnimationFrame(() => _fitPanelCore(p));
                     return;
                 }
-                try { p.fitAddon.fit(); } catch (e) {}
 
-                if (p.terminal.cols < MIN_COLS) {
-                    p.terminal.resize(MIN_COLS, p.terminal.rows);
+                // 3. Calculate rows and cols
+                let visibleRows = Math.max(1, Math.floor(wrapH / cellHeight));
+                if (visibleRows * cellHeight > wrapH + 0.5) visibleRows = Math.max(1, visibleRows - 1);
+                const visibleCols = Math.max(MIN_COLS, Math.floor(wrapW / cellWidth));
+
+                // 4. Set min-width for MIN_COLS
+                target.style.minWidth = Math.ceil(MIN_COLS * cellWidth) + 'px';
+                target.style.width = '';
+
+                // 5. Resize terminal — single call, no oscillation
+                if (p.terminal.cols !== visibleCols || p.terminal.rows !== visibleRows) {
+                    p.terminal.resize(visibleCols, visibleRows);
                 }
+
+                // DEBUG — show fit dimensions on mobile
+                // if ('ontouchstart' in window) {
+                //     _dbg(`[fit ${p.name}] wrapH=${wrapH} wrapW=${wrapW}\n` +
+                //         `rows=${visibleRows} cols=${visibleCols}\n` +
+                //         `cellH=${cellHeight.toFixed(2)} cellW=${cellWidth.toFixed(2)}\n` +
+                //         `kbOpen=${kbOpen} panels=${panels.length}`);
+                // }
 
                 syncResizeToPTY(p);
-
-                // Layout changes (panel added/removed) cause xterm.js
-                // buffer reflow that corrupts the cursor position.
-                // The CLI's SIGWINCH response is diff-based (Ink) and
-                // can't fix the corrupted state.  Force a WebSocket
-                // reconnect: ws.onopen does terminal.reset() + buffer
-                // replay, rendering into a clean terminal.  Only fires
-                // once per layout change — keyboard open/close does NOT
-                // set the flag, so no reconnect on focus tap.
-                const layoutChanged = p._layoutChanged;
-                p._layoutChanged = false;   // consume unconditionally
-                const sizeDecreased = (p.terminal.rows < prevRows || p.terminal.cols < prevCols)
-                                       && prevRows > 0;
-                if (layoutChanged && sizeDecreased
-                    && p.ws && p.ws.readyState === WebSocket.OPEN) {
-                    const oldWs = p.ws;
-                    oldWs.onclose = null;   // suppress auto-reconnect
-                    oldWs.close();
-                    connectWebSocket(p);    // ws.onopen → reset + clean replay
-                }
             }
 
             // Sync scroll proxies to match the actual panel height.
@@ -3128,22 +3097,37 @@
             }
 
             if (panel.fitAddon) {
-                panel.fitAddon.fit();
-
-                // Measure actual char width and set wrapper min-width so terminal never shrinks below MIN_COLS
-                if (panel.terminal.cols > 0 && target.clientWidth > 0) {
-                    const charWidth = target.clientWidth / panel.terminal.cols;
-                    target.style.minWidth = Math.ceil(MIN_COLS * charWidth) + 'px';
-                }
-                // Pin wrapper height to visible area (horizontal scrollbar
-                // steals vertical space that CSS height:100% doesn't subtract).
-                // Guard against 0 on mobile before layout settles.
-                // Don't call fit() again here — _fitPanelCore will handle
-                // the final sizing (including PTY dimensions if applicable).
-                const outerEl = target.closest('.panel-terminal-outer');
-                const visH = outerEl ? outerEl.clientHeight : target.parentElement.clientHeight;
-                if (visH > 0) {
-                    target.style.height = visH + 'px';
+                // Manual sizing (matches _fitPanelCore) — avoids fitAddon.fit()
+                // which uses getComputedStyle and causes ~2-row cursor drift.
+                // Fall back to fitAddon.fit() only if renderer dimensions
+                // aren't available yet (first open before first render).
+                let didManualFit = false;
+                try {
+                    const d = panel.terminal._core._renderService.dimensions;
+                    if (d && d.css && d.css.cell && d.css.cell.height > 0 && d.css.cell.width > 0) {
+                        const cellH = d.css.cell.height;
+                        const cellW = d.css.cell.width;
+                        const wrapH = target.clientHeight;
+                        const wrapW = target.clientWidth;
+                        if (wrapH > 0 && wrapW > 0) {
+                            let rows = Math.max(1, Math.floor(wrapH / cellH));
+                            if (rows * cellH > wrapH + 0.5) rows = Math.max(1, rows - 1);
+                            const cols = Math.max(MIN_COLS, Math.floor(wrapW / cellW));
+                            target.style.minWidth = Math.ceil(MIN_COLS * cellW) + 'px';
+                            if (panel.terminal.cols !== cols || panel.terminal.rows !== rows) {
+                                panel.terminal.resize(cols, rows);
+                            }
+                            didManualFit = true;
+                        }
+                    }
+                } catch (e) { /* renderer not ready */ }
+                if (!didManualFit) {
+                    panel.fitAddon.fit();
+                    // Set minWidth from measured char width
+                    if (panel.terminal.cols > 0 && target.clientWidth > 0) {
+                        const charWidth = target.clientWidth / panel.terminal.cols;
+                        target.style.minWidth = Math.ceil(MIN_COLS * charWidth) + 'px';
+                    }
                 }
 
                 // Set up custom vertical scroll thumb — positioned manually so it
@@ -3346,6 +3330,21 @@
         function layoutPanels() {
             const container = document.getElementById('panels');
 
+            // Clear stale explicit pixel heights from previous fits BEFORE
+            // detaching — prevents the old (too-large) heights from persisting
+            // through the DOM restructure.  On mobile with touch-action:pan-y,
+            // stale heights cause the terminal to overflow its new (smaller)
+            // container, corrupting xterm.js viewport scroll and cursor position.
+            panels.forEach(p => {
+                const target = p._termWrapper || p._termEl;
+                if (target) {
+                    target.style.height = '';
+                    // Keep minWidth — PTY column width must persist (horizontal scroll)
+                    const sc = target.parentElement; // .panel-terminal
+                    if (sc) sc.style.height = '';
+                }
+            });
+
             // Detach all children without destroying them
             while (container.firstChild) {
                 container.removeChild(container.firstChild);
@@ -3366,19 +3365,22 @@
 
             renderSessionList();
 
-            // Mark all panels — xterm.js reflow on resize corrupts the
-            // cursor position.  _fitPanelCore uses _layoutChanged to
-            // trigger a WS reconnect, and ws.onopen uses
-            // _needsCleanReplay to discard the old-dimension buffer
-            // and request a fresh CLI repaint via SIGWINCH.
-            panels.forEach(p => {
-                p._layoutChanged = true;
-                p._needsCleanReplay = true;
-            });
-
-            // Open terminals that haven't been opened yet + refit all
+            // Double-RAF: first frame lets the browser compute flex layout
+            // for the new split structure; second frame reads settled
+            // dimensions and fits terminals accurately.
             requestAnimationFrame(() => {
-                panels.forEach(p => ensureTerminalOpen(p));
+                requestAnimationFrame(() => {
+                    // Open new terminals + schedule debounced refit for all
+                    panels.forEach(p => ensureTerminalOpen(p));
+                    // Immediate (non-debounced) refit for already-open panels
+                    // so dimensions are correct NOW, not 100ms later.
+                    panels.forEach(p => {
+                        if (p._termOpened && p.fitAddon) {
+                            _fitPanelCore(p);
+                            p.terminal.refresh(0, p.terminal.rows - 1);
+                        }
+                    });
+                });
             });
         }
 
@@ -4066,33 +4068,11 @@
                 // must not be written until the terminal has the correct size.
                 _fitPanelCore(panel);
 
-                const needsClean = panel._needsCleanReplay;
-                panel._needsCleanReplay = false;
+                // Now that dimensions are correct, allow buffered data to flush.
+                panel._dimensionsReady = true;
+                if (writeBuf.length && !writeRaf) writeRaf = requestAnimationFrame(flushWrites);
 
-                if (needsClean) {
-                    // Layout change: the buffer contains data at old PTY
-                    // dimensions whose ANSI cursor positioning corrupts
-                    // xterm.js state on reflow.  Discard it, reset the
-                    // terminal, then trigger a fresh SIGWINCH so the CLI
-                    // does a full repaint into a clean terminal.
-                    setTimeout(() => {
-                        panel._bufferReplay = false;
-                        if (writeRaf) { cancelAnimationFrame(writeRaf); writeRaf = null; }
-                        writeBuf = [];
-                        if (panel.terminal) panel.terminal.reset();
-                        panel._dimensionsReady = true;
-                        // Re-send current size → ioctl TIOCSWINSZ → SIGWINCH
-                        // even though PTY is already at this size.
-                        syncResizeToPTY(panel);
-                    }, 500);
-                } else {
-                    // Normal: flush buffer replay after SIGWINCH delay.
-                    setTimeout(() => {
-                        panel._dimensionsReady = true;
-                        if (writeBuf.length && !writeRaf) writeRaf = requestAnimationFrame(flushWrites);
-                    }, 500);
-                    setTimeout(() => { panel._bufferReplay = false; }, 1500);
-                }
+                setTimeout(() => { panel._bufferReplay = false; }, 1500);
             };
 
             // Batch incoming WebSocket data and flush once per animation frame
