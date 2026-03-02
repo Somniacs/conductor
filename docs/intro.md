@@ -48,6 +48,21 @@ conductor run aider backend
 conductor run codex feature
 ```
 
+### Isolated worktree sessions
+
+Run agents in their own git branch so they don't conflict with each other or your work:
+
+```bash
+conductor run -w claude refactor-auth
+conductor run -w claude add-tests
+```
+
+Each gets its own branch and working copy. When done, merge from the dashboard or CLI:
+
+```bash
+conductor worktree merge refactor-auth --strategy squash
+```
+
 ## 4. Open on your phone
 
 ```bash
@@ -64,16 +79,25 @@ http://my-laptop:7777
 
 Run `tailscale status` to see the name. No IP to remember.
 
+## 5. Keep it running
+
+The Conductor server starts automatically when you run your first agent and stays running in the background. To make sure the dashboard is always reachable — even after a reboot — set up auto-start. See [Auto-Start on Boot](autostart.md) for systemd (Linux), launchd (macOS), and Task Scheduler (Windows) setup.
+
 ## Quick reference
 
 | Do this | Command |
 |---|---|
 | Start an agent | `conductor run claude research` |
+| Start in a worktree | `conductor run -w claude research` |
 | Start in background | `conductor run -d claude research` |
+| Resume a session | `conductor resume research` |
 | List sessions | `conductor list` |
 | Attach to a session | `conductor attach research` |
 | Detach without stopping | `Ctrl+]` |
 | Open dashboard | `conductor open` |
 | QR code for phone | `conductor qr` |
 | Stop a session | `conductor stop research` |
+| List worktrees | `conductor worktree list` |
+| Merge a worktree | `conductor worktree merge research` |
+| Discard a worktree | `conductor worktree discard research` |
 | Shut everything down | `conductor shutdown` |
