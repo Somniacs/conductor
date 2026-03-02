@@ -4,6 +4,11 @@ All notable changes to Conductor are documented here.
 
 ## v0.3.9
 
+### UI fixes
+
+- **Empty state action** — restored the "+ New Session" button on the empty state screen (lost during the v0.3.8 rework)
+- **Scrollable new-session dialog** — the new-session form now scrolls on small viewports so the Run button is always reachable
+
 ### New agents
 
 - **Gemini CLI** — Google's terminal AI agent (`gemini`), with resume support via `gemini --resume`

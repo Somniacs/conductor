@@ -238,7 +238,7 @@
             display: none;
         }
 
-        .new-session.open { display: block; }
+        .new-session.open { display: block; overflow-y: auto; max-height: calc(100vh - 130px); }
 
         .new-session label {
             display: block;
@@ -1267,6 +1267,13 @@
         }
 
         .empty-state .icon { font-size: 48px; opacity: 0.3; }
+        .empty-state button {
+            margin-top: 8px; padding: 6px 18px;
+            background: transparent; border: 1px solid #2a2a5a;
+            color: #8080c0; border-radius: 6px; cursor: pointer;
+            font-size: 13px; transition: background 0.15s, border-color 0.15s;
+        }
+        .empty-state button:hover { background: #1a1a3a; border-color: #4a4a8a; }
 
         /* Sidebar chevron toggle — sticks to sidebar edge */
         .drawer-toggle {
@@ -1933,6 +1940,7 @@
                 <div class="empty-state">
                     <div class="icon">&#9837;</div>
                     <div>Select a session or create a new one</div>
+                    <button onclick="toggleNewSession()">+ New Session</button>
                 </div>
             </div>
         </main>
@@ -3643,6 +3651,7 @@
                     <div class="empty-state">
                         <div class="icon">&#9837;</div>
                         <div>Select a session or create a new one</div>
+                        <button onclick="toggleNewSession()">+ New Session</button>
                     </div>`;
                 _saveLayout();
                 renderSessionList();
