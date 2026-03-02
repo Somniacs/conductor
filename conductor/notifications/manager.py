@@ -21,9 +21,11 @@ import time
 from pathlib import Path
 from typing import Callable
 
+import pyte
+
 from conductor.utils.config import CONDUCTOR_DIR
 
-log = logging.getLogger(__name__)
+log = logging.getLogger("uvicorn.error")
 
 # File for persisting per-device notification settings (webhook URLs etc.)
 _NOTIFICATIONS_FILE = CONDUCTOR_DIR / "notifications.json"
@@ -35,9 +37,10 @@ _NOTIFICATIONS_FILE = CONDUCTOR_DIR / "notifications.json"
 _DEFAULT_PATTERNS = [
     re.compile(r"\(y\)es.*\(n\)o", re.IGNORECASE),
     re.compile(r"\[Y/n\]", re.IGNORECASE),
+    re.compile(r"\[y/N\]", re.IGNORECASE),
     re.compile(r"\(y/n\)", re.IGNORECASE),
     re.compile(r"(?:allow|deny|approve|reject).*\?", re.IGNORECASE),
-    re.compile(r"\?\s*$", re.MULTILINE),
+    re.compile(r"(?:do you want|would you like|shall I|should I|proceed|continue|confirm).*\?", re.IGNORECASE),
 ]
 
 # Minimum seconds between notifications for the same session+reason.
@@ -83,6 +86,7 @@ class NotificationManager:
     def __init__(self):
         self._handlers: list[Callable] = []
         self._device_settings: dict[str, dict] = {}
+        self._webhook_settings: dict = {}  # Global webhook config
         self._load_settings()
 
     def register_handler(self, handler: Callable):
@@ -109,18 +113,28 @@ class NotificationManager:
     def get_all_device_settings(self) -> dict:
         return dict(self._device_settings)
 
+    # ── Global webhook settings ────────────────────────────────────────────
+
+    def get_webhook_settings(self) -> dict:
+        return dict(self._webhook_settings)
+
+    def set_webhook_settings(self, settings: dict):
+        self._webhook_settings = settings
+        self._save_settings()
+
     def _load_settings(self):
         if _NOTIFICATIONS_FILE.exists():
             try:
                 data = json.loads(_NOTIFICATIONS_FILE.read_text())
                 self._device_settings = data.get("devices", {})
+                self._webhook_settings = data.get("webhook", {})
             except Exception:
                 pass
 
     def _save_settings(self):
         CONDUCTOR_DIR.mkdir(parents=True, exist_ok=True)
         _NOTIFICATIONS_FILE.write_text(json.dumps(
-            {"devices": self._device_settings},
+            {"devices": self._device_settings, "webhook": self._webhook_settings},
             indent=2,
         ))
 
@@ -128,9 +142,9 @@ class NotificationManager:
 class SessionNotifier:
     """Tracks output activity for a single session and fires notifications.
 
-    Attach to a session to monitor its output and detect when the agent
-    is waiting for user input.  Uses the same pattern-matching approach
-    as ``_extract_resume_id()`` — strip ANSI, scan tail of buffer.
+    Uses a pyte virtual terminal to maintain a clean screen representation,
+    exactly like what xterm.js renders in the browser.  Pattern matching
+    runs against this clean text instead of raw escape-laden bytes.
     """
 
     def __init__(self, session_id: str, session_name: str,
@@ -141,7 +155,10 @@ class SessionNotifier:
         self.session_name = session_name
         self._manager = manager
         self._patterns = patterns or list(_DEFAULT_PATTERNS)
-        self._ansi_re = ansi_re
+
+        # Virtual terminal — gives us clean screen text
+        self._screen = pyte.Screen(200, 50)
+        self._stream = pyte.Stream(self._screen)
 
         # Activity tracking
         self._output_bytes = 0
@@ -155,6 +172,12 @@ class SessionNotifier:
         self._output_bytes += len(data)
         self._last_output_time = time.time()
 
+        # Feed data to the virtual terminal
+        try:
+            self._stream.feed(data.decode("utf-8", errors="replace"))
+        except Exception:
+            pass
+
         # Cancel any pending silence check and schedule a new one.
         if self._silence_handle is not None:
             self._silence_handle.cancel()
@@ -167,22 +190,23 @@ class SessionNotifier:
 
         self._silence_handle = self._loop.call_later(
             _SILENCE_SECONDS,
-            lambda: asyncio.ensure_future(self._check_patterns(buffer)),
+            lambda: asyncio.ensure_future(self._check_patterns()),
         )
 
-    async def _check_patterns(self, buffer: bytearray):
-        """Scan buffer tail for notification patterns after silence."""
+    def _get_screen_text(self) -> list[str]:
+        """Get non-empty lines from the virtual terminal screen."""
+        return [line.rstrip() for line in self._screen.display if line.strip()]
+
+    async def _check_patterns(self):
+        """Scan virtual screen for notification patterns after silence."""
         if self._output_bytes < _MIN_OUTPUT_BYTES:
             return
 
         try:
-            tail = bytes(buffer[-4096:]).decode("utf-8", errors="replace")
-            if self._ansi_re:
-                tail = self._ansi_re.sub("", tail)
+            lines = self._get_screen_text()
+            recent = "\n".join(lines[-15:])
 
-            # Get last ~10 lines for pattern matching
-            lines = tail.rstrip().split("\n")
-            recent = "\n".join(lines[-10:])
+            log.info("Notification scan [%s]: screen=%r", self.session_id, recent[-300:])
 
             reason = self._match_patterns(recent)
             if not reason:
@@ -206,9 +230,11 @@ class SessionNotifier:
                 reason=reason,
                 snippet=snippet,
             )
+            log.info("Notification fired [%s]: reason=%s snippet=%s",
+                     self.session_id, reason, snippet[:80])
             await self._manager.notify(event)
         except Exception as e:
-            log.debug("Notification pattern check failed: %s", e)
+            log.warning("Notification pattern check failed: %s", e)
 
     def _match_patterns(self, text: str) -> str | None:
         """Match text against notification patterns and return a reason string."""
@@ -223,9 +249,6 @@ class SessionNotifier:
                 if "?" in src:
                     return "Asking a question"
                 return "Needs attention"
-        # Task completion: lots of output then silence
-        if self._output_bytes > 5000:
-            return "Task may be complete"
         return None
 
     def cancel(self):

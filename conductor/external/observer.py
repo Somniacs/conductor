@@ -11,7 +11,7 @@
 # software distributed under the License is distributed on an
 # "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND.
 
-"""Tail a Claude Code JSONL file and stream ANSI-formatted text for observation."""
+"""Tail an agent JSONL file and stream ANSI-formatted text for observation."""
 
 import asyncio
 import json
@@ -37,8 +37,9 @@ _MAX_HISTORY_RECORDS = 200
 class SessionObserver:
     """Tails a JSONL session file and streams ANSI-formatted text to subscribers."""
 
-    def __init__(self, jsonl_path: Path):
+    def __init__(self, jsonl_path: Path, agent: str = "claude"):
         self.path = jsonl_path
+        self.agent = agent
         self._buffer = bytearray()
         self._subscribers: Set[asyncio.Queue] = set()
         self._tail_task: asyncio.Task | None = None
@@ -145,9 +146,22 @@ class SessionObserver:
             return None
         return "".join(chunks).encode("utf-8", errors="replace")
 
+    def _format_record(self, record: dict) -> str | None:
+        """Dispatch to agent-specific formatter."""
+        if self.agent == "codex":
+            return self._format_codex(record)
+        elif self.agent == "copilot":
+            return self._format_copilot(record)
+        else:
+            return self._format_claude(record)
+
+    # ------------------------------------------------------------------
+    # Claude Code formatter
+    # ------------------------------------------------------------------
+
     @staticmethod
-    def _format_record(record: dict) -> str | None:
-        """Convert a JSONL record to ANSI-colored text for xterm.js display."""
+    def _format_claude(record: dict) -> str | None:
+        """Convert a Claude Code JSONL record to ANSI-colored text."""
         rtype = record.get("type", "")
 
         # Skip noise
@@ -155,25 +169,15 @@ class SessionObserver:
             return None
 
         # Timestamp prefix
-        timestamp_str = record.get("timestamp", "")
-        time_prefix = ""
-        if timestamp_str:
-            try:
-                dt = datetime.fromisoformat(timestamp_str.replace("Z", "+00:00"))
-                local_dt = dt.astimezone()
-                time_prefix = f"{_DIM}[{local_dt.strftime('%H:%M:%S')}]{_RESET} "
-            except (ValueError, OSError):
-                pass
+        time_prefix = _time_prefix(record.get("timestamp", ""))
 
         if rtype == "user":
             message = record.get("message", {})
             content = message.get("content", "")
             if isinstance(content, list):
-                # Extract text blocks
                 texts = [b.get("text", "") for b in content if isinstance(b, dict) and b.get("type") == "text"]
                 content = "\n".join(texts)
             if isinstance(content, str) and content.strip():
-                # Truncate very long user messages
                 display = content.strip()
                 if len(display) > 500:
                     display = display[:500] + "..."
@@ -198,7 +202,6 @@ class SessionObserver:
                 elif block.get("type") == "tool_use":
                     tool_name = block.get("name", "unknown")
                     tool_input = block.get("input", {})
-                    # Show a compact summary of the tool call
                     summary = _tool_summary(tool_name, tool_input)
                     parts.append(f"{_YELLOW_BOLD}[Tool: {tool_name}]{_RESET} {summary}")
 
@@ -207,10 +210,143 @@ class SessionObserver:
                 return header + "\r\n".join(parts) + "\r\n"
 
         elif rtype == "tool_result":
-            # Show brief tool results
             return None
 
         return None
+
+    # ------------------------------------------------------------------
+    # Codex formatter
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _format_codex(record: dict) -> str | None:
+        """Convert a Codex JSONL record to ANSI-colored text."""
+        rtype = record.get("type", "")
+
+        # Skip metadata records
+        if rtype in ("session_meta", "turn_context"):
+            return None
+
+        time_prefix = _time_prefix(record.get("timestamp", ""))
+
+        if rtype == "event_msg":
+            payload = record.get("payload", {})
+            ptype = payload.get("type", "")
+
+            if ptype == "user_message":
+                text = payload.get("text", "")
+                if text.strip():
+                    display = text.strip()
+                    if len(display) > 500:
+                        display = display[:500] + "..."
+                    return f"\r\n{time_prefix}{_CYAN_BOLD}>>> User{_RESET}\r\n{_escape_for_terminal(display)}\r\n"
+
+            elif ptype == "agent_message":
+                text = payload.get("text", "")
+                if text.strip():
+                    return f"\r\n{time_prefix}{_GREEN_BOLD}<<< Agent{_RESET}\r\n{_escape_for_terminal(text.strip())}\r\n"
+
+            elif ptype == "task_started":
+                return None  # Skip task metadata
+
+        elif rtype == "response_item":
+            payload = record.get("payload", {})
+            role = payload.get("role", "")
+            content = payload.get("content", [])
+
+            if role == "user":
+                texts = []
+                if isinstance(content, list):
+                    for block in content:
+                        if isinstance(block, dict) and block.get("type") == "input_text":
+                            t = block.get("text", "").strip()
+                            # Skip long system prompts
+                            if len(t) > 1000:
+                                continue
+                            if t:
+                                texts.append(t)
+                if texts:
+                    combined = "\n".join(texts)
+                    if len(combined) > 500:
+                        combined = combined[:500] + "..."
+                    return f"\r\n{time_prefix}{_CYAN_BOLD}>>> User{_RESET}\r\n{_escape_for_terminal(combined)}\r\n"
+
+            elif role == "assistant":
+                parts = []
+                if isinstance(content, list):
+                    for block in content:
+                        if isinstance(block, dict):
+                            if block.get("type") == "output_text":
+                                t = block.get("text", "").strip()
+                                if t:
+                                    parts.append(_escape_for_terminal(t))
+                            elif block.get("type") == "function_call":
+                                fname = block.get("name", "unknown")
+                                parts.append(f"{_YELLOW_BOLD}[Tool: {fname}]{_RESET}")
+                if parts:
+                    header = f"\r\n{time_prefix}{_GREEN_BOLD}<<< Assistant{_RESET}\r\n"
+                    return header + "\r\n".join(parts) + "\r\n"
+
+            # Skip developer role (system prompts)
+            return None
+
+        return None
+
+    # ------------------------------------------------------------------
+    # Copilot formatter
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _format_copilot(record: dict) -> str | None:
+        """Convert a Copilot events.jsonl record to ANSI-colored text."""
+        rtype = record.get("type", "")
+
+        # Skip noise
+        if rtype in ("session.start", "tool.execution_start", "tool.execution_end",
+                      "assistant.turn_start", "assistant.turn_end"):
+            return None
+
+        time_prefix = _time_prefix(record.get("timestamp", ""))
+        data = record.get("data", {})
+
+        if rtype == "user.message":
+            content = data.get("content", "")
+            if isinstance(content, str) and content.strip():
+                display = content.strip()
+                if len(display) > 500:
+                    display = display[:500] + "..."
+                return f"\r\n{time_prefix}{_CYAN_BOLD}>>> User{_RESET}\r\n{_escape_for_terminal(display)}\r\n"
+
+        elif rtype == "assistant.message":
+            content = data.get("content", "")
+            tool_requests = data.get("toolRequests", [])
+
+            parts = []
+            if isinstance(content, str) and content.strip():
+                parts.append(_escape_for_terminal(content.strip()))
+
+            for tool_req in tool_requests:
+                if isinstance(tool_req, dict):
+                    tool_name = tool_req.get("name", "unknown")
+                    args = tool_req.get("arguments", {})
+                    summary = ""
+                    if isinstance(args, dict):
+                        # Show first meaningful string arg
+                        for v in args.values():
+                            if isinstance(v, str) and v:
+                                summary = v[:60]
+                                break
+                    parts.append(f"{_YELLOW_BOLD}[Tool: {tool_name}]{_RESET} {summary}")
+
+            if parts:
+                header = f"\r\n{time_prefix}{_GREEN_BOLD}<<< Assistant{_RESET}\r\n"
+                return header + "\r\n".join(parts) + "\r\n"
+
+        return None
+
+    # ------------------------------------------------------------------
+    # Subscriber management
+    # ------------------------------------------------------------------
 
     def _broadcast(self, data: bytes):
         """Send data to all subscribers."""
@@ -246,6 +382,22 @@ class SessionObserver:
             except asyncio.CancelledError:
                 pass
             self._tail_task = None
+
+
+# ------------------------------------------------------------------
+# Shared helpers
+# ------------------------------------------------------------------
+
+def _time_prefix(timestamp_str: str) -> str:
+    """Format an ISO timestamp into a dim [HH:MM:SS] prefix."""
+    if not timestamp_str:
+        return ""
+    try:
+        dt = datetime.fromisoformat(timestamp_str.replace("Z", "+00:00"))
+        local_dt = dt.astimezone()
+        return f"{_DIM}[{local_dt.strftime('%H:%M:%S')}]{_RESET} "
+    except (ValueError, OSError):
+        return ""
 
 
 def _escape_for_terminal(text: str) -> str:

@@ -125,6 +125,14 @@ def create_app() -> FastAPI:
                 return HTMLResponse(html)
             return FileResponse(static_dir / "index.html")
 
+        @app.get("/sw.js")
+        async def service_worker():
+            return FileResponse(
+                static_dir / "sw.js",
+                media_type="application/javascript",
+                headers={"Service-Worker-Allowed": "/"},
+            )
+
         app.mount(
             "/static",
             StaticFiles(directory=str(static_dir)),

@@ -157,7 +157,6 @@ class SessionRegistry:
             session_name=name,
             manager=self.notification_manager,
             patterns=notif_patterns,
-            ansi_re=_ANSI_RE,
         )
 
         session = Session(
@@ -319,6 +318,17 @@ class SessionRegistry:
         """Remove a resumable entry without resuming it."""
         self.resumable.pop(session_id, None)
         self._delete_metadata(session_id)
+
+    def clear_all_resumable(self) -> int:
+        """Remove all resumable entries that have no worktree. Returns count removed."""
+        to_remove = [
+            sid for sid, meta in self.resumable.items()
+            if not meta.get("worktree")
+        ]
+        for sid in to_remove:
+            self.resumable.pop(sid, None)
+            self._delete_metadata(sid)
+        return len(to_remove)
 
     def _save_metadata(self, session: Session):
         path = SESSIONS_DIR / f"{session.id}.json"

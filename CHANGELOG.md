@@ -4,21 +4,25 @@ All notable changes to Conductor are documented here.
 
 ## v0.3.9
 
-### External session discovery and observation
+### Multi-agent session discovery and observation
 
-- **Discover IDE sessions** — the Resume tab now scans `~/.claude/projects/` for Claude Code session files (JSONL) and lists them with slug, project path, branch, and recency. Sessions running in VS Code or JetBrains IDEs are detected via `~/.claude/ide/*.lock` files and shown with a live badge
-- **Resume external sessions** — select a closed IDE session from the list and resume it in a Conductor PTY using `claude --resume`. The conversation continues where the IDE left off
-- **Observe live sessions** — select a running IDE session to open a read-only observation panel. The JSONL file is tailed in real-time with ANSI-colored formatting (user messages in cyan, assistant in green, tool calls in yellow with timestamps). Input is disabled server-side; typing shows a "read-only" toast
-- **Session scanner** — new `conductor.external` package handles discovery (10s cache, excludes subagent files, filters out sessions already in Conductor) and observation (history limited to last 200 records for large files, auto-cleanup on last subscriber disconnect)
-- **Security** — file IDs are validated as UUIDs to prevent path traversal and command injection
+- **Multi-agent discovery** — the Resume tab now discovers sessions from Claude Code, Codex, Copilot CLI, Gemini CLI, and Goose. Each agent's local session storage is scanned automatically (JSONL files, SQLite databases, YAML metadata). Sessions are shown in a unified list sorted by recency
+- **Agent filter** — a new dropdown in the browse list lets you filter by agent (Claude, Codex, Copilot, etc.). Agent badges with color-coded labels appear on each session item
+- **Agent-specific observation** — the read-only observation panel now formats JSONL records differently per agent: Claude Code (user/assistant/tool_use), Codex (event_msg/response_item), and Copilot (user.message/assistant.message with tool requests)
+- **Agent-specific resume** — each agent uses its own resume command (e.g. `claude --resume`, `codex resume`, `copilot --resume`). The resume endpoint reads the command from the scanner instead of hardcoding
+- **Discover IDE sessions** — scans `~/.claude/projects/` for Claude Code, `~/.codex/state_5.sqlite` for Codex, `~/.copilot/session-state/` for Copilot, with defensive stubs for Gemini (`~/.gemini/tmp/`) and Goose (`~/.local/share/goose/`). Sessions running in VS Code or JetBrains IDEs are detected via lock files and shown with a live badge
+- **Observe live sessions** — select a running session to open a read-only observation panel. The JSONL file is tailed in real-time with ANSI-colored formatting. Sessions without a JSONL file (Gemini, Goose) hide the Observe button
+- **Session scanner** — `conductor.external` package handles discovery across all agents (10s cache, excludes subagent files, filters out sessions already in Conductor) and observation (history limited to last 200 records, auto-cleanup on disconnect)
+- **Security** — file IDs use an `agent::id` namespace format. Bare UUIDs are accepted for backward compatibility (mapped to Claude). IDs are validated against a strict allowlist of agent prefixes
 
 ### Notification system
 
-- **Server-side notification detection** — the server now monitors terminal output and detects when an AI agent is waiting for user input (confirmation prompts, permission requests, questions). Pattern matching runs after 5 seconds of silence, with a 60-second cooldown to prevent spam
-- **Browser notifications** — opt-in system notifications when an agent needs attention (only fires when the tab is not visible). Configurable per device via the new Notifications settings tab
+- **Server-side notification detection** — uses a pyte virtual terminal to maintain a clean screen representation (same as what xterm.js renders in the browser), then pattern-matches against it to detect when an agent is waiting for user input (confirmation prompts, permission requests, questions). Scanning runs after 5 seconds of silence, with a 60-second cooldown to prevent spam
+- **Browser notifications** — opt-in system notifications when an agent needs attention (only fires when the tab is not visible). Uses Service Worker for mobile browser support. Configurable per device via the Notifications settings tab
 - **Audio alerts** — optional notification chime that plays when an agent is waiting. Preview button in settings to hear the sound before enabling
-- **Webhook integration** — send notifications to Telegram, Discord, Slack, or any generic JSON endpoint. Auto-detects the platform from the URL and formats messages accordingly. Includes a test button to verify webhook configuration
-- **Per-device notification settings** — each device (phone, tablet, desktop) has its own notification preferences stored in localStorage with webhook config synced server-side. Unique device ID generated automatically
+- **Webhook integration** — send notifications to Telegram, Discord, Slack, or any custom JSON endpoint. Platform dropdown with per-platform fields (e.g. Telegram shows Bot Token + Chat ID instead of a raw URL). Includes a test button to verify configuration. See [Telegram setup guide](docs/notification_telegram.md)
+- **Global webhook settings** — webhook configuration is stored server-side and shared across all devices. Change it on your phone, see it on desktop. Browser/sound preferences remain per-device (localStorage)
+- **Masked secrets** — bot tokens, chat IDs, and webhook URLs are displayed as password fields with an eye toggle to reveal/hide
 - **Settings visible to all devices** — the Settings dialog is now accessible from any device (not just localhost). Remote devices see only the Notifications tab; admin tabs (Agents, Directories, General) remain localhost-only
 - **Custom notification patterns** — per-agent `notification_patterns` can be configured to match agent-specific prompts beyond the built-in defaults
 

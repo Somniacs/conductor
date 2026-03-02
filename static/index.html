@@ -314,7 +314,59 @@
         .ext-session-item:hover { background: #1a1a3e; }
         .ext-session-item.selected { background: #252560; border-color: #6060bb; }
         .ext-session-live { color: #44dd77; font-size: 10px; font-weight: 500; }
+        .ext-agent-badge {
+            font-size: 9px; font-weight: 600; text-transform: uppercase;
+            padding: 1px 4px; border-radius: 3px; margin-right: 4px;
+            display: inline-block; letter-spacing: 0.3px;
+        }
         .ext-session-meta { color: #7878a0; font-size: 10px; margin-top: 2px; }
+        .ext-filters { display: flex; gap: 4px; margin-bottom: 4px; }
+        .ext-filters select {
+            flex: 1; padding: 3px 6px; font-size: 10px;
+            background: #0a0a1a; color: #c0c0e0; border: 1px solid #2a2a5a;
+            border-radius: 3px; cursor: pointer;
+        }
+        .ext-agent-filter-btn {
+            padding: 3px 6px; font-size: 10px;
+            background: #0a0a1a; color: #c0c0e0; border: 1px solid #2a2a5a;
+            border-radius: 3px; cursor: pointer;
+            white-space: nowrap;
+        }
+        .ext-agent-filter-btn:hover { border-color: #3a3a6a; }
+        .ext-agent-popup {
+            display: none; position: fixed;
+            background: #10102a; border: 1px solid #3a3a6a; border-radius: 5px;
+            z-index: 9999; padding: 4px 0; min-width: 130px;
+            box-shadow: 0 6px 20px rgba(0,0,0,0.5);
+        }
+        .ext-agent-popup.open { display: block; }
+        .ext-agent-popup-item {
+            display: flex; align-items: center; gap: 6px;
+            padding: 5px 10px; cursor: pointer; font-size: 11px; color: #c0c0e0;
+        }
+        .ext-agent-popup-item:hover { background: #1a1a3e; }
+        .ext-agent-popup-item .ext-agent-check {
+            width: 14px; text-align: center; font-size: 11px;
+        }
+        .ext-selected-info {
+            padding: 6px 10px; border: 1px solid #3a3a7a; border-radius: 5px;
+            background: #1a1a3e; font-size: 11px; margin-bottom: 4px;
+        }
+        .ext-selected-info .ext-sel-header {
+            display: flex; justify-content: space-between; align-items: center;
+        }
+        .ext-selected-info .ext-sel-name { font-weight: 500; color: #d0d0ff; }
+        .ext-selected-info .ext-sel-id { color: #7878a0; font-size: 10px; margin-top: 2px; font-family: monospace; }
+        .ext-selected-info .ext-sel-clear {
+            background: none; border: none; color: #7878a0; cursor: pointer;
+            font-size: 14px; padding: 0 2px; line-height: 1;
+        }
+        .ext-selected-info .ext-sel-clear:hover { color: #ff6666; }
+        .external-live-warning {
+            margin-top: 4px; padding: 5px 8px; border-radius: 4px;
+            background: #2a1a0a; border: 1px solid #5a3a1a;
+            color: #ff9060; font-size: 11px; font-weight: 500;
+        }
 
         /* Read-only observation banner & panel */
         .observe-banner {
@@ -2027,22 +2079,45 @@
                     <button class="active" onclick="setSessionMode('new')">New</button>
                     <button onclick="setSessionMode('resume')">Resume</button>
                 </div>
-                <label>Command</label>
-                <select id="new-command" onchange="onCommandChange()"></select>
-                <label>Session name</label>
-                <input type="text" id="new-name" placeholder="e.g. research" autocomplete="off">
-                <div id="name-error" style="font-size:11px;color:#ff6666;margin-top:2px;display:none;">Name already taken</div>
-                <div class="resume-token-row" id="resume-token-row">
-                    <label>Resume token</label>
-                    <input type="text" id="new-resume-token" placeholder="Paste UUID from agent output" autocomplete="off" oninput="validateNewSession()">
+                <div class="session-mode-toggle" id="resume-sub-toggle" style="display:none;">
+                    <button class="active" onclick="setResumeSubMode('manual')">Manual</button>
+                    <button onclick="setResumeSubMode('browse')">Browse</button>
                 </div>
-                <div class="resume-info" id="resume-info"></div>
-                <div id="external-sessions-section" style="display:none;">
-                    <label>Claude Code sessions</label>
+                <!-- New mode + Resume/Manual mode -->
+                <div id="resume-manual-section">
+                    <label>Command</label>
+                    <select id="new-command" onchange="onCommandChange()"></select>
+                    <label>Session name</label>
+                    <input type="text" id="new-name" placeholder="e.g. research" autocomplete="off">
+                    <div id="name-error" style="font-size:11px;color:#ff6666;margin-top:2px;display:none;">Name already taken</div>
+                    <div class="resume-token-row" id="resume-token-row">
+                        <label>Resume token</label>
+                        <input type="text" id="new-resume-token" placeholder="Paste UUID from agent output" autocomplete="off" oninput="validateNewSession()">
+                    </div>
+                    <div class="resume-info" id="resume-info"></div>
+                </div>
+                <!-- Resume/Browse mode -->
+                <div id="resume-browse-section" style="display:none;">
+                    <div class="ext-filters">
+                        <select id="ext-filter-time" onchange="renderExternalSessionList()">
+                            <option value="3600">Last hour</option>
+                            <option value="86400" selected>Today</option>
+                            <option value="604800">This week</option>
+                            <option value="2592000">This month</option>
+                            <option value="0">All</option>
+                        </select>
+                        <button type="button" class="ext-agent-filter-btn" id="ext-agent-btn" onclick="openAgentPopup(event)">Agents</button>
+                        <div class="ext-agent-popup" id="ext-agent-popup"></div>
+                        <select id="ext-filter-project" onchange="renderExternalSessionList()">
+                            <option value="">All projects</option>
+                        </select>
+                    </div>
                     <div id="external-session-list" class="external-session-list"></div>
+                    <div id="ext-selected-info" class="ext-selected-info" style="display:none;"></div>
+                    <div id="external-live-warning" class="external-live-warning" style="display:none;">Currently running in IDE — use Observe for read-only view</div>
                 </div>
                 <div id="new-session-fields">
-                    <label>Working directory</label>
+                    <label style="margin-top:14px;">Working directory</label>
                     <div class="dir-picker" id="dir-picker"></div>
                     <div class="worktree-row" id="worktree-row">
                         <input type="checkbox" id="new-worktree" onchange="onWorktreeToggle()">
@@ -2051,7 +2126,13 @@
                     </div>
                     <div class="worktree-branch-preview" id="worktree-branch-preview"></div>
                 </div>
-                <button class="run-btn" id="run-btn" onclick="createSession()" disabled>Run</button>
+                <div id="run-btn-container">
+                    <button class="run-btn" id="run-btn" onclick="createSession()" disabled>Run</button>
+                </div>
+                <div id="ext-btn-container" style="display:none;gap:6px;margin-top:10px;">
+                    <button class="run-btn" id="ext-resume-btn" onclick="createSession()" style="flex:1;" disabled>Resume</button>
+                    <button class="run-btn" id="ext-observe-btn" onclick="observeExternalSession()" style="flex:1;background:#2a1a0a;border-color:#5a3a1a;">Observe</button>
+                </div>
             </div>
         </aside>
         <main class="content">
@@ -4650,7 +4731,7 @@
 
         // --- Observe Panel (read-only external session) ---
 
-        function openObservePanel(fileId, displayName) {
+        function openObservePanel(fileId, displayName, agent) {
             const panelId = 'observe::' + fileId;
             if (panels.find(p => p.id === panelId)) return;
 
@@ -4659,7 +4740,7 @@
                 ws: null, terminal: null, fitAddon: null,
                 element: null, _resizeObserver: null, _theme: 'default',
                 _sizeChecked: false, _dimensionsReady: true, _ptyRows: null, _ptyCols: null,
-                _isObserve: true, _fileId: fileId,
+                _isObserve: true, _fileId: fileId, _agent: agent || 'claude',
             };
             panels.push(panel);
             buildObservePanelElement(panel);
@@ -4709,7 +4790,7 @@
             // Read-only banner
             const banner = document.createElement('div');
             banner.className = 'observe-banner';
-            banner.textContent = 'READ-ONLY — OBSERVING IDE SESSION';
+            banner.textContent = `READ-ONLY — OBSERVING ${(panel._agent || 'CLAUDE').toUpperCase()} SESSION`;
             div.appendChild(banner);
 
             div.appendChild(termOuter);
@@ -4771,7 +4852,7 @@
         }
 
         function connectObserveWebSocket(panel) {
-            let wsUrl = serverWsUrl(panel.server, `/external/sessions/${panel._fileId}/observe`);
+            let wsUrl = serverWsUrl(panel.server, `/external/sessions/${encodeURIComponent(panel._fileId)}/observe`);
             if (_conductorToken) wsUrl += (wsUrl.includes('?') ? '&' : '?') + 'token=' + encodeURIComponent(_conductorToken);
             const ws = new WebSocket(wsUrl);
             ws.binaryType = 'arraybuffer';
@@ -4913,11 +4994,27 @@
             if (mi) mi.style.display = '';
         }
 
+        let _notifSettingsSnapshot = null;
+        let _webhookSettingsSnapshot = null;
         async function toggleSettingsDialog() {
             const dialog = document.getElementById('settings-dialog');
+            const wasOpen = dialog.classList.contains('open');
             dialog.classList.toggle('open');
-            if (dialog.classList.contains('open')) {
+            if (!wasOpen) {
+                // Opening — snapshot so Cancel can revert
+                _notifSettingsSnapshot = localStorage.getItem('conductor-notifications') || '{}';
                 await loadSettings();
+                _webhookSettingsSnapshot = JSON.stringify(_webhookSettings);
+            } else {
+                // Closing via Cancel/X/overlay — restore snapshot
+                if (_notifSettingsSnapshot !== null) {
+                    localStorage.setItem('conductor-notifications', _notifSettingsSnapshot);
+                    _notifSettingsSnapshot = null;
+                }
+                if (_webhookSettingsSnapshot !== null) {
+                    _webhookSettings = JSON.parse(_webhookSettingsSnapshot);
+                    _webhookSettingsSnapshot = null;
+                }
             }
         }
 
@@ -4936,23 +5033,13 @@
                     _settingsData = { _remote: true };
                     _settingsTab = 'notifications';
                 }
-                // Load server-stored notification settings and merge with localStorage.
-                // Server is the source of truth for webhook_url / webhook_chat_id so
-                // they persist across browser clears.
+                // Load global webhook settings from server
                 try {
-                    const resp = await fetch('/notifications/settings', {
-                        headers: { 'X-Device-Id': _getDeviceId() },
-                    });
+                    const resp = await fetch('/notifications/webhook');
                     if (resp.ok) {
-                        const serverNs = await resp.json();
-                        if (serverNs && Object.keys(serverNs).length) {
-                            const localNs = _getNotifSettings();
-                            // Merge: server wins for webhook fields, local wins for browser/sound
-                            const merged = { ...serverNs, ...localNs };
-                            // But always take server webhook_url if local is empty
-                            if (!merged.webhook_url && serverNs.webhook_url) merged.webhook_url = serverNs.webhook_url;
-                            if (!merged.webhook_chat_id && serverNs.webhook_chat_id) merged.webhook_chat_id = serverNs.webhook_chat_id;
-                            _saveNotifSettings(merged);
+                        const wh = await resp.json();
+                        if (wh && Object.keys(wh).length) {
+                            _webhookSettings = wh;
                         }
                     }
                 } catch (_) {}
@@ -4973,7 +5060,9 @@
             if (resetBtn) resetBtn.style.display = (tab !== 'notifications' && isLocalhost()) ? '' : 'none';
         }
 
-        // ── Notification settings (per-device, stored in localStorage) ────
+        // ── Notification settings ────
+        // Browser/sound are per-device (localStorage). Webhook is global (server).
+        let _webhookSettings = {};
 
         function _getDeviceId() {
             let id = localStorage.getItem('conductor-device-id');
@@ -4998,27 +5087,284 @@
             const ns = _getNotifSettings();
             ns[key] = value;
             _saveNotifSettings(ns);
-            // If enabling browser notifications, request permission
+            // If enabling browser notifications, check support and request permission
             if (key === 'browser' && value) {
+                const noSW = !('serviceWorker' in navigator);
+                const noNotif = !('Notification' in window);
+                if (noSW && noNotif) {
+                    // Browser has no notification support at all
+                    _showNotifUnsupportedBanner();
+                    return;
+                }
                 requestNotificationPermission().then(ok => {
-                    if (!ok) {
-                        ns.browser = false;
-                        _saveNotifSettings(ns);
-                        const cb = document.getElementById('notif-browser');
-                        if (cb) cb.checked = false;
-                        showAlert('Browser notification permission was denied. Check your browser settings.');
+                    if (!ok && noSW) {
+                        // Permission denied and no SW fallback
+                        _showNotifDeniedBanner();
+                    } else {
+                        _hideNotifDeniedBanner();
                     }
                 });
             }
+        }
+
+        function _showNotifDeniedBanner() {
+            const b = document.getElementById('notif-denied-banner');
+            if (b) b.style.display = 'block';
+        }
+        function _hideNotifDeniedBanner() {
+            const b = document.getElementById('notif-denied-banner');
+            if (b) b.style.display = 'none';
+        }
+        function _showNotifUnsupportedBanner() {
+            const b = document.getElementById('notif-denied-banner');
+            if (!b) return;
+            b.style.display = 'block';
+            b.innerHTML = 'This browser does not support push notifications. Use <b>Chrome</b> for browser notifications, or use the <b>Webhook</b> below for Telegram/Discord/Slack alerts.';
+        }
+        async function _retryNotifPermission() {
+            if (!('Notification' in window)) return;
+            // Call requestPermission directly — skip the 'denied' early-return
+            // so the browser gets a chance to re-prompt after site data clear.
+            try {
+                const result = await Notification.requestPermission();
+                if (result === 'granted') {
+                    localStorage.setItem('conductor_notif_verified', '1');
+                    _hideNotifDeniedBanner();
+                    const ns = _getNotifSettings();
+                    ns.browser = true;
+                    _saveNotifSettings(ns);
+                    const cb = document.getElementById('notif-browser');
+                    if (cb) cb.checked = true;
+                    return;
+                }
+            } catch (e) {}
+            // Permission still denied — try sending via SW as a test
+            if ('serviceWorker' in navigator) {
+                try {
+                    const reg = await navigator.serviceWorker.ready;
+                    await reg.showNotification('Conductor', { body: 'Notifications enabled', tag: 'conductor-verify' });
+                    localStorage.setItem('conductor_notif_verified', '1');
+                    _hideNotifDeniedBanner();
+                    const ns = _getNotifSettings();
+                    ns.browser = true;
+                    _saveNotifSettings(ns);
+                    const cb = document.getElementById('notif-browser');
+                    if (cb) cb.checked = true;
+                    return;
+                } catch (e) {}
+            }
+            _openBrowserSiteSettings();
+        }
+        function _openBrowserSiteSettings() {
+            // Browsers don't allow opening chrome:// or internal settings URLs from web pages.
+            // Detect browser and show tailored instructions.
+            const b = document.getElementById('notif-denied-banner');
+            if (!b) return;
+            const ua = navigator.userAgent || '';
+            let steps = '';
+            if (/SamsungBrowser/i.test(ua)) {
+                steps = '<ol style="margin:6px 0 0 16px;padding:0;line-height:1.6">'
+                    + '<li>Open Samsung Internet <b>Settings</b> (&#8942; menu &gt; Settings)</li>'
+                    + '<li>Go to <b>Sites and downloads</b></li>'
+                    + '<li>Tap <b>Notifications</b></li>'
+                    + '<li>Find this site and tap <b>Allow</b>, or remove it from the <b>Blocked</b> list</li>'
+                    + '<li>Reload this page</li>'
+                    + '</ol>'
+                    + '<p style="margin:6px 0 0;font-size:10px;color:#a08060">If the site is not listed, try: Settings &gt; Sites and downloads &gt; Clear site data for this URL, then reload and allow the prompt.</p>';
+            } else if (/Chrome/i.test(ua) && !/Edg/i.test(ua)) {
+                steps = '<ol style="margin:6px 0 0 16px;padding:0;line-height:1.6">'
+                    + '<li>Tap the <b>lock icon</b> in the address bar</li>'
+                    + '<li>Tap <b>Permissions</b> (or <b>Site settings</b>)</li>'
+                    + '<li>Set <b>Notifications</b> to <b>Allow</b></li>'
+                    + '<li>Reload this page</li>'
+                    + '</ol>';
+            } else if (/Firefox/i.test(ua)) {
+                steps = '<ol style="margin:6px 0 0 16px;padding:0;line-height:1.6">'
+                    + '<li>Tap the <b>lock icon</b> in the address bar</li>'
+                    + '<li>Tap <b>Edit site permissions</b></li>'
+                    + '<li>Set <b>Notification</b> to <b>Allow</b></li>'
+                    + '<li>Reload this page</li>'
+                    + '</ol>';
+            } else {
+                steps = '<ol style="margin:6px 0 0 16px;padding:0;line-height:1.6">'
+                    + '<li>Open your browser\'s <b>Settings</b></li>'
+                    + '<li>Find <b>Site settings</b> or <b>Permissions</b></li>'
+                    + '<li>Find this site and set <b>Notifications</b> to <b>Allow</b></li>'
+                    + '<li>Reload this page</li>'
+                    + '</ol>';
+            }
+            b.innerHTML = '<strong>How to enable notifications:</strong>' + steps
+                + '<button onclick="_retryNotifPermission()" style="margin-top:6px;padding:3px 10px;background:#3a2a1a;border:1px solid #5a3a1a;color:#ffb070;border-radius:3px;cursor:pointer;font-size:11px;">Try again</button>';
+        }
+
+        async function _testBrowserNotification() {
+            const res = document.getElementById('notif-browser-test-result');
+            if (!res) return;
+
+            // Try SW path first (mobile)
+            if ('serviceWorker' in navigator) {
+                try {
+                    const swReg = await Promise.race([
+                        navigator.serviceWorker.ready,
+                        new Promise((_, rej) => setTimeout(() => rej('timeout'), 3000))
+                    ]);
+                    await swReg.showNotification('Conductor', {
+                        body: 'Test notification — it works!',
+                        tag: 'conductor-test',
+                    });
+                    localStorage.setItem('conductor_notif_verified', '1');
+                    _hideNotifDeniedBanner();
+                    res.textContent = 'Sent! Switch to another app to see it.';
+                    res.style.color = '#60e060';
+                    const ns = _getNotifSettings();
+                    if (ns.sound) _previewNotifSound();
+                    return;
+                } catch (e) {}
+            }
+
+            // Try Notification constructor (desktop)
+            if ('Notification' in window) {
+                let perm = Notification.permission;
+                if (perm !== 'granted') {
+                    try { perm = await Notification.requestPermission(); } catch (e) {}
+                }
+                if (perm === 'granted') {
+                    try {
+                        new Notification('Conductor', { body: 'Test notification — it works!', tag: 'conductor-test' });
+                        localStorage.setItem('conductor_notif_verified', '1');
+                        _hideNotifDeniedBanner();
+                        res.textContent = 'Sent!';
+                        res.style.color = '#60e060';
+                        const ns = _getNotifSettings();
+                        if (ns.sound) _previewNotifSound();
+                        return;
+                    } catch (e) {}
+                }
+            }
+
+            // Nothing works
+            res.style.color = '#ff9060';
+            res.style.fontSize = '11px';
+            res.textContent = 'This browser does not support notifications. Use the Webhook below or try Chrome.';
+        }
+
+        function _detectWebhookPlatform(url) {
+            if (!url) return 'telegram';
+            if (url.includes('telegram.org')) return 'telegram';
+            if (url.includes('discord.com') || url.includes('discordapp.com')) return 'discord';
+            if (url.includes('slack.com')) return 'slack';
+            return 'custom';
+        }
+
+        const _svgEye = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>';
+        const _svgEyeOff = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>';
+        function _toggleSecret(inputId, btn) {
+            const i = document.getElementById(inputId);
+            const show = i.type === 'password';
+            i.type = show ? 'text' : 'password';
+            btn.innerHTML = show ? _svgEye : _svgEyeOff;
+        }
+
+        function _renderWebhookFields(platform, ns) {
+            let h = '';
+            const eyeBtn = (inputId) => `<button type="button" onclick="_toggleSecret('${inputId}',this)" title="Show/hide" style="background:none;border:none;color:#7878a0;cursor:pointer;padding:4px;display:flex;align-items:center">${_svgEyeOff}</button>`;
+            if (platform === 'telegram') {
+                // Extract token from existing URL if migrating
+                let token = ns.webhook_token || '';
+                if (!token && ns.webhook_url && ns.webhook_url.includes('telegram.org/bot')) {
+                    const m = ns.webhook_url.match(/\/bot([^/]+)\//);
+                    if (m) token = m[1];
+                }
+                h += '<div class="notif-webhook-row">';
+                h += '<label>Bot Token <small style="color:#7878a0">from @BotFather</small></label>';
+                h += '<div style="display:flex;align-items:center;gap:4px">';
+                h += `<input class="settings-input" type="password" id="notif-webhook-token" value="${escHtml(token)}" placeholder="123456:ABC-DEF1234ghIkl-zyx57W2v" onchange="_updateTelegramUrl()" style="flex:1">`;
+                h += eyeBtn('notif-webhook-token');
+                h += '</div>';
+                h += '</div>';
+                h += '<div class="notif-webhook-row">';
+                h += '<label>Chat ID <small style="color:#7878a0">from @userinfobot</small></label>';
+                h += '<div style="display:flex;align-items:center;gap:4px">';
+                h += `<input class="settings-input" type="password" id="notif-webhook-chat-id" value="${escHtml(ns.webhook_chat_id || '')}" placeholder="e.g. 123456789" onchange="_updateWebhookSetting('webhook_chat_id', this.value)" style="flex:1">`;
+                h += eyeBtn('notif-webhook-chat-id');
+                h += '</div>';
+                h += '</div>';
+            } else if (platform === 'discord') {
+                h += '<div class="notif-webhook-row">';
+                h += '<label>Discord Webhook URL</label>';
+                h += '<div style="display:flex;align-items:center;gap:4px">';
+                h += `<input class="settings-input" type="password" id="notif-webhook-url" value="${escHtml(platform === _detectWebhookPlatform(ns.webhook_url) ? ns.webhook_url : '')}" placeholder="https://discord.com/api/webhooks/..." onchange="_updateWebhookSetting('webhook_url', this.value)" style="flex:1">`;
+                h += eyeBtn('notif-webhook-url');
+                h += '</div>';
+                h += '</div>';
+            } else if (platform === 'slack') {
+                h += '<div class="notif-webhook-row">';
+                h += '<label>Slack Webhook URL</label>';
+                h += '<div style="display:flex;align-items:center;gap:4px">';
+                h += `<input class="settings-input" type="password" id="notif-webhook-url" value="${escHtml(platform === _detectWebhookPlatform(ns.webhook_url) ? ns.webhook_url : '')}" placeholder="https://hooks.slack.com/services/..." onchange="_updateWebhookSetting('webhook_url', this.value)" style="flex:1">`;
+                h += eyeBtn('notif-webhook-url');
+                h += '</div>';
+                h += '</div>';
+            } else {
+                h += '<div class="notif-webhook-row">';
+                h += '<label>Webhook URL</label>';
+                h += '<div style="display:flex;align-items:center;gap:4px">';
+                h += `<input class="settings-input" type="password" id="notif-webhook-url" value="${escHtml(ns.webhook_url || '')}" placeholder="https://example.com/webhook" onchange="_updateWebhookSetting('webhook_url', this.value)" style="flex:1">`;
+                h += eyeBtn('notif-webhook-url');
+                h += '</div>';
+                h += '</div>';
+            }
+            // Hidden field to always have a webhook-url element for non-telegram
+            if (platform === 'telegram') {
+                let builtUrl = '';
+                const token = ns.webhook_token || '';
+                if (token) builtUrl = 'https://api.telegram.org/bot' + token + '/sendMessage';
+                else if (ns.webhook_url && ns.webhook_url.includes('telegram.org')) builtUrl = ns.webhook_url;
+                h += `<input type="hidden" id="notif-webhook-url" value="${escHtml(builtUrl)}">`;
+            }
+            return h;
+        }
+
+        function _updateWebhookSetting(key, value) {
+            _webhookSettings[key] = value;
+        }
+
+        function _switchWebhookPlatform(platform) {
+            try {
+                _webhookSettings.webhook_platform = platform;
+                if (platform !== _detectWebhookPlatform(_webhookSettings.webhook_url)) {
+                    _webhookSettings.webhook_url = '';
+                }
+                const container = document.getElementById('notif-webhook-fields');
+                if (container) container.innerHTML = _renderWebhookFields(platform, _webhookSettings);
+            } catch (e) {
+                console.error('switchWebhookPlatform error:', e);
+            }
+        }
+
+        function _updateTelegramUrl() {
+            const tokenEl = document.getElementById('notif-webhook-token');
+            const urlEl = document.getElementById('notif-webhook-url');
+            if (!tokenEl) return;
+            const token = tokenEl.value.trim();
+            const url = token ? 'https://api.telegram.org/bot' + token + '/sendMessage' : '';
+            if (urlEl) urlEl.value = url;
+            _webhookSettings.webhook_token = token;
+            _webhookSettings.webhook_url = url;
         }
 
         async function _testWebhook() {
             const urlEl = document.getElementById('notif-webhook-url');
             const chatIdEl = document.getElementById('notif-webhook-chat-id');
             const resultEl = document.getElementById('notif-test-result');
-            if (!urlEl || !resultEl) return;
-            const url = urlEl.value.trim();
-            if (!url) { resultEl.textContent = 'Enter a webhook URL first'; resultEl.className = 'notif-test-result fail'; return; }
+            if (!resultEl) return;
+            const url = urlEl ? urlEl.value.trim() : '';
+            if (!url) {
+                const platform = document.getElementById('notif-webhook-platform')?.value || 'telegram';
+                resultEl.textContent = platform === 'telegram' ? 'Enter a bot token first' : 'Enter a webhook URL first';
+                resultEl.className = 'notif-test-result fail';
+                return;
+            }
             resultEl.textContent = 'Sending...';
             resultEl.className = 'notif-test-result';
             try {
@@ -5148,6 +5494,15 @@
             html += `<input type="number" min="5" max="300" value="${d.graceful_stop_timeout || 30}" onchange="_settingsData.graceful_stop_timeout = parseInt(this.value)">`;
             html += '</div>';
             html += '</div>';
+
+            // Stopped sessions cleanup
+            const stoppedCount = sessions.filter(s => s.status === 'exited' && !s.worktree).length;
+            html += '<div class="settings-section"><div class="settings-section-title">Stopped Sessions</div>';
+            html += `<div class="settings-info-row"><span class="info-label">Resumable sessions</span><span class="info-value" id="settings-stopped-count">${stoppedCount}</span></div>`;
+            html += '<div class="settings-hint">Stopped sessions are kept so you can resume them later. Clear old ones to declutter the sidebar.</div>';
+            html += `<div style="margin-top:8px;"><button class="run-btn" style="width:auto;padding:5px 14px;font-size:12px;" onclick="_clearStoppedSessions()" ${stoppedCount === 0 ? 'disabled' : ''}>Clear all stopped sessions</button></div>`;
+            html += '</div>';
+
             html += '<div class="settings-section"><div class="settings-section-title">Server Info</div>';
             html += `<div class="settings-info-row"><span class="info-label">Version</span><span class="info-value">${escHtml(d.version || '')}</span></div>`;
             html += `<div class="settings-info-row"><span class="info-label">Host</span><span class="info-value">${escHtml(d.host || '')}:${d.port || ''}</span></div>`;
@@ -5167,6 +5522,12 @@
             html += '<div class="settings-toggle-label">Enable browser notifications<small>Show a system notification when an agent needs your attention</small></div>';
             html += `<label class="toggle-switch"><input type="checkbox" id="notif-browser" ${ns.browser ? 'checked' : ''} onchange="_updateNotifSetting('browser', this.checked)"><span class="toggle-slider"></span></label>`;
             html += '</div>';
+            html += '<div id="notif-denied-banner" style="display:none;margin-top:6px;padding:8px 10px;background:#2a1a0a;border:1px solid #5a3a1a;border-radius:5px;font-size:11px;color:#ff9060;">';
+            html += 'Notification permission is blocked by your browser.';
+            html += '<div style="margin-top:6px;display:flex;gap:6px;flex-wrap:wrap;">';
+            html += '<button onclick="_retryNotifPermission()" style="padding:3px 10px;background:#3a2a1a;border:1px solid #5a3a1a;color:#ffb070;border-radius:3px;cursor:pointer;font-size:11px;">Request again</button>';
+            html += '<button onclick="_openBrowserSiteSettings()" style="padding:3px 10px;background:#1a1a3e;border:1px solid #2a2a5a;color:#c0c0e0;border-radius:3px;cursor:pointer;font-size:11px;">Open site settings</button>';
+            html += '</div></div>';
 
             html += '<div class="settings-toggle-row">';
             html += '<div class="settings-toggle-label">Play sound<small>Play an audio alert when a notification fires</small></div>';
@@ -5175,22 +5536,32 @@
             html += '<button style="background:none;border:none;color:#7878a0;cursor:pointer;font-size:14px" onclick="_previewNotifSound()" title="Preview sound">&#9835;</button>';
             html += '</div>';
             html += '</div>';
+            html += '<div style="margin-top:8px;display:flex;align-items:center;gap:10px;">';
+            html += '<button class="run-btn" style="width:auto;padding:4px 14px;font-size:11px;" onclick="_testBrowserNotification()">Test notification</button>';
+            html += '<span id="notif-browser-test-result" style="font-size:11px;color:#7878a0"></span>';
+            html += '</div>';
             html += '</div>';
 
+            const wh = _webhookSettings;
             html += '<div class="settings-section"><div class="settings-section-title">Webhook</div>';
             html += '<div class="settings-toggle-row">';
-            html += '<div class="settings-toggle-label">Enable webhook<small>Send notifications to Telegram, Discord, Slack, or a custom URL</small></div>';
-            html += `<label class="toggle-switch"><input type="checkbox" id="notif-webhook-enabled" ${ns.webhook_enabled ? 'checked' : ''} onchange="_updateNotifSetting('webhook_enabled', this.checked)"><span class="toggle-slider"></span></label>`;
+            html += '<div class="settings-toggle-label">Enable webhook<small>Send notifications to Telegram, Discord, Slack, or a custom URL — shared across all devices</small></div>';
+            html += `<label class="toggle-switch"><input type="checkbox" id="notif-webhook-enabled" ${wh.webhook_enabled ? 'checked' : ''} onchange="_updateWebhookSetting('webhook_enabled', this.checked)"><span class="toggle-slider"></span></label>`;
             html += '</div>';
 
+            const wp = wh.webhook_platform || _detectWebhookPlatform(wh.webhook_url);
             html += '<div class="notif-webhook-row">';
-            html += '<label>Webhook URL</label>';
-            html += `<input class="settings-input" id="notif-webhook-url" value="${escHtml(ns.webhook_url || '')}" placeholder="https://api.telegram.org/bot.../sendMessage" onchange="_updateNotifSetting('webhook_url', this.value)">`;
+            html += '<label>Platform</label>';
+            html += `<select class="settings-input" id="notif-webhook-platform" onchange="_switchWebhookPlatform(this.value)" style="padding:6px 8px">`;
+            html += `<option value="telegram" ${wp === 'telegram' ? 'selected' : ''}>Telegram</option>`;
+            html += `<option value="discord" ${wp === 'discord' ? 'selected' : ''}>Discord</option>`;
+            html += `<option value="slack" ${wp === 'slack' ? 'selected' : ''}>Slack</option>`;
+            html += `<option value="custom" ${wp === 'custom' ? 'selected' : ''}>Custom URL</option>`;
+            html += '</select>';
             html += '</div>';
 
-            html += '<div class="notif-webhook-row">';
-            html += '<label>Chat ID <span style="color:#7878a0">(Telegram only, optional)</span></label>';
-            html += `<input class="settings-input" id="notif-webhook-chat-id" value="${escHtml(ns.webhook_chat_id || '')}" placeholder="e.g. -1001234567890" onchange="_updateNotifSetting('webhook_chat_id', this.value)">`;
+            html += '<div id="notif-webhook-fields">';
+            html += _renderWebhookFields(wp, wh);
             html += '</div>';
 
             html += '<div class="notif-webhook-actions">';
@@ -5207,6 +5578,11 @@
             html += '</div>';
 
             el.innerHTML = html;
+            // Show denied banner on load if permission is blocked AND not verified working via SW
+            if (typeof Notification !== 'undefined' && Notification.permission === 'denied'
+                && !localStorage.getItem('conductor_notif_verified')) {
+                _showNotifDeniedBanner();
+            }
         }
 
         function editCommand(idx) {
@@ -5292,8 +5668,32 @@
             renderSettings();
         }
 
+        async function _clearStoppedSessions() {
+            const confirmed = await showConfirm(
+                'Remove all stopped sessions? They will no longer appear in the sidebar. Worktree sessions are kept.',
+                'Clear'
+            );
+            if (!confirmed) return;
+            try {
+                const resp = await fetch('/sessions/resumable/all', { method: 'DELETE' });
+                if (resp.ok) {
+                    const result = await resp.json();
+                    await fetchAllSessions();
+                    // Update the count in settings if still open
+                    const countEl = document.getElementById('settings-stopped-count');
+                    if (countEl) countEl.textContent = '0';
+                    showToast(`Cleared ${result.count} stopped session${result.count !== 1 ? 's' : ''}`);
+                }
+            } catch (e) {
+                showAlert('Failed to clear sessions');
+            }
+        }
+
         async function saveSettings() {
-            // Always sync notification settings to server (webhook config)
+            // Commit current state — Cancel after this won't revert
+            _notifSettingsSnapshot = null;
+            _webhookSettingsSnapshot = null;
+            // Sync per-device notification settings (browser, sound)
             const ns = _getNotifSettings();
             try {
                 await fetch('/notifications/settings', {
@@ -5304,9 +5704,15 @@
                     },
                     body: JSON.stringify(ns),
                 });
-            } catch (e) {
-                // Non-fatal — webhook settings just won't fire server-side
-            }
+            } catch (e) {}
+            // Sync global webhook settings to server
+            try {
+                await fetch('/notifications/webhook', {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(_webhookSettings),
+                });
+            } catch (e) {}
 
             // If remote device, just close the dialog — no admin settings to save
             if (!_settingsData || _settingsData._remote) {
@@ -5823,29 +6229,58 @@
         }
 
         let _newSessionMode = 'new';
+        let _resumeSubMode = 'manual';  // 'manual' or 'browse'
         let _externalSessions = [];
         let _selectedExternal = null;  // file_id or null
 
         function setSessionMode(mode) {
             _newSessionMode = mode;
             _selectedExternal = null;
+            _resumeSubMode = 'manual';
             const toggle = document.querySelector('.session-mode-toggle');
             toggle.children[0].classList.toggle('active', mode === 'new');
             toggle.children[1].classList.toggle('active', mode === 'resume');
-            // Show/hide fields based on mode
+            // Show/hide sub-toggle and sections
+            document.getElementById('resume-sub-toggle').style.display = mode === 'resume' ? '' : 'none';
             document.getElementById('new-session-fields').style.display = mode === 'new' ? '' : 'none';
+            _applyResumeSubMode();
+            if (mode === 'new') {
+                document.getElementById('resume-manual-section').style.display = '';
+                document.getElementById('resume-browse-section').style.display = 'none';
+            }
             updateResumeFields();
-            updateExternalSessionsVisibility();
-            if (mode === 'resume') fetchExternalSessions();
+            updateRunButton();
             validateNewSession();
         }
 
+        function setResumeSubMode(sub) {
+            _resumeSubMode = sub;
+            _selectedExternal = null;
+            const subToggle = document.getElementById('resume-sub-toggle');
+            subToggle.children[0].classList.toggle('active', sub === 'manual');
+            subToggle.children[1].classList.toggle('active', sub === 'browse');
+            _applyResumeSubMode();
+            if (sub === 'browse') fetchExternalSessions();
+            updateRunButton();
+            validateNewSession();
+        }
+
+        function _applyResumeSubMode() {
+            const isResume = _newSessionMode === 'resume';
+            const isBrowse = isResume && _resumeSubMode === 'browse';
+            document.getElementById('resume-manual-section').style.display = isBrowse ? 'none' : '';
+            document.getElementById('resume-browse-section').style.display = isBrowse ? '' : 'none';
+            document.getElementById('external-live-warning').style.display = 'none';
+            const selInfo = document.getElementById('ext-selected-info');
+            if (selInfo) selInfo.style.display = 'none';
+            // Close agent popup if open
+            const agentPopup = document.getElementById('ext-agent-popup');
+            if (agentPopup) agentPopup.classList.remove('open');
+            // (browse name is auto-derived from slug, no field to reset)
+        }
+
         function onCommandChange() {
-            if (_newSessionMode === 'resume') {
-                updateResumeFields();
-                updateExternalSessionsVisibility();
-                fetchExternalSessions();
-            }
+            if (_newSessionMode === 'resume') updateResumeFields();
             validateNewSession();
         }
 
@@ -5871,18 +6306,7 @@
             }
         }
 
-        function _isClaudeCommand() {
-            const command = document.getElementById('new-command').value;
-            try { return command.split(/\s+/)[0] === 'claude'; } catch (_) { return false; }
-        }
-
-        function updateExternalSessionsVisibility() {
-            const section = document.getElementById('external-sessions-section');
-            section.style.display = (_newSessionMode === 'resume' && _isClaudeCommand()) ? '' : 'none';
-        }
-
         async function fetchExternalSessions() {
-            if (!_isClaudeCommand()) return;
             const listEl = document.getElementById('external-session-list');
             listEl.innerHTML = '<div style="color:#7878a0;font-size:11px;padding:6px 0;">Loading...</div>';
 
@@ -5893,76 +6317,251 @@
                     return;
                 }
                 _externalSessions = await resp.json();
+                _populateAgentFilter();
+                _populateProjectFilter();
                 renderExternalSessionList();
             } catch (e) {
                 listEl.innerHTML = '<div style="color:#ff6666;font-size:11px;padding:6px 0;">Server unreachable</div>';
             }
         }
 
+        const _AGENT_COLORS = { claude:'#e8a040', codex:'#40a8e8', copilot:'#40e870', gemini:'#e840a8', goose:'#a8e840' };
+        let _selectedAgents = new Set();  // empty = all agents shown
+        let _allDiscoveredAgents = [];
+
+        function _populateAgentFilter() {
+            const agents = new Set();
+            for (const s of _externalSessions) {
+                if (s.agent) agents.add(s.agent);
+            }
+            _allDiscoveredAgents = [...agents].sort();
+            // Default: all selected
+            if (_selectedAgents.size === 0) {
+                _selectedAgents = new Set(_allDiscoveredAgents);
+            } else {
+                for (const a of _allDiscoveredAgents) {
+                    if (!_selectedAgents.has(a)) _selectedAgents.add(a);
+                }
+            }
+            _updateAgentBtnLabel();
+        }
+
+        function _updateAgentBtnLabel() {
+            const btn = document.getElementById('ext-agent-btn');
+            if (_selectedAgents.size === 0) {
+                btn.textContent = 'No agents';
+            } else if (_selectedAgents.size >= _allDiscoveredAgents.length) {
+                btn.textContent = 'Agents';
+            } else if (_selectedAgents.size === 1) {
+                const name = [..._selectedAgents][0];
+                btn.textContent = name.charAt(0).toUpperCase() + name.slice(1);
+            } else {
+                btn.textContent = `${_selectedAgents.size} agents`;
+            }
+        }
+
+        function openAgentPopup(e) {
+            if (e) e.stopPropagation();
+            const popup = document.getElementById('ext-agent-popup');
+            const btn = document.getElementById('ext-agent-btn');
+
+            // Build items
+            popup.innerHTML = _allDiscoveredAgents.map(agent => {
+                const color = _AGENT_COLORS[agent] || '#888';
+                const checked = _selectedAgents.has(agent);
+                const label = agent.charAt(0).toUpperCase() + agent.slice(1);
+                return `<div class="ext-agent-popup-item" onclick="toggleAgent('${agent}', event)">
+                    <span class="ext-agent-check">${checked ? '✓' : ''}</span>
+                    <span class="ext-agent-badge" style="background:${color}22;color:${color};border:1px solid ${color}44;">${label}</span>
+                </div>`;
+            }).join('');
+
+            // Position below button
+            const rect = btn.getBoundingClientRect();
+            popup.style.top = (rect.bottom + 2) + 'px';
+            popup.style.left = rect.left + 'px';
+            popup.classList.add('open');
+
+            // Close on next click anywhere
+            function close(ev) {
+                if (popup.contains(ev.target)) return;
+                popup.classList.remove('open');
+                document.removeEventListener('click', close);
+            }
+            setTimeout(() => document.addEventListener('click', close), 0);
+        }
+
+        function toggleAgent(agent, e) {
+            if (e) e.stopPropagation();
+            if (_selectedAgents.has(agent)) {
+                _selectedAgents.delete(agent);
+            } else {
+                _selectedAgents.add(agent);
+            }
+            _updateAgentBtnLabel();
+            renderExternalSessionList();
+            // Close popup after toggle
+            document.getElementById('ext-agent-popup').classList.remove('open');
+        }
+
+        function _populateProjectFilter() {
+            const select = document.getElementById('ext-filter-project');
+            const prev = select.value;
+            // Collect unique project paths (last 2 segments as label)
+            const projects = new Map();
+            for (const s of _externalSessions) {
+                const p = s.project_path || '';
+                if (!p || projects.has(p)) continue;
+                const parts = p.split('/').filter(Boolean);
+                const label = parts.length > 2 ? parts.slice(-2).join('/') : parts.join('/');
+                projects.set(p, label);
+            }
+            select.innerHTML = '<option value="">All projects</option>';
+            for (const [path, label] of [...projects.entries()].sort((a, b) => a[1].localeCompare(b[1]))) {
+                const opt = document.createElement('option');
+                opt.value = path;
+                opt.textContent = label;
+                select.appendChild(opt);
+            }
+            if (prev && select.querySelector(`option[value="${CSS.escape(prev)}"]`)) select.value = prev;
+        }
+
+        function _filteredExternalSessions() {
+            const timeSec = parseInt(document.getElementById('ext-filter-time').value) || 0;
+            const project = document.getElementById('ext-filter-project').value;
+            const now = Date.now() / 1000;
+            // Count how many distinct agents exist in the data
+            const allAgents = new Set(_externalSessions.map(s => s.agent || ''));
+            const allSelected = _selectedAgents.size >= allAgents.size;
+            return _externalSessions.filter(s => {
+                if (timeSec && (now - s.last_modified) > timeSec) return false;
+                if (!allSelected && !_selectedAgents.has(s.agent || '')) return false;
+                if (project && (s.project_path || '') !== project) return false;
+                return true;
+            });
+        }
+
         function renderExternalSessionList() {
             const listEl = document.getElementById('external-session-list');
+            const filtered = _filteredExternalSessions();
             if (!_externalSessions.length) {
-                listEl.innerHTML = '<div style="color:#7878a0;font-size:11px;padding:6px 0;">No Claude Code sessions found</div>';
+                listEl.innerHTML = '<div style="color:#7878a0;font-size:11px;padding:6px 0;">No external agent sessions found</div>';
                 return;
             }
-            listEl.innerHTML = _externalSessions.map(s => {
+            if (!filtered.length) {
+                listEl.innerHTML = '<div style="color:#7878a0;font-size:11px;padding:6px 0;">No sessions match filters</div>';
+                return;
+            }
+            listEl.innerHTML = filtered.map(s => {
                 const selected = _selectedExternal === s.file_id;
                 const slug = escHtml(s.slug || s.file_id.slice(0, 12));
                 // Project path — show last 2 segments
                 const parts = (s.project_path || '').split('/').filter(Boolean);
                 const shortPath = parts.length > 2 ? parts.slice(-2).join('/') : parts.join('/');
 
-                let badge = '';
+                // Agent badge
+                const agentName = s.agent || 'claude';
+                const agentColor = _AGENT_COLORS[agentName] || '#888';
+                const agentBadge = `<span class="ext-agent-badge" style="background:${agentColor}22;color:${agentColor};border:1px solid ${agentColor}44;">${agentName}</span>`;
+
+                let timeBadge = '';
                 if (s.is_live && s.ide_name) {
-                    badge = `<span class="ext-session-live">${escHtml(s.ide_name)} (live)</span>`;
+                    timeBadge = `<span class="ext-session-live">${escHtml(s.ide_name)} (live)</span>`;
                 } else if (s.is_live) {
-                    badge = '<span class="ext-session-live">IDE (live)</span>';
+                    timeBadge = '<span class="ext-session-live">live</span>';
                 } else {
-                    badge = `<span style="color:#7878a0;font-size:10px;">${_timeAgo(s.last_modified)}</span>`;
+                    timeBadge = `<span style="color:#7878a0;font-size:10px;">${_timeAgo(s.last_modified)}</span>`;
                 }
 
                 const branch = s.git_branch ? ` · ${escHtml(s.git_branch)}` : '';
-                return `<div class="ext-session-item${selected ? ' selected' : ''}" onclick="selectExternalSession('${escHtml(s.file_id)}')">
+                // Show raw_id (after :: prefix) for short display
+                const rawId = s.file_id.includes('::') ? s.file_id.split('::')[1] : s.file_id;
+                const shortId = rawId.slice(0, 8);
+                const escapedFileId = escHtml(s.file_id).replace(/'/g, "\\'");
+                return `<div class="ext-session-item" onclick="selectExternalSession('${escapedFileId}')">
                     <div style="display:flex;justify-content:space-between;align-items:center;">
-                        <span>${slug}</span>
-                        ${badge}
+                        <span>${agentBadge}${slug}</span>
+                        ${timeBadge}
                     </div>
-                    <div class="ext-session-meta">${escHtml(shortPath)}${branch}</div>
+                    <div class="ext-session-meta">${escHtml(shortPath)}${branch} · <span style="font-family:monospace;">${shortId}</span></div>
                 </div>`;
             }).join('');
         }
 
         function selectExternalSession(fileId) {
-            if (_selectedExternal === fileId) {
-                _selectedExternal = null;
-            } else {
-                _selectedExternal = fileId;
-                // Auto-fill session name with slug
-                const session = _externalSessions.find(s => s.file_id === fileId);
-                if (session && session.slug) {
-                    const nameInput = document.getElementById('new-name');
-                    if (!nameInput.value.trim()) {
-                        nameInput.value = session.slug;
-                    }
-                }
-            }
-            renderExternalSessionList();
+            _selectedExternal = fileId;
+            const session = _externalSessions.find(s => s.file_id === fileId);
+
+            // Show selected info, hide list
+            const selectedInfo = document.getElementById('ext-selected-info');
+            const listEl = document.getElementById('external-session-list');
+            const filters = selectedInfo.previousElementSibling; // ext-filters is right before list
+            const warning = document.getElementById('external-live-warning');
+
+            const s = session;
+            const parts = (s && s.project_path || '').split('/').filter(Boolean);
+            const shortPath = parts.length > 2 ? parts.slice(-2).join('/') : parts.join('/');
+            const liveBadge = s && s.is_live ? ` <span class="ext-session-live">${escHtml(s.ide_name || 'IDE')} (live)</span>` : '';
+            const agentName = (s && s.agent) || 'claude';
+            const agentColor = _AGENT_COLORS[agentName] || '#888';
+            const selAgentBadge = `<span class="ext-agent-badge" style="background:${agentColor}22;color:${agentColor};border:1px solid ${agentColor}44;">${agentName}</span>`;
+            selectedInfo.innerHTML = `
+                <div class="ext-sel-header">
+                    <span class="ext-sel-name">${selAgentBadge}${escHtml(s ? s.slug : fileId.slice(0, 12))}${liveBadge}</span>
+                    <button class="ext-sel-clear" onclick="clearExternalSelection()" title="Clear selection">&times;</button>
+                </div>
+                <div class="ext-sel-id">${escHtml(fileId)}</div>
+                <div style="color:#7878a0;font-size:10px;margin-top:1px;">${escHtml(shortPath)}${s && s.git_branch ? ' · ' + escHtml(s.git_branch) : ''}</div>
+            `;
+            selectedInfo.style.display = '';
+            listEl.style.display = 'none';
+            document.querySelector('.ext-filters').style.display = 'none';
+            warning.style.display = (s && s.is_live) ? '' : 'none';
+
             updateRunButton();
             validateNewSession();
         }
 
+        function clearExternalSelection() {
+            _selectedExternal = null;
+            document.getElementById('ext-selected-info').style.display = 'none';
+            document.getElementById('external-session-list').style.display = '';
+            document.querySelector('.ext-filters').style.display = 'flex';
+            document.getElementById('external-live-warning').style.display = 'none';
+            updateRunButton();
+            validateNewSession();
+        }
+
+
         function updateRunButton() {
+            const runContainer = document.getElementById('run-btn-container');
+            const extContainer = document.getElementById('ext-btn-container');
             const btn = document.getElementById('run-btn');
-            if (_newSessionMode === 'resume' && _selectedExternal) {
-                const session = _externalSessions.find(s => s.file_id === _selectedExternal);
-                if (session && session.is_live) {
-                    btn.textContent = 'Observe';
-                } else {
-                    btn.textContent = 'Resume';
+
+            if (_newSessionMode === 'resume' && _resumeSubMode === 'browse') {
+                // Browse mode — show Resume + Observe buttons
+                runContainer.style.display = 'none';
+                extContainer.style.display = 'flex';
+                // Hide Observe button when session is not observable (no jsonl_path)
+                const observeBtn = document.getElementById('ext-observe-btn');
+                if (observeBtn) {
+                    const sel = _selectedExternal ? _externalSessions.find(s => s.file_id === _selectedExternal) : null;
+                    observeBtn.style.display = (sel && sel.jsonl_path === null) ? 'none' : '';
                 }
             } else {
+                runContainer.style.display = '';
+                extContainer.style.display = 'none';
                 btn.textContent = 'Run';
             }
+        }
+
+        function observeExternalSession() {
+            if (!_selectedExternal) return;
+            const session = _externalSessions.find(s => s.file_id === _selectedExternal);
+            const agent = session ? (session.agent || 'claude') : 'claude';
+            document.getElementById('new-session-dialog').classList.remove('open');
+            openObservePanel(_selectedExternal, session ? (session.slug || session.file_id.slice(0, 12)) : _selectedExternal.slice(0, 12), agent);
+            _selectedExternal = null;
         }
 
         function _timeAgo(mtime) {
@@ -5978,41 +6577,56 @@
 
         const _SAFE_NAME_RE = /^[a-zA-Z0-9][a-zA-Z0-9 _.~-]{0,63}$/;
 
-        function validateNewSession() {
-            const name = document.getElementById('new-name').value.trim();
-            const nameInput = document.getElementById('new-name');
-            const nameError = document.getElementById('name-error');
-            const btn = document.getElementById('run-btn');
-            // Check name against sessions on the target server
+        function _safeSessionName(slug) {
+            // Sanitize a slug into a valid session name
+            let name = (slug || '').trim().replace(/[^a-zA-Z0-9 _.~-]/g, '-').slice(0, 64);
+            // Ensure it starts with alphanumeric
+            name = name.replace(/^[^a-zA-Z0-9]+/, '');
+            return name || 'session';
+        }
+
+        function _validateName(inputId, errorId) {
+            const name = document.getElementById(inputId).value.trim();
+            const nameInput = document.getElementById(inputId);
+            const nameError = document.getElementById(errorId);
             const serverSessions = sessions.filter(s => s._server === _newSessionServer);
             const nameTaken = name && serverSessions.some(s => s.name === name);
             const nameInvalid = name && !_SAFE_NAME_RE.test(name);
             nameError.textContent = nameTaken ? 'Name already taken' : nameInvalid ? 'Only letters, numbers, hyphens, underscores' : '';
             nameError.style.display = (nameTaken || nameInvalid) ? 'block' : 'none';
             nameInput.style.borderColor = (nameTaken || nameInvalid) ? '#ff6666' : '#2a2a5a';
+            return name && !nameTaken && !nameInvalid;
+        }
 
-            const nameOk = name && !nameTaken && !nameInvalid;
+        function validateNewSession() {
+            const btn = document.getElementById('run-btn');
+
+            if (_newSessionMode === 'resume' && _resumeSubMode === 'browse') {
+                // Browse mode — name is auto-derived from slug
+                const extResumeBtn = document.getElementById('ext-resume-btn');
+                const selSession = _selectedExternal ? _externalSessions.find(s => s.file_id === _selectedExternal) : null;
+                const isLive = selSession && selSession.is_live;
+                // Check the auto-derived name is valid and not taken
+                const autoName = selSession ? _safeSessionName(selSession.slug || selSession.file_id.slice(0, 12)) : '';
+                const serverSessions = sessions.filter(s => s._server === _newSessionServer);
+                const nameOk = autoName && _SAFE_NAME_RE.test(autoName) && !serverSessions.some(s => s.name === autoName);
+                if (extResumeBtn) extResumeBtn.disabled = !nameOk || !_selectedExternal || isLive;
+                btn.disabled = true; // main run btn hidden in browse mode
+                updateRunButton();
+                return;
+            }
+
+            const nameOk = _validateName('new-name', 'name-error');
 
             if (_newSessionMode === 'resume') {
-                if (_selectedExternal) {
-                    // External session selected — observe needs no name, resume needs name
-                    const session = _externalSessions.find(s => s.file_id === _selectedExternal);
-                    if (session && session.is_live) {
-                        btn.disabled = false;  // Observe — no name needed
-                    } else {
-                        btn.disabled = !nameOk;
-                    }
+                // Manual mode
+                const command = document.getElementById('new-command').value;
+                const cmdConfig = allowedCommands.find(c => c.command === command);
+                if (cmdConfig && cmdConfig.resume_command) {
+                    btn.disabled = !nameOk;
                 } else {
-                    const command = document.getElementById('new-command').value;
-                    const cmdConfig = allowedCommands.find(c => c.command === command);
-                    if (cmdConfig && cmdConfig.resume_command) {
-                        // Command-based: just need name + command
-                        btn.disabled = !nameOk;
-                    } else {
-                        // Token-based: need name + command + token
-                        const token = document.getElementById('new-resume-token').value.trim();
-                        btn.disabled = !nameOk || !token;
-                    }
+                    const token = document.getElementById('new-resume-token').value.trim();
+                    btn.disabled = !nameOk || !token;
                 }
                 updateRunButton();
             } else {
@@ -6037,32 +6651,30 @@
         }
 
         async function createSession() {
-            const name = document.getElementById('new-name').value.trim();
+            const isBrowse = _newSessionMode === 'resume' && _resumeSubMode === 'browse';
             const command = document.getElementById('new-command').value;
 
-            // Handle external session actions (observe or resume)
-            if (_newSessionMode === 'resume' && _selectedExternal) {
-                const session = _externalSessions.find(s => s.file_id === _selectedExternal);
-                if (session && session.is_live) {
-                    // Observe — open read-only panel
-                    document.getElementById('new-session-dialog').classList.remove('open');
-                    openObservePanel(_selectedExternal, session.slug || session.file_id.slice(0, 12));
-                    _selectedExternal = null;
-                    return;
-                }
-                // Resume external session via backend
+            // Handle external session resume (browse mode)
+            if (_newSessionMode === 'resume' && _selectedExternal && isBrowse) {
+                const selSession = _externalSessions.find(s => s.file_id === _selectedExternal);
+                const name = _safeSessionName(selSession ? (selSession.slug || selSession.file_id.slice(0, 12)) : _selectedExternal.slice(0, 12));
                 if (!name) return;
+                // Warn about the risk of concurrent access
+                const confirmed = await showConfirm(
+                    'Resuming takes over this session. If the same session is later opened in an IDE, both will write to the same file and may cause corruption. Continue?',
+                    'Resume'
+                );
+                if (!confirmed) return;
                 document.getElementById('new-session-dialog').classList.remove('open');
                 showBusy(`Resuming "${name}"…`);
                 try {
-                    const resp = await fetch(serverUrl(_newSessionServer, `/external/sessions/${_selectedExternal}/resume`), {
+                    const resp = await fetch(serverUrl(_newSessionServer, `/external/sessions/${encodeURIComponent(_selectedExternal)}/resume`), {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({ name }),
                     });
                     if (resp.ok) {
                         const created = await resp.json();
-                        document.getElementById('new-name').value = '';
                         _selectedExternal = null;
                         _suppressDrawerOpen = true;
                         const ids = panels.map(p => p.id);
@@ -6083,6 +6695,7 @@
                 return;
             }
 
+            const name = document.getElementById('new-name').value.trim();
             if (!name || !command) return;
 
             let body;
@@ -6714,18 +7327,30 @@
             return result === 'granted';
         }
 
+        async function _showNativeNotification(title, body, tag) {
+            const opts = {
+                body: body,
+                icon: 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><text y="80" font-size="80">\u266D</text></svg>',
+                tag: tag || 'conductor-' + title,
+            };
+            // Try service worker first (required on mobile)
+            if ('serviceWorker' in navigator) {
+                try {
+                    const reg = await navigator.serviceWorker.ready;
+                    await reg.showNotification(title, opts);
+                    return;
+                } catch (e) {}
+            }
+            // Fallback to Notification constructor (desktop)
+            try { new Notification(title, opts); } catch (e) {}
+        }
+
         function sendNotification(title, body) {
             const ns = _getNotifSettings();
             if (!ns.browser) return;
             if (document.visibilityState === 'visible') return;
             if (!('Notification' in window) || Notification.permission !== 'granted') return;
-            try {
-                new Notification(title, {
-                    body: body,
-                    icon: 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><text y="80" font-size="80">♭</text></svg>',
-                    tag: 'conductor-' + title,
-                });
-            } catch (e) {}
+            _showNativeNotification(title, body);
         }
 
         function _handleServerNotification(msg, panel) {
@@ -6767,6 +7392,11 @@
             if (_hasSavedLayout) hideBusy();
         });
         setInterval(fetchAllSessions, 1500);
+
+        // --- Register service worker for mobile notification support ---
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.register('/sw.js', { scope: '/' }).catch(() => {});
+        }
 
         // --- Update check ---
         function _semverNewer(a, b) {

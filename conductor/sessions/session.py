@@ -27,7 +27,7 @@ from typing import Set
 _ANSI_RE = re.compile(
     r'\x1b'           # ESC
     r'(?:'
-    r'\[[0-9;]*[a-zA-Z]'   # CSI sequences  (e.g. \e[31m)
+    r'\[[\x20-\x3f]*[a-zA-Z@-~]'  # CSI sequences incl. private modes (e.g. \e[?2026h)
     r'|\][^\x07]*\x07'     # OSC sequences  (e.g. \e]0;title\a)
     r'|[()][AB012]'        # charset select
     r'|[>=<]'              # keypad modes

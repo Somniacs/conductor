@@ -307,18 +307,18 @@ Resume tokens are persisted to disk (`~/.conductor/sessions/`), so they survive 
 
 If you don't need a resumable session, dismiss it with the **×** button — a confirmation dialog prevents accidental deletion.
 
-### Discover and observe IDE sessions
+### Discover and observe external sessions
 
-Claude Code sessions started in VS Code or JetBrains IDEs run outside Conductor, but Conductor can discover and interact with them.
+AI agent sessions started outside Conductor — in IDEs, other terminals, or standalone tools — are automatically discovered and shown in the Resume tab's browse list.
 
-Switch to the **Resume** tab with the Claude command selected, and Conductor scans `~/.claude/projects/` for session files. Each session shows its slug, project path, branch, and how recently it was active. Sessions running in an IDE are marked with a live badge (e.g. "Visual Studio Code (live)").
+Conductor scans local session stores for **Claude Code**, **Codex**, **Copilot CLI**, **Gemini CLI**, and **Goose**. Each session shows its name/slug, project path, branch, agent badge, and recency. Sessions running in an IDE are marked with a live badge. Use the **agent filter dropdown** to narrow the list to a specific agent.
 
-- **Resume a closed IDE session** — select it from the list, give it a name, and click **Resume**. Conductor launches `claude --resume` in a PTY and the conversation continues where the IDE left off.
-- **Observe a live IDE session** — select a running session and click **Observe**. A read-only panel opens showing the conversation in real time (user messages, assistant responses, tool calls — all color-coded). Typing is disabled; the panel tails the session file and updates as the IDE session progresses.
+- **Resume a closed session** — select it from the list, give it a name, and click **Resume**. Conductor launches the agent-specific resume command (e.g. `claude --resume`, `codex resume`, `copilot --resume`) in a PTY.
+- **Observe a live session** — select a running session and click **Observe**. A read-only panel opens showing the conversation in real time with agent-specific formatting (user messages, assistant responses, tool calls — all color-coded). The Observe button is hidden for agents whose sessions aren't observable (Gemini, Goose).
 
-Liveness is detected via `~/.claude/ide/*.lock` files — if the IDE process is still running, the session shows as live.
+Liveness is detected via IDE lock files (`~/.claude/ide/*.lock`, `~/.copilot/ide/*.lock`).
 
-> **Warning:** Do not resume a session that is still active in an IDE. Claude Code session files are single-writer — resuming a session in Conductor while the IDE is still using it will cause both to write to the same file, leading to corruption. Conductor blocks resume for sessions it detects as live, but if an IDE exits between the scan and the resume click, the guard may not catch it. When in doubt, close the IDE session first.
+> **Warning:** Do not resume a session that is still active in an IDE. Session files are single-writer — resuming in Conductor while the IDE is still using it can cause corruption. Conductor blocks resume for sessions it detects as live, but the guard is best-effort. When in doubt, close the IDE session first.
 
 **Creating sessions on remote machines:**
 
@@ -408,11 +408,11 @@ The web dashboard provides:
 - **Keyboard input** — type directly into the terminal
 - **New session** — create sessions on any connected machine with directory picker
 - **Session resume** — exited sessions with a resume token show a play button; resume with one click
-- **IDE session discovery** — Resume tab scans `~/.claude/projects/` for external Claude Code sessions (VS Code, JetBrains); resume closed ones or observe live ones in a read-only panel
+- **Multi-agent session discovery** — Resume tab discovers external sessions from Claude Code, Codex, Copilot, Gemini, and Goose; filter by agent, resume closed sessions, or observe live ones in a read-only panel with agent-specific formatting
 - **Kill confirmation** — stop sessions with a confirmation dialog
 - **Color themes** — 6 presets per panel: Default, Dark, Mid, Bright, Bernstein, Green (retro CRT)
 - **Font size controls** — per-panel `+` / `−` buttons, adaptive defaults for desktop and mobile
-- **Idle notifications** — browser notification when a session is waiting for input (when tab not visible)
+- **Idle notifications** — browser notification or webhook alert when a session is waiting for input. Supports Telegram, Discord, Slack, and custom webhooks. See [Telegram setup guide](docs/notification_telegram.md)
 - **Link Device** — QR code in the hamburger menu for opening the dashboard on another device
 - **Git worktree isolation** — run any agent in an isolated git worktree; each gets its own branch and working copy, so parallel agents never conflict with each other or your work. Auto-commits before merge, non-destructive merge cycle (work → merge → resume → merge again → delete when done). Merge dialog with conflict detection, strategy picker (squash/merge/rebase), and fullscreen diff viewer with file sidebar, keyboard navigation (j/k, ↑/↓), and font zoom (+/−). Merge button only appears when there are commits to merge
 - **Layout persistence** — open panels, split layout, and focus are saved to localStorage and restored on page reload; only panels with running sessions are restored
@@ -481,10 +481,14 @@ Default port `7777`. All endpoints relative to your host. OpenAPI spec at `/open
 | `POST` | `/worktrees/{name}/merge` | Merge worktree (`{"strategy": "squash\|merge\|rebase"}`) |
 | `DELETE` | `/worktrees/{name}` | Discard worktree and branch |
 | `POST` | `/worktrees/gc` | Clean up stale/orphaned worktrees |
-| `GET` | `/external/sessions` | Discover external Claude Code sessions (optional `?project=` filter) |
+| `GET` | `/external/sessions` | Discover external agent sessions (optional `?project=` and `?agent=` filters) |
 | `POST` | `/external/sessions/{file_id}/resume` | Resume a closed external session as a Conductor PTY |
-| `WS` | `/external/sessions/{file_id}/observe` | Read-only stream of an external session (tails JSONL) |
+| `WS` | `/external/sessions/{file_id}/observe` | Read-only stream of an external session (tails JSONL, agent-aware formatting) |
 | `GET` | `/worktrees/health` | Worktree health warnings |
+| `GET` | `/notifications/webhook` | Get global webhook settings |
+| `PUT` | `/notifications/webhook` | Update global webhook settings |
+| `PUT` | `/notifications/settings` | Update per-device notification settings (`X-Device-Id` header) |
+| `POST` | `/notifications/webhook/test` | Send a test notification to verify webhook config |
 | `GET` | `/git/check?path=...` | Check if path is a git repo (for worktree toggle) |
 | `GET` | `/info` | Server identity (hostname, port, Tailscale IP/name) |
 | `GET` | `/tailscale/peers` | Online Tailscale peers for device picker |
@@ -602,6 +606,7 @@ conductor/
 │   ├── sessions/
 │   │   ├── session.py        # Session — PTY, buffer, subscribers
 │   │   └── registry.py       # In-memory session registry
+│   ├── notifications/         # Notification detection, webhook dispatch
 │   ├── worktrees/            # Git worktree lifecycle management
 │   ├── proxy/pty_wrapper.py  # PTY spawn and I/O
 │   └── utils/config.py       # Paths, ports, allowed commands
@@ -626,4 +631,4 @@ conductor/
 
 - Python 3.10+
 - Linux, macOS, or Windows 10+ (PTY / ConPTY required)
-- Dependencies: FastAPI, uvicorn, click, httpx, websockets, qrcode, pywinpty (Windows only)
+- Dependencies: FastAPI, uvicorn, click, httpx, websockets, qrcode, pyte, pywinpty (Windows only)

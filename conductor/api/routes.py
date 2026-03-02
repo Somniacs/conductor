@@ -50,7 +50,7 @@ _external_scanner = ExternalSessionScanner()
 _observers: dict[str, SessionObserver] = {}
 
 # Set of active WebSocket connections for notification broadcast.
-_notification_ws: set[WebSocket] = set()
+_notification_ws: dict[WebSocket, str] = {}  # ws → session_id
 
 
 async def _broadcast_notification(event: NotificationEvent):
@@ -68,31 +68,29 @@ async def _broadcast_notification(event: NotificationEvent):
         "timestamp": event.timestamp,
     })
     dead: list[WebSocket] = []
-    for ws in list(_notification_ws):
+    for ws, sid in list(_notification_ws.items()):
+        # Don't send a session its own notification (it would appear in the terminal)
+        if sid == event.session_id:
+            continue
         try:
             await ws.send_text(msg)
         except Exception:
             dead.append(ws)
     for ws in dead:
-        _notification_ws.discard(ws)
+        _notification_ws.pop(ws, None)
 
-    # Webhook dispatch — send to all devices with webhooks configured
-    for device_id, settings in registry.notification_manager.get_all_device_settings().items():
-        url = settings.get("webhook_url", "")
-        enabled = settings.get("webhook_enabled", False)
-        if url and enabled:
-            # Check session filter
-            session_filter = settings.get("sessions", "all")
-            if session_filter != "all" and isinstance(session_filter, list):
-                if event.session_id not in session_filter:
-                    continue
-            asyncio.ensure_future(send_webhook(
-                url=url,
-                session_name=event.session_name,
-                reason=event.reason,
-                snippet=event.snippet,
-                chat_id=settings.get("webhook_chat_id"),
-            ))
+    # Webhook dispatch — single global webhook config
+    wh = registry.notification_manager.get_webhook_settings()
+    url = wh.get("webhook_url", "")
+    enabled = wh.get("webhook_enabled", False)
+    if url and enabled:
+        asyncio.ensure_future(send_webhook(
+            url=url,
+            session_name=event.session_name,
+            reason=event.reason,
+            snippet=event.snippet,
+            chat_id=wh.get("webhook_chat_id"),
+        ))
 
 
 # Register the broadcast handler with the notification manager.
@@ -428,12 +426,29 @@ async def get_notification_settings(request: Request):
 
 @router.put("/notifications/settings")
 async def put_notification_settings(request: Request):
-    """Save notification settings for a device."""
+    """Save notification settings for a device (browser/sound only)."""
     device_id = request.headers.get("x-device-id", "")
     if not device_id:
         raise HTTPException(status_code=400, detail="X-Device-Id header required")
     data = await request.json()
-    registry.notification_manager.set_device_settings(device_id, data)
+    # Only store per-device fields; webhook config is global
+    device_data = {k: v for k, v in data.items()
+                   if k in ("browser", "sound")}
+    registry.notification_manager.set_device_settings(device_id, device_data)
+    return {"status": "ok"}
+
+
+@router.get("/notifications/webhook")
+async def get_webhook_settings():
+    """Get global webhook settings."""
+    return registry.notification_manager.get_webhook_settings()
+
+
+@router.put("/notifications/webhook")
+async def put_webhook_settings(request: Request):
+    """Save global webhook settings."""
+    data = await request.json()
+    registry.notification_manager.set_webhook_settings(data)
     return {"status": "ok"}
 
 
@@ -630,6 +645,13 @@ async def kill_session(session_id: str):
         return {"status": "dismissed"}
 
     raise HTTPException(status_code=404, detail="Session not found")
+
+
+@router.delete("/sessions/resumable/all")
+async def clear_all_resumable():
+    """Remove all stopped resumable sessions (keeps worktree sessions)."""
+    count = registry.clear_all_resumable()
+    return {"status": "cleared", "count": count}
 
 
 # ---------------------------------------------------------------------------
@@ -832,36 +854,58 @@ async def worktree_gc(req: GCRequest):
 # External Claude Code sessions — discovery, resume, and observation
 # ---------------------------------------------------------------------------
 
-# file_id must be a UUID (Claude session filenames are always UUIDs).
-# This prevents path traversal and command injection.
+# file_id: either a bare UUID (backward compat → claude) or agent::id.
+# agent prefix is one of: claude, codex, copilot, gemini, goose.
+# The raw_id part is a UUID or similar safe identifier.
+_VALID_AGENTS = {"claude", "codex", "copilot", "gemini", "goose"}
 _UUID_RE = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$", re.IGNORECASE)
+_SAFE_FILE_ID_RE = re.compile(r"^(?:(?:claude|codex|copilot|gemini|goose)::)?[a-zA-Z0-9._-]{1,200}$")
 
 
 def _validate_file_id(file_id: str):
-    """Raise 400 if file_id is not a valid UUID."""
-    if not _UUID_RE.match(file_id):
+    """Raise 400 if file_id is not a valid agent::id or bare UUID."""
+    if not _SAFE_FILE_ID_RE.match(file_id):
         raise HTTPException(status_code=400, detail="Invalid session file ID")
+    # If prefixed, validate the agent name
+    if "::" in file_id:
+        agent = file_id.split("::", 1)[0]
+        if agent not in _VALID_AGENTS:
+            raise HTTPException(status_code=400, detail="Unknown agent prefix")
 
 
 def _conductor_resume_ids() -> set[str]:
-    """Collect file_ids already managed by Conductor (to exclude from scan)."""
+    """Collect file_ids already managed by Conductor (to exclude from scan).
+
+    Returns both bare IDs and claude:: prefixed forms for backward compat.
+    """
     ids = set()
+    _resume_re = re.compile(r'--resume\s+(\S+)')
+    # Running sessions — check command for --resume <file_id>
     for session in registry.sessions.values():
-        # Check if command contains --resume <file_id>
-        import re as _re
-        m = _re.search(r'--resume\s+(\S+)', session.command)
+        m = _resume_re.search(session.command)
         if m:
-            ids.add(m.group(1))
+            raw_id = m.group(1)
+            ids.add(raw_id)
+            # Also add prefixed form so new-style file_ids match
+            if "::" not in raw_id:
+                ids.add(f"claude::{raw_id}")
+    # Resumable (exited) sessions — resume_id IS the file_id
+    for meta in registry.resumable.values():
+        rid = meta.get("resume_id")
+        if rid and rid != "__always__":
+            ids.add(rid)
+            if "::" not in rid:
+                ids.add(f"claude::{rid}")
     return ids
 
 
 @router.get("/external/sessions")
-async def list_external_sessions(project: str | None = None):
-    """Discover external Claude Code sessions from ~/.claude/projects/."""
+async def list_external_sessions(project: str | None = None, agent: str | None = None):
+    """Discover external AI agent sessions."""
     loop = asyncio.get_event_loop()
     conductor_ids = _conductor_resume_ids()
     results = await loop.run_in_executor(
-        None, _external_scanner.scan, project, conductor_ids
+        None, _external_scanner.scan, project, conductor_ids, agent
     )
     return results
 
@@ -872,7 +916,7 @@ class ExternalResumeRequest(BaseModel):
 
 @router.post("/external/sessions/{file_id}/resume")
 async def resume_external_session(file_id: str, req: ExternalResumeRequest, request: Request):
-    """Resume an external Claude Code session in a Conductor PTY."""
+    """Resume an external agent session in a Conductor PTY."""
     _validate_file_id(file_id)
     req.name = req.name.strip()
     if not _SAFE_NAME.match(req.name):
@@ -887,11 +931,10 @@ async def resume_external_session(file_id: str, req: ExternalResumeRequest, requ
     if not info:
         raise HTTPException(status_code=404, detail="External session not found")
 
-    if info.get("is_live"):
-        raise HTTPException(status_code=409, detail="Session is still running in IDE — use observe instead")
-
-    # Build the resume command
-    command = f"claude --resume {file_id}"
+    # Use the agent-specific resume command
+    command = info.get("resume_command")
+    if not command:
+        raise HTTPException(status_code=400, detail="No resume command for this session")
     cwd = info.get("cwd")
 
     try:
@@ -908,21 +951,26 @@ async def resume_external_session(file_id: str, req: ExternalResumeRequest, requ
         raise HTTPException(status_code=500, detail=str(e))
 
 
+
 @router.websocket("/external/sessions/{file_id}/observe")
 async def observe_external_session(ws: WebSocket, file_id: str):
-    """WebSocket endpoint for read-only observation of a running IDE session."""
-    if not _UUID_RE.match(file_id):
+    """WebSocket endpoint for read-only observation of a running agent session."""
+    if not _SAFE_FILE_ID_RE.match(file_id):
         await ws.close(code=4003, reason="Invalid session file ID")
         return
     if not _check_ws_auth(ws):
         await ws.close(code=4001, reason="Unauthorized")
         return
 
+    # Determine agent from file_id prefix
+    from conductor.external.scanner import _parse_file_id
+    agent, _raw_id = _parse_file_id(file_id)
+
     # Find the JSONL file
     loop = asyncio.get_event_loop()
     jsonl_path = await loop.run_in_executor(None, _external_scanner.get_jsonl_path, file_id)
     if not jsonl_path:
-        await ws.close(code=4004, reason="Session file not found")
+        await ws.close(code=4004, reason="Session not observable")
         return
 
     await ws.accept()
@@ -930,7 +978,7 @@ async def observe_external_session(ws: WebSocket, file_id: str):
     # Get or create observer for this file
     observer = _observers.get(file_id)
     if not observer:
-        observer = SessionObserver(jsonl_path)
+        observer = SessionObserver(jsonl_path, agent=agent)
         _observers[file_id] = observer
         await observer.start()
 
@@ -1008,7 +1056,7 @@ async def stream_session(ws: WebSocket, session_id: str, typed: bool = False):
     await ws.accept()
 
     # Track this WebSocket for notification broadcast.
-    _notification_ws.add(ws)
+    _notification_ws[ws] = session_id
 
     try:
         if typed:
@@ -1016,7 +1064,7 @@ async def stream_session(ws: WebSocket, session_id: str, typed: bool = False):
         else:
             await _stream_raw(ws, session)
     finally:
-        _notification_ws.discard(ws)
+        _notification_ws.pop(ws, None)
 
 
 async def _stream_raw(ws: WebSocket, session: Any):
