@@ -16,19 +16,15 @@ To check Python: open PowerShell and run `python --version` or `py --version`.
 
 ## Install
 
-### Option A — From release (recommended)
+### One-line install (recommended)
 
 ```powershell
-# Download and extract
-Invoke-WebRequest https://github.com/somniacs/conductor/releases/latest/download/conductor.zip -OutFile conductor.zip
-Expand-Archive conductor.zip -DestinationPath .
-cd conductor
-powershell -ExecutionPolicy Bypass -File install.ps1
+irm https://github.com/somniacs/conductor/releases/latest/download/install.ps1 | iex
 ```
 
-Or download manually from the [latest release](https://github.com/somniacs/conductor/releases/latest).
+The installer checks for Python 3.10+, installs [pipx](https://pipx.pypa.io/) if needed, downloads the latest release, and offers to set up autostart via Task Scheduler.
 
-### Option B — From source
+### From source
 
 ```powershell
 git clone https://github.com/somniacs/conductor.git
@@ -36,9 +32,15 @@ cd conductor
 powershell -ExecutionPolicy Bypass -File install.ps1
 ```
 
-The install script checks for Python 3.10+, installs [pipx](https://pipx.pypa.io/) if needed, and installs Conductor system-wide. After it finishes, the `conductor` command is available from any terminal.
+After install, the `conductor` command is available from any terminal. If the command is not found, restart your terminal.
 
-If the command is not found after install, restart your terminal.
+### Uninstall
+
+```powershell
+irm https://github.com/somniacs/conductor/releases/latest/download/uninstall.ps1 | iex
+```
+
+This stops the server, removes the scheduled task, uninstalls the package, and asks whether to keep your data (`~\.conductor\`).
 
 ### Manual install (without install script)
 
@@ -123,7 +125,7 @@ The web dashboard at `http://127.0.0.1:7777` provides:
 - **Settings** — manage allowed commands and directories (localhost only)
 - **Mobile-friendly** — touch scroll, extra keys toolbar, responsive layout
 
-For auto-start on boot, see [Auto-Start on Boot](autostart.md).
+If you accepted autostart during install, the server already starts on boot. For manual setup or customization, see [Auto-Start on Boot](autostart.md).
 
 ## How it works on Windows
 

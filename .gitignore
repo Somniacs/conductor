@@ -14,5 +14,8 @@ CLAUDE.md
 .claude/
 .ai/
 
+# Temp docs
+docs/planned/
+
 # Conductor worktrees
 /.conductor-worktrees/

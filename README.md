@@ -118,17 +118,13 @@ After editing the file, restart the server: `conductor restart`.
 
 ### Linux / [macOS](docs/MACOS.md)
 
-#### Option A — From release (recommended)
+#### One-line install (recommended)
 
 ```bash
-curl -sL https://github.com/somniacs/conductor/releases/latest/download/conductor.tar.gz | tar xz
-cd conductor
-./install.sh
+curl -fsSL https://github.com/somniacs/conductor/releases/latest/download/install.sh | bash
 ```
 
-Or download from the [Releases](https://github.com/somniacs/conductor/releases) page and run `./install.sh`.
-
-#### Option B — From source
+#### From source
 
 ```bash
 git clone https://github.com/somniacs/conductor.git
@@ -138,23 +134,19 @@ cd conductor
 
 If the command is not found after install, restart your terminal or run `source ~/.bashrc` (or `~/.zshrc`).
 
+The installer checks for Python 3.10+, installs [pipx](https://pipx.pypa.io/) if needed, and offers to set up autostart (systemd on Linux, launchd on macOS).
+
 ### [Windows](docs/WINDOWS.md)
 
 Requires Windows 10 Build 1809+ or Windows 11 (for ConPTY support).
 
-#### Option A — From release (recommended)
+#### One-line install (recommended)
 
 ```powershell
-# Download and extract
-Invoke-WebRequest https://github.com/somniacs/conductor/releases/latest/download/conductor.zip -OutFile conductor.zip
-Expand-Archive conductor.zip -DestinationPath .
-cd conductor
-powershell -ExecutionPolicy Bypass -File install.ps1
+irm https://github.com/somniacs/conductor/releases/latest/download/install.ps1 | iex
 ```
 
-Or download manually from the [Releases](https://github.com/somniacs/conductor/releases) page.
-
-#### Option B — From source
+#### From source
 
 ```powershell
 git clone https://github.com/somniacs/conductor.git
@@ -162,7 +154,7 @@ cd conductor
 powershell -ExecutionPolicy Bypass -File install.ps1
 ```
 
-The install script checks for Python 3.10+, installs [pipx](https://pipx.pypa.io/) if needed, and installs Conductor system-wide. After it finishes, the `conductor` command is available from any terminal.
+The installer checks for Python 3.10+, installs [pipx](https://pipx.pypa.io/) if needed, and offers to set up autostart via Task Scheduler.
 
 <details>
 <summary>Manual install (without install script)</summary>
@@ -189,7 +181,21 @@ pip install -e .
 
 ### Updating
 
-The dashboard shows a notification when a new version is available. To update, download the latest release and run `./install.sh` (or `install.ps1` on Windows) again. Your settings (`~/.conductor/config.yaml`), sessions, and uploads are preserved — only the application code is replaced.
+The dashboard shows a notification when a new version is available. To update, run the one-liner again or `./install.sh` from a cloned repo. On Windows, run `install.ps1` again. Your settings (`~/.conductor/config.yaml`), sessions, and uploads are preserved — only the application code is replaced.
+
+### Uninstall
+
+**Linux / macOS:**
+```bash
+curl -fsSL https://github.com/somniacs/conductor/releases/latest/download/uninstall.sh | bash
+```
+
+**Windows:**
+```powershell
+irm https://github.com/somniacs/conductor/releases/latest/download/uninstall.ps1 | iex
+```
+
+This stops the server, removes autostart configs, uninstalls the package, and asks whether to keep or remove your data.
 
 ## Usage
 
@@ -412,7 +418,7 @@ The web dashboard provides:
 - **Kill confirmation** — stop sessions with a confirmation dialog
 - **Color themes** — 6 presets per panel: Default, Dark, Mid, Bright, Bernstein, Green (retro CRT)
 - **Font size controls** — per-panel `+` / `−` buttons, adaptive defaults for desktop and mobile
-- **Idle notifications** — browser notification or webhook alert when a session is waiting for input. Supports Telegram, Discord, Slack, and custom webhooks. See [Telegram setup guide](docs/notification_telegram.md)
+- **Idle notifications** — browser notification or webhook alert when a session is waiting for input. Supports Telegram, Discord, Slack, and custom webhooks. Webhook messages include a clickable deep link that opens the dashboard directly to the session. Smart suppression: webhooks only fire when you're not already looking at the dashboard (visibility-based, like read receipts). Setup guides: [Telegram](docs/notification_telegram.md), [Slack](docs/notification_slack.md)
 - **Link Device** — QR code in the hamburger menu for opening the dashboard on another device
 - **Git worktree isolation** — run any agent in an isolated git worktree; each gets its own branch and working copy, so parallel agents never conflict with each other or your work. Auto-commits before merge, non-destructive merge cycle (work → merge → resume → merge again → delete when done). Merge dialog with conflict detection, strategy picker (squash/merge/rebase), and fullscreen diff viewer with file sidebar, keyboard navigation (j/k, ↑/↓), and font zoom (+/−). Merge button only appears when there are commits to merge
 - **Layout persistence** — open panels, split layout, and focus are saved to localStorage and restored on page reload; only panels with running sessions are restored
@@ -613,8 +619,10 @@ conductor/
 ├── cli/main.py               # Click CLI
 ├── static/index.html          # Dashboard (single-file HTML/JS/CSS)
 ├── main.py                    # Entry point
-├── install.sh                 # One-step installer (Linux/macOS)
-├── install.ps1                # One-step installer (Windows)
+├── install.sh                 # One-line installer (Linux/macOS)
+├── install.ps1                # One-line installer (Windows)
+├── uninstall.sh               # Uninstaller (Linux/macOS)
+├── uninstall.ps1              # Uninstaller (Windows)
 ├── pyproject.toml
 └── LICENSE                    # MIT
 ```

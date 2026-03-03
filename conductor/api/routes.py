@@ -35,6 +35,8 @@ _SAFE_NAME = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9 _.~-]{0,63}$")
 from conductor.external.observer import SessionObserver
 from conductor.external.scanner import ExternalSessionScanner
 from conductor.notifications.manager import NotificationEvent
+from urllib.parse import quote
+
 from conductor.notifications.webhook import send_webhook, test_webhook
 from conductor.sessions.registry import SessionRegistry
 from conductor.utils import config as cfg
@@ -52,6 +54,22 @@ _observers: dict[str, SessionObserver] = {}
 # Set of active WebSocket connections for notification broadcast.
 _notification_ws: dict[WebSocket, str] = {}  # ws → session_id
 
+# Notification ack — set by browser when it sees a notification (tab visible).
+_notification_ack: asyncio.Event = asyncio.Event()
+
+# Cached dashboard base URL (avoids Tailscale subprocess on every notification).
+_dashboard_base_url: str | None = None
+
+
+def _get_dashboard_base_url() -> str:
+    """Return the base URL for dashboard deep links (cached after first call)."""
+    global _dashboard_base_url
+    if _dashboard_base_url is not None:
+        return _dashboard_base_url
+    host = _get_tailscale_name() or _get_tailscale_ip() or "127.0.0.1"
+    _dashboard_base_url = f"http://{host}:{PORT}"
+    return _dashboard_base_url
+
 
 async def _broadcast_notification(event: NotificationEvent):
     """Send a notification event to all connected WebSocket clients.
@@ -68,28 +86,43 @@ async def _broadcast_notification(event: NotificationEvent):
         "timestamp": event.timestamp,
     })
     dead: list[WebSocket] = []
-    for ws, sid in list(_notification_ws.items()):
-        # Don't send a session its own notification (it would appear in the terminal)
-        if sid == event.session_id:
-            continue
+    delivered = 0
+    for ws in list(_notification_ws):
         try:
             await ws.send_text(msg)
+            delivered += 1
         except Exception:
             dead.append(ws)
     for ws in dead:
         _notification_ws.pop(ws, None)
+
+    # If notification was delivered to at least one browser, wait briefly for
+    # a visibility ack.  If the user is actually looking at the dashboard the
+    # ack arrives in milliseconds and we skip the webhook (like WhatsApp read
+    # receipts).  If the tab is hidden / minimised no ack comes and we fall
+    # through to the webhook after the timeout.
+    if delivered > 0:
+        _notification_ack.clear()
+        try:
+            await asyncio.wait_for(_notification_ack.wait(), timeout=2.0)
+            return  # user saw it — skip webhook
+        except asyncio.TimeoutError:
+            pass  # tab not visible — proceed to webhook
 
     # Webhook dispatch — single global webhook config
     wh = registry.notification_manager.get_webhook_settings()
     url = wh.get("webhook_url", "")
     enabled = wh.get("webhook_enabled", False)
     if url and enabled:
+        base = _get_dashboard_base_url()
+        dashboard_url = f"{base}#session={quote(event.session_name)}"
         asyncio.ensure_future(send_webhook(
             url=url,
             session_name=event.session_name,
             reason=event.reason,
             snippet=event.snippet,
             chat_id=wh.get("webhook_chat_id"),
+            dashboard_url=dashboard_url,
         ))
 
 
@@ -1104,6 +1137,14 @@ async def _stream_raw(ws: WebSocket, session: Any):
                 text = message.get("text")
                 raw = message.get("bytes")
                 if text:
+                    # Intercept notification ack (browser saw the notification)
+                    try:
+                        ctrl = json.loads(text)
+                        if isinstance(ctrl, dict) and ctrl.get("type") == "notification_ack":
+                            _notification_ack.set()
+                            continue
+                    except (json.JSONDecodeError, ValueError):
+                        pass
                     session.send_input(text)
                 elif raw:
                     session.send_input_bytes(raw)

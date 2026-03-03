@@ -41,6 +41,9 @@ _DEFAULT_PATTERNS = [
     re.compile(r"\(y/n\)", re.IGNORECASE),
     re.compile(r"(?:allow|deny|approve|reject).*\?", re.IGNORECASE),
     re.compile(r"(?:do you want|would you like|shall I|should I|proceed|continue|confirm).*\?", re.IGNORECASE),
+    # Claude Code selection menus — match the hint lines at the bottom
+    re.compile(r"Enter to select.*↑/↓ to navigate"),
+    re.compile(r"Esc to cancel.*Tab to amend"),
 ]
 
 # Minimum seconds between notifications for the same session+reason.
@@ -193,22 +196,46 @@ class SessionNotifier:
             lambda: asyncio.ensure_future(self._check_patterns()),
         )
 
+    # Characters that indicate TUI chrome / box drawing — not real text.
+    _CHROME_CHARS = set("─│┌┐└┘├┤┬┴┼━┃╋═║╔╗╚╝╠╣╦╩╬▀▄█▌▐░▒▓")
+
     def _get_screen_text(self) -> list[str]:
-        """Get non-empty lines from the virtual terminal screen."""
-        return [line.rstrip() for line in self._screen.display if line.strip()]
+        """Get non-empty lines from the virtual terminal screen.
+
+        Filters out lines that are purely TUI chrome (box-drawing chars,
+        borders) which are not meaningful for pattern matching.
+        """
+        result = []
+        for line in self._screen.display:
+            stripped = line.rstrip()
+            if not stripped.strip():
+                continue
+            # Skip lines that are purely box-drawing / UI borders
+            text_chars = [c for c in stripped.strip() if c not in self._CHROME_CHARS]
+            if not text_chars:
+                continue
+            result.append(stripped)
+        return result
 
     async def _check_patterns(self):
-        """Scan virtual screen for notification patterns after silence."""
+        """Scan the bottom of the virtual screen for notification patterns.
+
+        Checks the last 5 non-empty lines — AI agent prompts (especially
+        Claude Code's selection menus) can span several lines:
+        question line + option lines + hint line.
+        """
         if self._output_bytes < _MIN_OUTPUT_BYTES:
             return
 
         try:
             lines = self._get_screen_text()
-            recent = "\n".join(lines[-15:])
+            # Bottom 5 lines — covers question + selection options + hints.
+            bottom = lines[-5:] if len(lines) >= 5 else lines
+            recent = "\n".join(bottom)
 
-            log.info("Notification scan [%s]: screen=%r", self.session_id, recent[-300:])
+            log.info("Notification scan [%s]: bottom=%r", self.session_id, recent[:300])
 
-            reason = self._match_patterns(recent)
+            reason, matched_line = self._match_patterns(bottom)
             if not reason:
                 return
 
@@ -222,8 +249,8 @@ class SessionNotifier:
             # Reset output counter so the same output doesn't re-trigger
             self._output_bytes = 0
 
-            # Fire notification
-            snippet = lines[-1].strip()[:120] if lines else ""
+            # Use the matched line as snippet (not the last screen line)
+            snippet = matched_line.strip()[:120]
             event = NotificationEvent(
                 session_id=self.session_id,
                 session_name=self.session_name,
@@ -236,20 +263,44 @@ class SessionNotifier:
         except Exception as e:
             log.warning("Notification pattern check failed: %s", e)
 
-    def _match_patterns(self, text: str) -> str | None:
-        """Match text against notification patterns and return a reason string."""
-        for pattern in self._patterns:
-            if pattern.search(text):
-                # Determine a human-readable reason from the pattern
-                src = pattern.pattern.lower()
-                if "y" in src and "n" in src:
-                    return "Needs confirmation"
-                if "allow" in src or "deny" in src or "approve" in src:
-                    return "Asking for permission"
-                if "?" in src:
-                    return "Asking a question"
-                return "Needs attention"
-        return None
+    # Lines that are UI chrome / hints — not useful as notification snippets.
+    _HINT_RE = re.compile(
+        r"(Enter to select|Esc to cancel|↑/↓ to navigate|Tab to amend|ctrl\+e to explain)",
+        re.IGNORECASE,
+    )
+
+    def _match_patterns(self, lines: list[str]) -> tuple[str | None, str]:
+        """Match lines against notification patterns.
+
+        Returns (reason, snippet) or (None, "") if no match.
+        The snippet is the most informative nearby line (skipping UI hints).
+        """
+        for i, line in enumerate(lines):
+            for pattern in self._patterns:
+                if pattern.search(line):
+                    src = pattern.pattern.lower()
+                    if "y" in src and "n" in src:
+                        reason = "Needs confirmation"
+                    elif "enter to select" in src or "esc to cancel" in src:
+                        reason = "Needs confirmation"
+                    elif "allow" in src or "deny" in src or "approve" in src:
+                        reason = "Asking for permission"
+                    elif "?" in src:
+                        reason = "Asking a question"
+                    else:
+                        reason = "Needs attention"
+
+                    # Pick the best snippet: walk upward from the matched
+                    # line to find something more descriptive than a UI hint.
+                    snippet = line
+                    for j in range(i, -1, -1):
+                        candidate = lines[j].strip()
+                        if candidate and not self._HINT_RE.search(candidate):
+                            snippet = candidate
+                            break
+
+                    return reason, snippet
+        return None, ""
 
     def cancel(self):
         """Cancel any pending silence check."""

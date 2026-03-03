@@ -9,13 +9,13 @@ Conductor runs natively on macOS. No extra dependencies beyond Python.
 
 ## Install
 
-### From release
+### One-line install (recommended)
 
 ```bash
-curl -sL https://github.com/somniacs/conductor/releases/latest/download/conductor.tar.gz | tar xz
-cd conductor
-./install.sh
+curl -fsSL https://github.com/somniacs/conductor/releases/latest/download/install.sh | bash
 ```
+
+The installer checks for Python 3.10+, installs [pipx](https://pipx.pypa.io/) if needed, downloads the latest release, and offers to set up autostart via launchd.
 
 ### From source
 
@@ -25,9 +25,15 @@ cd conductor
 ./install.sh
 ```
 
-The install script uses [pipx](https://pipx.pypa.io/) to install Conductor system-wide. After install, the `conductor` command is available from any terminal.
+After install, the `conductor` command is available from any terminal. If the command is not found, restart your terminal or run `source ~/.zshrc`.
 
-If the command is not found, restart your terminal or run `source ~/.zshrc`.
+### Uninstall
+
+```bash
+curl -fsSL https://github.com/somniacs/conductor/releases/latest/download/uninstall.sh | bash
+```
+
+This stops the server, removes the launchd agent, uninstalls the package, and asks whether to keep your data (`~/.conductor/`).
 
 ## Start sessions
 
@@ -91,7 +97,7 @@ The web dashboard at `http://127.0.0.1:7777` provides:
 - **Settings** — manage allowed commands and directories (localhost only)
 - **Mobile-friendly** — touch scroll, extra keys toolbar, responsive layout
 
-For auto-start on boot, see [Auto-Start on Boot](autostart.md).
+If you accepted autostart during install, the server already starts on boot. For manual setup or customization, see [Auto-Start on Boot](autostart.md).
 
 ## Notes
 

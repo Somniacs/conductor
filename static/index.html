@@ -7356,10 +7356,22 @@
         function _handleServerNotification(msg, panel) {
             const name = msg.session_name || (panel && panel.name) || 'Session';
             const reason = msg.reason || 'Needs attention';
-            // Browser notification
-            sendNotification(`♭ ${name}`, reason);
-            // Audio alert
-            _playNotifSound();
+            const isFocused = document.hasFocus();
+            const isSameSession = panel && panel.sessionId === msg.session_id;
+
+            if (isSameSession && isFocused) {
+                // User is looking at this session's terminal — no popup needed,
+                // just ack so the server skips the webhook.
+            } else {
+                // Different session or window not focused — alert the user.
+                sendNotification(`♭ ${name}`, reason);
+                _playNotifSound();
+            }
+
+            // Ack back to server if window is focused (suppresses webhook)
+            if (isFocused && panel.ws && panel.ws.readyState === 1) {
+                panel.ws.send(JSON.stringify({ type: 'notification_ack' }));
+            }
         }
 
         // --- Init ---
@@ -7388,6 +7400,13 @@
         if (_hasSavedLayout) showBusy('Restoring session…');
         fetchAllSessions().then(() => {
             _restoreLayout();
+            // Deep-link: #session=<name> opens a specific session on load
+            const hashMatch = location.hash.match(/^#session=(.+)/);
+            if (hashMatch) {
+                const targetName = decodeURIComponent(hashMatch[1]);
+                const s = sessions.find(s => s.name === targetName);
+                if (s) openSession(s._compoundId, s.name);
+            }
         }).catch(() => {}).finally(() => {
             if (_hasSavedLayout) hideBusy();
         });

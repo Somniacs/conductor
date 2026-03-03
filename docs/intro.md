@@ -17,23 +17,20 @@ That's it. Your devices can now find each other.
 **Linux / macOS:**
 
 ```bash
-curl -sL https://github.com/somniacs/conductor/releases/latest/download/conductor.tar.gz | tar xz
-cd conductor
-./install.sh
+curl -fsSL https://github.com/somniacs/conductor/releases/latest/download/install.sh | bash
 ```
+
+The installer checks for Python 3.10+, installs pipx if needed, downloads the latest release, and offers to set up autostart (systemd on Linux, launchd on macOS).
 
 **Windows** (PowerShell):
 
 ```powershell
-Invoke-WebRequest https://github.com/somniacs/conductor/releases/latest/download/conductor.zip -OutFile conductor.zip
-Expand-Archive conductor.zip -DestinationPath .
-cd conductor
-powershell -ExecutionPolicy Bypass -File install.ps1
+irm https://github.com/somniacs/conductor/releases/latest/download/install.ps1 | iex
 ```
 
-The installer handles everything. If it says Python is missing, grab it from [python.org](https://python.org) and run the installer again.
+If the installer says Python is missing, grab it from [python.org](https://python.org) and run it again.
 
-Restart your terminal after install.
+Restart your terminal after install if the `conductor` command is not found.
 
 ## 3. Run an agent
 
@@ -81,7 +78,7 @@ Run `tailscale status` to see the name. No IP to remember.
 
 ## 5. Keep it running
 
-The Conductor server starts automatically when you run your first agent and stays running in the background. To make sure the dashboard is always reachable — even after a reboot — set up auto-start. See [Auto-Start on Boot](autostart.md) for systemd (Linux), launchd (macOS), and Task Scheduler (Windows) setup.
+The Conductor server starts automatically when you run your first agent and stays running in the background. If you accepted autostart during install, the dashboard is already reachable after a reboot. Otherwise, see [Auto-Start on Boot](autostart.md) for manual systemd (Linux), launchd (macOS), and Task Scheduler (Windows) setup.
 
 ## Quick reference
 

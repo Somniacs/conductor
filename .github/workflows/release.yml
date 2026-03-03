@@ -20,6 +20,10 @@ jobs:
         run: git archive --format=zip --prefix=conductor/ -o conductor.zip HEAD
 
       - name: Upload to release
-        run: gh release upload "${{ github.event.release.tag_name }}" conductor.tar.gz conductor.zip --clobber
+        run: |
+          gh release upload "${{ github.event.release.tag_name }}" \
+            conductor.tar.gz conductor.zip \
+            install.sh uninstall.sh \
+            install.ps1 uninstall.ps1 --clobber
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

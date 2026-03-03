@@ -4,6 +4,14 @@ All notable changes to Conductor are documented here.
 
 ## v0.3.9
 
+### One-line installer and uninstaller
+
+- **One-line install** — `curl -fsSL .../install.sh | bash` (Linux/macOS) or `irm .../install.ps1 | iex` (Windows) downloads the latest release, installs via pipx, and offers to set up autostart. Also works as a local installer when run from a cloned repo or extracted tarball (detects `pyproject.toml` and uses `pipx install -e`)
+- **Autostart prompt** — the installer asks whether to configure autostart on boot: systemd user service on Linux, launchd agent on macOS, Task Scheduler on Windows. Previously required manual setup from the [autostart docs](docs/autostart.md)
+- **Uninstaller** — `curl -fsSL .../uninstall.sh | bash` (Linux/macOS) or `irm .../uninstall.ps1 | iex` (Windows) stops the server, removes autostart configs, uninstalls the package via pipx, and asks whether to keep or remove user data. Also available as `./uninstall.sh` or `uninstall.ps1` from the repo
+- **Release artifacts** — `install.sh`, `uninstall.sh`, `install.ps1`, and `uninstall.ps1` are now uploaded alongside the tarball and zip on every release
+- **Rename-ready** — all scripts use variables at the top (`PROJECT`, `REPO`, etc.) with an `OLD_PROJECT` field for seamless migration — stops old server, removes old autostart, moves data directory, uninstalls old package
+
 ### Multi-agent session discovery and observation
 
 - **Multi-agent discovery** — the Resume tab now discovers sessions from Claude Code, Codex, Copilot CLI, Gemini CLI, and Goose. Each agent's local session storage is scanned automatically (JSONL files, SQLite databases, YAML metadata). Sessions are shown in a unified list sorted by recency
@@ -20,7 +28,11 @@ All notable changes to Conductor are documented here.
 - **Server-side notification detection** — uses a pyte virtual terminal to maintain a clean screen representation (same as what xterm.js renders in the browser), then pattern-matches against it to detect when an agent is waiting for user input (confirmation prompts, permission requests, questions). Scanning runs after 5 seconds of silence, with a 60-second cooldown to prevent spam
 - **Browser notifications** — opt-in system notifications when an agent needs attention (only fires when the tab is not visible). Uses Service Worker for mobile browser support. Configurable per device via the Notifications settings tab
 - **Audio alerts** — optional notification chime that plays when an agent is waiting. Preview button in settings to hear the sound before enabling
-- **Webhook integration** — send notifications to Telegram, Discord, Slack, or any custom JSON endpoint. Platform dropdown with per-platform fields (e.g. Telegram shows Bot Token + Chat ID instead of a raw URL). Includes a test button to verify configuration. See [Telegram setup guide](docs/notification_telegram.md)
+- **Webhook integration** — send notifications to Telegram, Discord, Slack, or any custom JSON endpoint. Platform dropdown with per-platform fields (e.g. Telegram shows Bot Token + Chat ID instead of a raw URL). Includes a test button to verify configuration. Setup guides: [Telegram](docs/notification_telegram.md), [Slack](docs/notification_slack.md)
+- **Dashboard deep links** — webhook messages include a clickable "Open session" link that opens the dashboard directly to the specific session (`#session=<name>`). Works with Telegram, Slack, Discord, and generic JSON webhooks. Tap the link on your phone and you're looking at the terminal
+- **Smart webhook suppression** — webhooks only fire when you're not already looking. If the dashboard tab is focused, an ack is sent back to the server and the webhook is skipped (like WhatsApp read receipts). If the tab is hidden, minimised, or the browser window is behind other apps, the webhook fires after a 2-second grace period
+- **Claude Code selection menus** — notification patterns now detect Claude Code's `❯ 1. Yes / 2. No` selection prompts and multi-option menus (`Enter to select · ↑/↓ to navigate`). The scan window was widened from 3 to 5 bottom lines to cover the full prompt area
+- **Context-aware snippets** — webhook notification snippets now show the actual prompt content instead of UI hint lines. When a match hits a hint line (like `Enter to select`), the snippet walks upward to find the meaningful context
 - **Global webhook settings** — webhook configuration is stored server-side and shared across all devices. Change it on your phone, see it on desktop. Browser/sound preferences remain per-device (localStorage)
 - **Masked secrets** — bot tokens, chat IDs, and webhook URLs are displayed as password fields with an eye toggle to reveal/hide
 - **Settings visible to all devices** — the Settings dialog is now accessible from any device (not just localhost). Remote devices see only the Notifications tab; admin tabs (Agents, Directories, General) remain localhost-only

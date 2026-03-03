@@ -38,7 +38,8 @@ def _detect_platform(url: str) -> str:
 
 
 def _format_telegram(session_name: str, reason: str, snippet: str,
-                     url: str, chat_id: str | None = None) -> tuple[str, dict]:
+                     url: str, chat_id: str | None = None,
+                     dashboard_url: str = "") -> tuple[str, dict]:
     """Format a Telegram bot API message.
 
     URL format: https://api.telegram.org/bot<TOKEN>/sendMessage
@@ -48,6 +49,8 @@ def _format_telegram(session_name: str, reason: str, snippet: str,
     text = f"🔔 *{session_name}*: {reason}"
     if snippet:
         text += f"\n`{snippet}`"
+    if dashboard_url:
+        text += f"\n[Open session]({dashboard_url})"
 
     payload = {"text": text, "parse_mode": "Markdown"}
     if chat_id:
@@ -56,36 +59,44 @@ def _format_telegram(session_name: str, reason: str, snippet: str,
 
 
 def _format_discord(session_name: str, reason: str, snippet: str,
-                    url: str) -> tuple[str, dict]:
+                    url: str, dashboard_url: str = "") -> tuple[str, dict]:
     """Format a Discord webhook message."""
     content = f"🔔 **{session_name}**: {reason}"
     if snippet:
         content += f"\n```{snippet}```"
+    if dashboard_url:
+        content += f"\n[Open session]({dashboard_url})"
     return url, {"content": content}
 
 
 def _format_slack(session_name: str, reason: str, snippet: str,
-                  url: str) -> tuple[str, dict]:
+                  url: str, dashboard_url: str = "") -> tuple[str, dict]:
     """Format a Slack incoming webhook message."""
     text = f"🔔 *{session_name}*: {reason}"
     if snippet:
         text += f"\n```{snippet}```"
+    if dashboard_url:
+        text += f"\n<{dashboard_url}|Open session>"
     return url, {"text": text}
 
 
 def _format_generic(session_name: str, reason: str, snippet: str,
-                    url: str) -> tuple[str, dict]:
+                    url: str, dashboard_url: str = "") -> tuple[str, dict]:
     """Format a generic JSON POST."""
-    return url, {
+    payload: dict[str, str] = {
         "session": session_name,
         "reason": reason,
         "snippet": snippet,
         "timestamp": datetime.now(tz=timezone.utc).isoformat(),
     }
+    if dashboard_url:
+        payload["dashboard_url"] = dashboard_url
+    return url, payload
 
 
 async def send_webhook(url: str, session_name: str, reason: str,
-                       snippet: str = "", chat_id: str | None = None) -> bool:
+                       snippet: str = "", chat_id: str | None = None,
+                       dashboard_url: str = "") -> bool:
     """Send a notification to a webhook URL.
 
     Auto-detects the platform (Telegram, Discord, Slack) from the URL
@@ -99,13 +110,13 @@ async def send_webhook(url: str, session_name: str, reason: str,
     platform = _detect_platform(url)
 
     if platform == "telegram":
-        post_url, payload = _format_telegram(session_name, reason, snippet, url, chat_id)
+        post_url, payload = _format_telegram(session_name, reason, snippet, url, chat_id, dashboard_url)
     elif platform == "discord":
-        post_url, payload = _format_discord(session_name, reason, snippet, url)
+        post_url, payload = _format_discord(session_name, reason, snippet, url, dashboard_url)
     elif platform == "slack":
-        post_url, payload = _format_slack(session_name, reason, snippet, url)
+        post_url, payload = _format_slack(session_name, reason, snippet, url, dashboard_url)
     else:
-        post_url, payload = _format_generic(session_name, reason, snippet, url)
+        post_url, payload = _format_generic(session_name, reason, snippet, url, dashboard_url)
 
     try:
         async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
